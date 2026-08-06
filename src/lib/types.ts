@@ -81,6 +81,20 @@ export interface Movimiento {
   cantidad: number;
   nota?: string;
   componentes?: ComponenteMovido[];
+  /** Email de quien lo registró (lo completa la base) */
+  usuario?: string;
+}
+
+/** admin edita todo · invitado solo mira */
+export type Rol = 'admin' | 'invitado';
+
+export interface UsuarioStock {
+  email: string;
+  nombre: string | null;
+  rol: Rol;
+  activo: boolean;
+  notas?: string | null;
+  created_at?: string;
 }
 
 export interface DBState {

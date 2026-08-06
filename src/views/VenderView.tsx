@@ -34,7 +34,7 @@ const COMP_ICON: Record<Categoria, any> = {
 };
 
 export function VenderView() {
-  const { state, vender, producir } = useStore();
+  const { state, vender, producir, guardando } = useStore();
   const toast = useToast();
   const [modo, setModo] = useState<'venta' | 'produccion'>('venta');
   const [sel, setSel] = useState<Producto | null>(null);
@@ -75,10 +75,10 @@ export function VenderView() {
     });
   }, [sel, cant, state]);
 
-  function confirmar() {
+  async function confirmar() {
     if (!sel) return;
     const fn = modo === 'venta' ? vender : producir;
-    const res = fn(sel.codigo, cant);
+    const res = await fn(sel.codigo, cant);
     if (!res.ok) {
       toast(res.mensaje, true);
       return;
@@ -281,8 +281,11 @@ export function VenderView() {
               <button className="btn" onClick={() => setSel(null)}>
                 <Trash2 size={15} /> Cancelar
               </button>
-              <button className="btn btn--primary" onClick={confirmar}>
-                <Check size={16} /> Confirmar {modo === 'venta' ? 'venta' : 'producción'} ({cant})
+              <button className="btn btn--primary" onClick={confirmar} disabled={guardando}>
+                <Check size={16} />{' '}
+                {guardando
+                  ? 'Registrando…'
+                  : `Confirmar ${modo === 'venta' ? 'venta' : 'producción'} (${cant})`}
               </button>
             </div>
           </div>

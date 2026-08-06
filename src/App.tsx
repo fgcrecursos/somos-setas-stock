@@ -1,16 +1,27 @@
 import {
+  AlertTriangle,
   Boxes,
+  CloudUpload,
+  Database,
+  Download,
+  Eye,
   FlaskConical,
   History,
   LayoutDashboard,
+  LogOut,
+  RefreshCw,
   RotateCcw,
   ScanLine,
   ShoppingBag,
   Tag,
+  TrendingUp,
+  Users,
   Wheat,
 } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useToast } from './components/Toast';
+import { useAuth } from './lib/auth';
+import { descargarBackup } from './lib/backup';
 import { calcEstado, listaDe } from './lib/helpers';
 import { useStore } from './lib/store';
 import type { Categoria } from './lib/types';
@@ -18,7 +29,9 @@ import { CategoriaView } from './views/CategoriaView';
 import { Dashboard } from './views/Dashboard';
 import { MovimientosView } from './views/MovimientosView';
 import { ProductosView } from './views/ProductosView';
+import { UsuariosView } from './views/UsuariosView';
 import { VenderView } from './views/VenderView';
+import { VentasView } from './views/VentasView';
 
 const logo = '/brand/logo-blanco.png';
 
@@ -30,7 +43,9 @@ type ViewId =
   | 'insumo_interno'
   | 'etiqueta'
   | 'materia_prima'
-  | 'movimientos';
+  | 'ventas'
+  | 'movimientos'
+  | 'usuarios';
 
 const TITLES: Record<ViewId, { t: string; s: string }> = {
   dashboard: { t: 'Dashboard', s: 'Panorama general del stock' },
@@ -40,13 +55,18 @@ const TITLES: Record<ViewId, { t: string; s: string }> = {
   insumo_interno: { t: 'Insumos internos', s: 'Consumibles de producción y logística' },
   etiqueta: { t: 'Etiquetas', s: 'Stock de etiquetas por producto' },
   materia_prima: { t: 'Materia prima', s: 'Hongos, polvos e insumos base' },
+  ventas: { t: 'Ventas', s: 'Cuánto se vendió, de qué y cuándo' },
   movimientos: { t: 'Movimientos', s: 'Historial de ventas, producción y ajustes' },
+  usuarios: { t: 'Usuarios', s: 'Quién entra a la plataforma y con qué permisos' },
 };
 
 export default function App() {
-  const { state, resetDatos } = useStore();
+  const { state, cargando, errorCarga, vacio, puedeEditar, refrescar, restablecerDesdeExcel } =
+    useStore();
+  const { perfil, email, salir, esAdmin } = useAuth();
   const toast = useToast();
   const [view, setView] = useState<ViewId>('dashboard');
+  const [refrescando, setRefrescando] = useState(false);
 
   const alertCounts = useMemo(() => {
     const count = (cat: Categoria) =>
@@ -68,6 +88,37 @@ export default function App() {
     </button>
   );
 
+  async function actualizar() {
+    setRefrescando(true);
+    await refrescar();
+    setRefrescando(false);
+    toast('Datos actualizados desde la base');
+  }
+
+  async function backup() {
+    try {
+      const nombre = await descargarBackup(state, perfil?.nombre || email);
+      toast(`Backup descargado: ${nombre}`);
+    } catch (err) {
+      toast('No se pudo generar el backup: ' + (err as Error).message, true);
+    }
+  }
+
+  async function restablecer() {
+    // Ahora los datos son compartidos: restablecer le cambia el stock a todo el
+    // equipo, así que se avisa fuerte y se sugiere bajar el backup antes.
+    if (
+      !confirm(
+        'Esto reemplaza TODO el inventario de la nube por los valores originales del Excel.\n\n' +
+          'Le va a cambiar el stock a todo el equipo, no solo a vos. El historial de movimientos se conserva.\n\n' +
+          '¿Seguro? (conviene descargar el backup antes)'
+      )
+    )
+      return;
+    const res = await restablecerDesdeExcel();
+    toast(res.error ?? 'Inventario restablecido al Excel original', !!res.error);
+  }
+
   return (
     <div className="app">
       <aside className="sidebar">
@@ -81,7 +132,7 @@ export default function App() {
 
         <nav className="nav">
           {nav('dashboard', <LayoutDashboard size={18} />, 'Dashboard')}
-          {nav('vender', <ScanLine size={18} />, 'Vender / Escanear')}
+          {puedeEditar && nav('vender', <ScanLine size={18} />, 'Vender / Escanear')}
 
           <div className="nav__section">Inventario</div>
           {nav('producto', <ShoppingBag size={18} />, 'Productos', alertCounts.producto)}
@@ -91,22 +142,43 @@ export default function App() {
           {nav('insumo_interno', <FlaskConical size={18} />, 'Insumos internos', alertCounts.insumo_interno)}
 
           <div className="nav__section">Actividad</div>
+          {nav('ventas', <TrendingUp size={18} />, 'Ventas')}
           {nav('movimientos', <History size={18} />, 'Movimientos')}
+          {esAdmin && nav('usuarios', <Users size={18} />, 'Usuarios')}
         </nav>
 
+        <div className="sidebar__user">
+          <div className="sidebar__user-name">{perfil?.nombre || email}</div>
+          <div className="sidebar__user-rol">
+            {puedeEditar ? (
+              <>Acceso total</>
+            ) : (
+              <>
+                <Eye size={11} /> Solo lectura
+              </>
+            )}
+          </div>
+        </div>
+
         <div className="sidebar__footer">
-          <button
-            onClick={() => {
-              if (confirm('¿Restablecer todos los datos al estado original del Excel? Se perderán los cambios.')) {
-                resetDatos();
-                toast('Datos restablecidos al Excel original');
-              }
-            }}
-          >
-            <RotateCcw size={13} style={{ verticalAlign: 'middle', marginRight: 6 }} />
-            Restablecer datos
+          <button onClick={backup} title="Descarga un Excel con todo el inventario y el historial">
+            <Download size={13} style={{ verticalAlign: 'middle', marginRight: 6 }} />
+            Descargar backup (Excel)
           </button>
-          <p style={{ marginTop: 10, marginBottom: 0 }}>Datos guardados en este navegador.</p>
+          {puedeEditar && (
+            <button onClick={restablecer} style={{ marginTop: 8 }}>
+              <RotateCcw size={13} style={{ verticalAlign: 'middle', marginRight: 6 }} />
+              Restablecer datos
+            </button>
+          )}
+          <button onClick={salir} style={{ marginTop: 8 }}>
+            <LogOut size={13} style={{ verticalAlign: 'middle', marginRight: 6 }} />
+            Cerrar sesión
+          </button>
+          <p style={{ marginTop: 10, marginBottom: 0 }}>
+            <Database size={11} style={{ verticalAlign: 'middle', marginRight: 4 }} />
+            Datos compartidos en la nube.
+          </p>
         </div>
       </aside>
 
@@ -117,23 +189,136 @@ export default function App() {
             <div className="subtitle">{TITLES[view].s}</div>
           </div>
           <div className="topbar__spacer" />
-          <button className="btn btn--primary" onClick={() => setView('vender')}>
-            <ScanLine size={16} /> Escanear
+          {!puedeEditar && (
+            <span className="pill" title="Tu usuario puede mirar todo pero no modificar nada">
+              <Eye size={12} /> Modo lectura
+            </span>
+          )}
+          <button className="btn btn--sm" onClick={actualizar} disabled={refrescando}>
+            <RefreshCw size={14} className={refrescando ? 'spin' : ''} /> Actualizar
           </button>
+          {puedeEditar && (
+            <button className="btn btn--primary" onClick={() => setView('vender')}>
+              <ScanLine size={16} /> Escanear
+            </button>
+          )}
         </div>
 
         <div className="content">
-          {view === 'dashboard' && <Dashboard onNav={(v) => setView(v as ViewId)} />}
-          {view === 'vender' && <VenderView />}
-          {view === 'producto' && <ProductosView />}
-          {view === 'movimientos' && <MovimientosView />}
-          {(view === 'insumo' ||
-            view === 'insumo_interno' ||
-            view === 'etiqueta' ||
-            view === 'materia_prima') && (
-            <CategoriaView categoria={view} key={view} />
+          {cargando ? (
+            <div className="card">
+              <div className="empty">
+                <Database size={30} />
+                <p>Cargando el stock desde la base de datos…</p>
+              </div>
+            </div>
+          ) : errorCarga ? (
+            <ErrorCarga mensaje={errorCarga} onReintentar={actualizar} />
+          ) : vacio ? (
+            <CargaInicial />
+          ) : (
+            <>
+              {view === 'dashboard' && <Dashboard onNav={(v) => setView(v as ViewId)} />}
+              {view === 'vender' && puedeEditar && <VenderView />}
+              {view === 'producto' && <ProductosView />}
+              {view === 'ventas' && <VentasView />}
+              {view === 'movimientos' && <MovimientosView />}
+              {view === 'usuarios' && esAdmin && <UsuariosView />}
+              {(view === 'insumo' ||
+                view === 'insumo_interno' ||
+                view === 'etiqueta' ||
+                view === 'materia_prima') && <CategoriaView categoria={view} key={view} />}
+            </>
           )}
         </div>
+      </div>
+    </div>
+  );
+}
+
+function ErrorCarga({ mensaje, onReintentar }: { mensaje: string; onReintentar: () => void }) {
+  return (
+    <div className="card">
+      <div className="empty">
+        <AlertTriangle size={32} color="var(--agotado)" />
+        <p style={{ fontWeight: 600, color: 'var(--texto)' }}>No se pudieron cargar los datos</p>
+        <p style={{ maxWidth: 520, margin: '0 auto 16px' }}>{mensaje}</p>
+        <button className="btn btn--primary" onClick={onReintentar}>
+          <RefreshCw size={15} /> Reintentar
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * La base está vacía: hay que hacer la carga inicial una sola vez. Se ofrece
+ * subir lo que tenía guardado este navegador (los datos reales con los que se
+ * venía trabajando) o arrancar desde el Excel original.
+ */
+function CargaInicial() {
+  const { datosLocales, cargaInicial, puedeEditar, guardando } = useStore();
+  const toast = useToast();
+
+  async function subir(origen: 'navegador' | 'excel') {
+    const res = await cargaInicial(origen);
+    toast(res.error ?? 'Datos cargados en la base. Ya los ve todo el equipo.', !!res.error);
+  }
+
+  const total = datosLocales
+    ? datosLocales.productos.length +
+      datosLocales.insumos.length +
+      datosLocales.insumosInternos.length +
+      datosLocales.etiquetas.length +
+      datosLocales.materiaPrima.length
+    : 0;
+
+  return (
+    <div className="card">
+      <div className="card__head">
+        <CloudUpload size={18} />
+        <h3>Carga inicial de la base</h3>
+      </div>
+      <div className="card__body">
+        <p style={{ marginTop: 0 }}>
+          La base de datos todavía no tiene inventario cargado. Esto se hace <strong>una sola
+          vez</strong>: a partir de ahí, todos trabajan sobre los mismos números.
+        </p>
+
+        {!puedeEditar ? (
+          <p className="hlp">
+            Tu usuario es de solo lectura. Pedile a un administrador que haga la carga inicial.
+          </p>
+        ) : (
+          <div className="grid" style={{ gridTemplateColumns: '1fr 1fr', marginTop: 18 }}>
+            <div className="card" style={{ padding: 18 }}>
+              <h4 style={{ fontSize: 15, marginBottom: 6 }}>Subir lo de este navegador</h4>
+              <p className="hlp" style={{ minHeight: 54 }}>
+                {datosLocales
+                  ? `Se encontraron ${total} ítems y ${datosLocales.movimientos.length} movimientos guardados en esta computadora, con todos los cambios que venías haciendo. Es la opción recomendada.`
+                  : 'Esta computadora no tiene datos guardados de antes.'}
+              </p>
+              <button
+                className="btn btn--primary"
+                disabled={!datosLocales || guardando}
+                onClick={() => subir('navegador')}
+              >
+                <CloudUpload size={15} /> {guardando ? 'Subiendo…' : 'Subir a la nube'}
+              </button>
+            </div>
+
+            <div className="card" style={{ padding: 18 }}>
+              <h4 style={{ fontSize: 15, marginBottom: 6 }}>Empezar del Excel original</h4>
+              <p className="hlp" style={{ minHeight: 54 }}>
+                Carga el inventario tal como salió del Excel de control de stock, sin los cambios
+                posteriores.
+              </p>
+              <button className="btn" disabled={guardando} onClick={() => subir('excel')}>
+                <RotateCcw size={15} /> Cargar el Excel
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

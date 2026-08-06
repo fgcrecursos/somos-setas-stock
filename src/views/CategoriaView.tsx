@@ -14,7 +14,7 @@ import { useStore } from '../lib/store';
 import type { BaseItem, Categoria, Etiqueta, MateriaPrima } from '../lib/types';
 
 export function CategoriaView({ categoria }: { categoria: Categoria }) {
-  const { state } = useStore();
+  const { state, puedeEditar } = useStore();
   const [q, setQ] = useState('');
   const [soloAlerta, setSoloAlerta] = useState(false);
   const [ver, setVer] = useState<BaseItem | null>(null);
@@ -65,7 +65,12 @@ export function CategoriaView({ categoria }: { categoria: Categoria }) {
     { key: 'nivel', header: 'Nivel', sortable: false, render: (r) => <StockBar actual={r.actual} minimo={r.minimo} /> },
     { key: 'diff', header: 'Diferencia', align: 'right', sortValue: (r) => r.actual - r.minimo, render: (r) => <DiffCell actual={r.actual} minimo={r.minimo} /> },
     { key: 'estado', header: 'Estado', sortValue: (r) => calcEstado(r.actual, r.minimo).diferencia, render: (r) => <StatusBadge actual={r.actual} minimo={r.minimo} /> },
-    { key: 'acc', header: '', sortable: false, align: 'right', render: (r) => <button className="btn btn--sm" onClick={() => setEditar(r)}>Editar</button> },
+    { key: 'acc', header: '', sortable: false, align: 'right',
+      render: (r) => (
+        <button className="btn btn--sm" onClick={() => (puedeEditar ? setEditar(r) : setVer(r))}>
+          {puedeEditar ? 'Editar' : 'Ver'}
+        </button>
+      ) },
   ];
 
   const alertas = all.filter((it) => calcEstado(it.actual, it.minimo).faltan > 0).length;
@@ -82,9 +87,11 @@ export function CategoriaView({ categoria }: { categoria: Categoria }) {
         </button>
         <div className="toolbar__spacer" />
         <span className="muted" style={{ fontSize: 12 }}>{rows.length} de {all.length}</span>
-        <button className="btn btn--primary" onClick={() => setNuevo(true)}>
-          <Plus size={16} /> Nuevo
-        </button>
+        {puedeEditar && (
+          <button className="btn btn--primary" onClick={() => setNuevo(true)}>
+            <Plus size={16} /> Nuevo
+          </button>
+        )}
       </div>
 
       <div className="card">

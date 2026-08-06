@@ -6,6 +6,7 @@ import type { BaseItem, Categoria } from '../lib/types';
 import { Barcode } from './Barcode';
 import { Modal } from './Modal';
 import { DiffCell, StatusBadge } from './StatusBadge';
+import { useToast } from './Toast';
 
 interface Props {
   categoria: Categoria;
@@ -15,10 +16,17 @@ interface Props {
 }
 
 export function ItemModal({ categoria, item, onClose, onEdit }: Props) {
-  const { ingreso, ajustar } = useStore();
+  const { ingreso, ajustar, puedeEditar, guardando } = useStore();
+  const toast = useToast();
   const [addQty, setAddQty] = useState(10);
   const [setQty, setSetQty] = useState(item.actual);
   const e = calcEstado(item.actual, item.minimo);
+
+  async function correr(fn: () => Promise<{ ok: boolean; error?: string }>, exito: string) {
+    const res = await fn();
+    toast(res.error ?? exito, !res.ok);
+    if (res.ok) onClose();
+  }
 
   function printBarcode() {
     const w = window.open('', '_blank', 'width=420,height=320');
@@ -39,7 +47,7 @@ export function ItemModal({ categoria, item, onClose, onEdit }: Props) {
       onClose={onClose}
       footer={
         <>
-          {onEdit && (
+          {onEdit && puedeEditar && (
             <button className="btn" onClick={onEdit}>
               <Pencil size={15} /> Editar
             </button>
@@ -75,34 +83,50 @@ export function ItemModal({ categoria, item, onClose, onEdit }: Props) {
         </button>
       </div>
 
-      {/* Acciones rápidas */}
-      <div className="section-title" style={{ marginTop: 18 }}>Ajustar stock</div>
-      <div className="form-row">
-        <div className="field" style={{ margin: 0 }}>
-          <label><PackagePlus size={13} style={{ verticalAlign: 'middle' }} /> Ingresar (sumar)</label>
-          <div className="row">
-            <input className="input" type="number" value={addQty} onChange={(ev) => setAddQty(Number(ev.target.value))} />
-            <button
-              className="btn btn--primary"
-              onClick={() => { ingreso(categoria, item.codigo, addQty); onClose(); }}
-            >
-              + Sumar
-            </button>
+      {/* Acciones rápidas — solo para quien puede editar */}
+      {puedeEditar && (
+        <>
+          <div className="section-title" style={{ marginTop: 18 }}>Ajustar stock</div>
+          <div className="form-row">
+            <div className="field" style={{ margin: 0 }}>
+              <label><PackagePlus size={13} style={{ verticalAlign: 'middle' }} /> Ingresar (sumar)</label>
+              <div className="row">
+                <input className="input" type="number" value={addQty} onChange={(ev) => setAddQty(Number(ev.target.value))} />
+                <button
+                  className="btn btn--primary"
+                  disabled={guardando}
+                  onClick={() =>
+                    correr(
+                      () => ingreso(categoria, item.codigo, addQty),
+                      `Ingresaron ${addQty} de ${item.nombre}`
+                    )
+                  }
+                >
+                  + Sumar
+                </button>
+              </div>
+            </div>
+            <div className="field" style={{ margin: 0 }}>
+              <label><SlidersHorizontal size={13} style={{ verticalAlign: 'middle' }} /> Fijar actual</label>
+              <div className="row">
+                <input className="input" type="number" value={setQty} onChange={(ev) => setSetQty(Number(ev.target.value))} />
+                <button
+                  className="btn btn--dark"
+                  disabled={guardando}
+                  onClick={() =>
+                    correr(
+                      () => ajustar(categoria, item.codigo, setQty),
+                      `${item.nombre} quedó en ${setQty}`
+                    )
+                  }
+                >
+                  Fijar
+                </button>
+              </div>
+            </div>
           </div>
-        </div>
-        <div className="field" style={{ margin: 0 }}>
-          <label><SlidersHorizontal size={13} style={{ verticalAlign: 'middle' }} /> Fijar actual</label>
-          <div className="row">
-            <input className="input" type="number" value={setQty} onChange={(ev) => setSetQty(Number(ev.target.value))} />
-            <button
-              className="btn btn--dark"
-              onClick={() => { ajustar(categoria, item.codigo, setQty); onClose(); }}
-            >
-              Fijar
-            </button>
-          </div>
-        </div>
-      </div>
+        </>
+      )}
       <p className="hlp" style={{ marginTop: 10 }}>
         Nivel de stock: {e.faltan > 0 ? `faltan ${e.faltan} para el mínimo` : `hay ${e.sobran} por encima del mínimo`}.
       </p>

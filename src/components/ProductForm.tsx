@@ -19,7 +19,7 @@ interface Props {
 }
 
 export function ProductForm({ initial, onClose }: Props) {
-  const { state, upsertProducto } = useStore();
+  const { state, upsertProducto, guardando } = useStore();
   const editing = !!initial;
   const [p, setP] = useState<Producto>(
     initial
@@ -57,17 +57,18 @@ export function ProductForm({ initial, onClose }: Props) {
     setP((prev) => ({ ...prev, bom: prev.bom.filter((_, idx) => idx !== i) }));
   }
 
-  function guardar() {
+  async function guardar() {
     if (!p.codigo.trim()) return setError('El código es obligatorio (identifica al producto).');
     if (!p.nombre.trim()) return setError('El nombre es obligatorio.');
     const dup = state.productos.find(
       (x) => x.codigo === p.codigo && x.codigo !== initial?.codigo
     );
     if (dup) return setError(`Ya existe un producto con el código ${p.codigo}.`);
-    upsertProducto(
+    const res = await upsertProducto(
       { ...p, bom: p.bom.filter((b) => b.codigo) },
       initial?.codigo
     );
+    if (!res.ok) return setError(res.error ?? 'No se pudo guardar.');
     onClose();
   }
 
@@ -80,8 +81,8 @@ export function ProductForm({ initial, onClose }: Props) {
       footer={
         <>
           <button className="btn" onClick={onClose}>Cancelar</button>
-          <button className="btn btn--primary" onClick={guardar}>
-            {editing ? 'Guardar cambios' : 'Crear producto'}
+          <button className="btn btn--primary" onClick={guardar} disabled={guardando}>
+            {guardando ? 'Guardando…' : editing ? 'Guardar cambios' : 'Crear producto'}
           </button>
         </>
       }

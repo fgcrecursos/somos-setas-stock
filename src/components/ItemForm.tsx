@@ -14,7 +14,7 @@ interface Props {
 const usaTipoPres: Categoria[] = ['etiqueta', 'materia_prima'];
 
 export function ItemForm({ categoria, initial, onClose }: Props) {
-  const { state, upsertItem } = useStore();
+  const { state, upsertItem, guardando } = useStore();
   const editing = !!initial;
   const [item, setItem] = useState<any>(
     initial
@@ -27,7 +27,7 @@ export function ItemForm({ categoria, initial, onClose }: Props) {
     setItem((prev: any) => ({ ...prev, [k]: v }));
   }
 
-  function guardar() {
+  async function guardar() {
     if (!item.codigo?.trim()) return setError('El código es obligatorio.');
     if (!item.nombre?.trim()) return setError('El nombre es obligatorio.');
     const lista = state[
@@ -41,7 +41,8 @@ export function ItemForm({ categoria, initial, onClose }: Props) {
     ] as BaseItem[];
     const dup = lista.find((x) => x.codigo === item.codigo && x.codigo !== initial?.codigo);
     if (dup) return setError(`Ya existe ${item.codigo} en ${CATEGORIA_LABEL[categoria]}.`);
-    upsertItem(categoria, item, initial?.codigo);
+    const res = await upsertItem(categoria, item, initial?.codigo);
+    if (!res.ok) return setError(res.error ?? 'No se pudo guardar.');
     onClose();
   }
 
@@ -53,7 +54,9 @@ export function ItemForm({ categoria, initial, onClose }: Props) {
       footer={
         <>
           <button className="btn" onClick={onClose}>Cancelar</button>
-          <button className="btn btn--primary" onClick={guardar}>{editing ? 'Guardar' : 'Crear'}</button>
+          <button className="btn btn--primary" onClick={guardar} disabled={guardando}>
+            {guardando ? 'Guardando…' : editing ? 'Guardar' : 'Crear'}
+          </button>
         </>
       }
     >

@@ -1,8 +1,18 @@
+// =====================================================================
+// Estado de la aplicación.
+//
+// La fuente de verdad son las tablas st_items / st_movimientos de Supabase:
+// lo que uno carga, lo ve el resto. En memoria se mantiene la misma forma de
+// siempre (DBState) para que las vistas no cambien, pero cada modificación
+// viaja a la base y el stock resultante vuelve de ahí.
+// =====================================================================
 import {
   createContext,
+  useCallback,
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from 'react';
@@ -17,6 +27,18 @@ import type {
   Producto,
 } from './types';
 import { buscarItem, listaDe, uid } from './helpers';
+import { useAuth } from './auth';
+import {
+  aplicarMovimiento,
+  borrarItem,
+  contarItems,
+  estadoVacio,
+  guardarItem,
+  subirTodo,
+  traerTodo,
+  vaciarItems,
+  type Delta,
+} from './cloud';
 import {
   seedEtiquetas,
   seedInsumos,
@@ -25,9 +47,10 @@ import {
   seedProductos,
 } from '../data/seed';
 
-const STORAGE_KEY = 'somos-setas-stock:v1';
+/** Datos que quedaron guardados en este navegador antes de que existiera la nube */
+const LEGACY_KEY = 'somos-setas-stock:v1';
 
-function seedState(): DBState {
+export function estadoDelExcel(): DBState {
   return {
     productos: structuredClone(seedProductos),
     insumos: structuredClone(seedInsumos),
@@ -38,18 +61,24 @@ function seedState(): DBState {
   };
 }
 
-function loadState(): DBState {
+function estadoGuardadoEnEsteNavegador(): DBState | null {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) return JSON.parse(raw) as DBState;
+    const raw = localStorage.getItem(LEGACY_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as DBState;
+    if (!parsed?.productos?.length) return null;
+    return parsed;
   } catch {
-    /* ignore */
+    return null;
   }
-  return seedState();
 }
 
-export interface VentaResultado {
+export interface Resultado {
   ok: boolean;
+  error?: string;
+}
+
+export interface VentaResultado extends Resultado {
   mensaje: string;
   producto?: Producto;
   componentes: ComponenteMovido[];
@@ -58,81 +87,144 @@ export interface VentaResultado {
 
 interface StoreCtx {
   state: DBState;
-  vender: (codigoProducto: string, cantidad: number, nota?: string) => VentaResultado;
-  producir: (codigoProducto: string, cantidad: number, nota?: string) => VentaResultado;
-  ingreso: (categoria: Categoria, codigo: string, cantidad: number) => void;
-  ajustar: (categoria: Categoria, codigo: string, nuevoActual: number) => void;
-  upsertProducto: (p: Producto, codigoOriginal?: string) => void;
-  upsertItem: (categoria: Categoria, item: any, codigoOriginal?: string) => void;
-  eliminarItem: (categoria: Categoria, codigo: string) => void;
-  resetDatos: () => void;
+  cargando: boolean;
+  errorCarga: string | null;
+  /** La base todavía no tiene ningún ítem cargado */
+  vacio: boolean;
+  /** Inventario que había quedado en este navegador, para la carga inicial */
+  datosLocales: DBState | null;
+  puedeEditar: boolean;
+  guardando: boolean;
+  refrescar: () => Promise<void>;
+  cargaInicial: (origen: 'navegador' | 'excel') => Promise<Resultado>;
+  vender: (codigoProducto: string, cantidad: number, nota?: string) => Promise<VentaResultado>;
+  producir: (codigoProducto: string, cantidad: number, nota?: string) => Promise<VentaResultado>;
+  ingreso: (categoria: Categoria, codigo: string, cantidad: number) => Promise<Resultado>;
+  ajustar: (categoria: Categoria, codigo: string, nuevoActual: number) => Promise<Resultado>;
+  upsertProducto: (p: Producto, codigoOriginal?: string) => Promise<Resultado>;
+  upsertItem: (categoria: Categoria, item: any, codigoOriginal?: string) => Promise<Resultado>;
+  eliminarItem: (categoria: Categoria, codigo: string) => Promise<Resultado>;
+  restablecerDesdeExcel: () => Promise<Resultado>;
 }
 
 const Ctx = createContext<StoreCtx | null>(null);
 
+const SIN_PERMISO = 'Tu usuario es de solo lectura: no podés modificar el stock.';
+
+function mensajeError(err: unknown): string {
+  const msg = err instanceof Error ? err.message : String(err);
+  if (/row-level security|permission|policy/i.test(msg)) return SIN_PERMISO;
+  if (/failed to fetch|network/i.test(msg))
+    return 'No se pudo conectar con la base de datos. Revisá la conexión y volvé a intentar.';
+  return msg;
+}
+
 export function StoreProvider({ children }: { children: ReactNode }) {
-  const [state, setState] = useState<DBState>(loadState);
+  const { esAdmin, email } = useAuth();
+  const [state, setState] = useState<DBState>(estadoVacio);
+  const [cargando, setCargando] = useState(true);
+  const [errorCarga, setErrorCarga] = useState<string | null>(null);
+  const [vacio, setVacio] = useState(false);
+  const [guardando, setGuardando] = useState(false);
+  const [datosLocales] = useState<DBState | null>(estadoGuardadoEnEsteNavegador);
+  const ultimaCarga = useRef(0);
+
+  const refrescar = useCallback(async () => {
+    try {
+      const cantidad = await contarItems();
+      if (cantidad === 0) {
+        setVacio(true);
+        setState(estadoVacio());
+        setErrorCarga(null);
+        return;
+      }
+      const nuevo = await traerTodo();
+      setState(nuevo);
+      setVacio(false);
+      setErrorCarga(null);
+      ultimaCarga.current = Date.now();
+    } catch (err) {
+      setErrorCarga(mensajeError(err));
+    }
+  }, []);
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-  }, [state]);
+    let vivo = true;
+    setCargando(true);
+    refrescar().finally(() => {
+      if (vivo) setCargando(false);
+    });
+    return () => {
+      vivo = false;
+    };
+  }, [refrescar]);
+
+  // Al volver a la pestaña se recargan los datos: si otra persona vendió algo
+  // mientras tanto, se ve al instante y no se trabaja sobre números viejos.
+  useEffect(() => {
+    const alVolver = () => {
+      if (document.visibilityState !== 'visible') return;
+      if (Date.now() - ultimaCarga.current < 15000) return;
+      refrescar();
+    };
+    window.addEventListener('focus', alVolver);
+    document.addEventListener('visibilitychange', alVolver);
+    return () => {
+      window.removeEventListener('focus', alVolver);
+      document.removeEventListener('visibilitychange', alVolver);
+    };
+  }, [refrescar]);
+
+  /** Escribe en el estado local el stock que devolvió la base */
+  const aplicarResultantes = useCallback(
+    (resultantes: { categoria: Categoria; codigo: string; actual: number }[]) => {
+      setState((prev) => {
+        const next = structuredClone(prev);
+        for (const r of resultantes) {
+          const item = buscarItem(next, r.categoria, r.codigo);
+          if (item) item.actual = r.actual;
+        }
+        return next;
+      });
+    },
+    []
+  );
 
   const api = useMemo<StoreCtx>(() => {
-    /** Aplica el descuento de la receta y registra el movimiento */
-    function aplicarReceta(
-      prev: DBState,
-      producto: Producto,
+    /** Venta y producción comparten todo salvo el signo del producto terminado */
+    async function registrar(
+      codigoProducto: string,
       cantidad: number,
-      tipoMov: 'venta' | 'produccion'
-    ): { next: DBState; res: VentaResultado } {
-      const next: DBState = structuredClone(prev);
-      const componentes: ComponenteMovido[] = [];
-      const alertas: string[] = [];
+      tipoMov: 'venta' | 'produccion',
+      nota?: string
+    ): Promise<VentaResultado> {
+      const vacia: VentaResultado = { ok: false, mensaje: '', componentes: [], alertas: [] };
+      if (!esAdmin) return { ...vacia, mensaje: SIN_PERMISO, error: SIN_PERMISO };
 
-      // El producto: venta descuenta, producción suma
-      const prod = next.productos.find((p) => p.codigo === producto.codigo)!;
-      if (tipoMov === 'venta') prod.actual -= cantidad;
-      else prod.actual += cantidad;
+      const producto = state.productos.find((p) => p.codigo === codigoProducto);
+      if (!producto) return { ...vacia, mensaje: 'Producto no encontrado' };
 
-      // Componentes de la receta siempre se consumen (se descuentan)
-      for (const linea of producto.bom) {
-        const lista = listaDe(next, linea.categoria);
-        const comp = lista.find((x) => x.codigo === linea.codigo);
+      const deltas: Delta[] = [
+        {
+          categoria: 'producto',
+          codigo: producto.codigo,
+          delta: tipoMov === 'venta' ? -cantidad : cantidad,
+        },
+      ];
+      // La receta siempre se consume, se venda o se produzca.
+      const componentes: ComponenteMovido[] = producto.bom.map((linea) => {
+        const comp = buscarItem(state, linea.categoria, linea.codigo);
         const consumido = linea.cantidad * cantidad;
-        if (!comp) {
-          componentes.push({
-            categoria: linea.categoria,
-            codigo: linea.codigo,
-            nombre: '(no encontrado)',
-            cantidad: consumido,
-            resultante: 0,
-            faltante: true,
-          });
-          alertas.push(`Componente ${linea.codigo} no existe en stock.`);
-          continue;
-        }
-        comp.actual -= consumido;
-        const faltante = comp.actual < 0;
-        componentes.push({
+        deltas.push({ categoria: linea.categoria, codigo: linea.codigo, delta: -consumido });
+        return {
           categoria: linea.categoria,
-          codigo: comp.codigo,
-          nombre: comp.nombre,
+          codigo: linea.codigo,
+          nombre: comp?.nombre ?? '(no encontrado)',
           cantidad: consumido,
-          resultante: comp.actual,
-          faltante,
-        });
-        if (faltante) {
-          alertas.push(
-            `${comp.nombre} (${comp.codigo}) quedó en negativo: faltan ${Math.abs(
-              comp.actual
-            )}.`
-          );
-        } else if (comp.actual < comp.minimo) {
-          alertas.push(
-            `${comp.nombre} (${comp.codigo}) por debajo del mínimo (${comp.actual}/${comp.minimo}).`
-          );
-        }
-      }
+          resultante: (comp?.actual ?? 0) - consumido,
+          faltante: !comp || comp.actual - consumido < 0,
+        };
+      });
 
       const mov: Movimiento = {
         id: uid(),
@@ -142,66 +234,110 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         codigo: producto.codigo,
         nombre: producto.nombre,
         cantidad,
+        nota,
         componentes,
+        usuario: email,
       };
-      next.movimientos = [mov, ...next.movimientos];
 
-      return {
-        next,
-        res: {
+      setGuardando(true);
+      try {
+        const { resultantes, movimiento } = await aplicarMovimiento(deltas, mov);
+        aplicarResultantes(resultantes);
+        const guardado = movimiento ?? mov;
+        setState((prev) => ({ ...prev, movimientos: [guardado, ...prev.movimientos] }));
+
+        // Las alertas se arman con el stock REAL que devolvió la base.
+        const alertas: string[] = [];
+        const finales = guardado.componentes ?? componentes;
+        for (const c of finales) {
+          const item = buscarItem(state, c.categoria, c.codigo);
+          if (!item) {
+            alertas.push(`El componente ${c.codigo} ya no existe en el stock.`);
+            continue;
+          }
+          if (c.resultante < 0) {
+            alertas.push(
+              `${item.nombre} (${c.codigo}) quedó en negativo: faltan ${Math.abs(c.resultante)}.`
+            );
+          } else if (c.resultante < item.minimo) {
+            alertas.push(
+              `${item.nombre} (${c.codigo}) por debajo del mínimo (${c.resultante}/${item.minimo}).`
+            );
+          }
+        }
+
+        const prodFinal = resultantes.find(
+          (r) => r.categoria === 'producto' && r.codigo === producto.codigo
+        );
+        return {
           ok: true,
           mensaje:
             tipoMov === 'venta'
               ? `Venta registrada: ${cantidad} × ${producto.nombre}`
               : `Producción registrada: ${cantidad} × ${producto.nombre}`,
-          producto: prod,
-          componentes,
+          producto: prodFinal ? { ...producto, actual: prodFinal.actual } : producto,
+          componentes: finales,
           alertas,
-        },
-      };
+        };
+      } catch (err) {
+        const error = mensajeError(err);
+        return { ...vacia, mensaje: error, error };
+      } finally {
+        setGuardando(false);
+      }
+    }
+
+    /** Envuelve una escritura simple: chequea permiso, marca guardando y traduce el error */
+    async function escribir(fn: () => Promise<void>): Promise<Resultado> {
+      if (!esAdmin) return { ok: false, error: SIN_PERMISO };
+      setGuardando(true);
+      try {
+        await fn();
+        return { ok: true };
+      } catch (err) {
+        return { ok: false, error: mensajeError(err) };
+      } finally {
+        setGuardando(false);
+      }
     }
 
     return {
       state,
-      vender(codigoProducto, cantidad, _nota) {
-        let result: VentaResultado = {
-          ok: false,
-          mensaje: 'Producto no encontrado',
-          componentes: [],
-          alertas: [],
-        };
-        setState((prev) => {
-          const producto = prev.productos.find((p) => p.codigo === codigoProducto);
-          if (!producto) return prev;
-          const { next, res } = aplicarReceta(prev, producto, cantidad, 'venta');
-          result = res;
-          return next;
-        });
-        return result;
+      cargando,
+      errorCarga,
+      vacio,
+      datosLocales,
+      puedeEditar: esAdmin,
+      guardando,
+      refrescar,
+
+      async cargaInicial(origen) {
+        if (!esAdmin) return { ok: false, error: SIN_PERMISO };
+        const inicial = origen === 'navegador' ? datosLocales : estadoDelExcel();
+        if (!inicial) return { ok: false, error: 'No hay datos guardados en este navegador.' };
+        setGuardando(true);
+        try {
+          await subirTodo(inicial);
+          await refrescar();
+          return { ok: true };
+        } catch (err) {
+          return { ok: false, error: mensajeError(err) };
+        } finally {
+          setGuardando(false);
+        }
       },
-      producir(codigoProducto, cantidad, _nota) {
-        let result: VentaResultado = {
-          ok: false,
-          mensaje: 'Producto no encontrado',
-          componentes: [],
-          alertas: [],
-        };
-        setState((prev) => {
-          const producto = prev.productos.find((p) => p.codigo === codigoProducto);
-          if (!producto) return prev;
-          const { next, res } = aplicarReceta(prev, producto, cantidad, 'produccion');
-          result = res;
-          return next;
-        });
-        return result;
-      },
-      ingreso(categoria, codigo, cantidad) {
-        setState((prev) => {
-          const next = structuredClone(prev);
-          const item = buscarItem(next, categoria, codigo);
-          if (!item) return prev;
-          item.actual += cantidad;
-          next.movimientos = [
+
+      vender: (codigo, cantidad, nota) => registrar(codigo, cantidad, 'venta', nota),
+      producir: (codigo, cantidad, nota) => registrar(codigo, cantidad, 'produccion', nota),
+
+      async ingreso(categoria, codigo, cantidad) {
+        if (!esAdmin) return { ok: false, error: SIN_PERMISO };
+        const item = buscarItem(state, categoria, codigo);
+        if (!item) return { ok: false, error: 'No se encontró el ítem.' };
+        setGuardando(true);
+        try {
+          const { resultantes, movimiento } = await aplicarMovimiento(
+            [{ categoria, codigo, delta: cantidad }],
             {
               id: uid(),
               fecha: new Date().toISOString(),
@@ -210,20 +346,29 @@ export function StoreProvider({ children }: { children: ReactNode }) {
               codigo,
               nombre: item.nombre,
               cantidad,
-            },
-            ...next.movimientos,
-          ];
-          return next;
-        });
+              usuario: email,
+            }
+          );
+          aplicarResultantes(resultantes);
+          if (movimiento)
+            setState((prev) => ({ ...prev, movimientos: [movimiento, ...prev.movimientos] }));
+          return { ok: true };
+        } catch (err) {
+          return { ok: false, error: mensajeError(err) };
+        } finally {
+          setGuardando(false);
+        }
       },
-      ajustar(categoria, codigo, nuevoActual) {
-        setState((prev) => {
-          const next = structuredClone(prev);
-          const item = buscarItem(next, categoria, codigo);
-          if (!item) return prev;
-          const delta = nuevoActual - item.actual;
-          item.actual = nuevoActual;
-          next.movimientos = [
+
+      async ajustar(categoria, codigo, nuevoActual) {
+        if (!esAdmin) return { ok: false, error: SIN_PERMISO };
+        const item = buscarItem(state, categoria, codigo);
+        if (!item) return { ok: false, error: 'No se encontró el ítem.' };
+        setGuardando(true);
+        try {
+          // `set` en vez de delta: es un conteo físico, vale el número exacto.
+          const { resultantes, movimiento } = await aplicarMovimiento(
+            [{ categoria, codigo, set: nuevoActual }],
             {
               id: uid(),
               fecha: new Date().toISOString(),
@@ -231,49 +376,88 @@ export function StoreProvider({ children }: { children: ReactNode }) {
               categoria,
               codigo,
               nombre: item.nombre,
-              cantidad: delta,
+              cantidad: nuevoActual - item.actual,
               nota: `Ajuste manual a ${nuevoActual}`,
-            },
-            ...next.movimientos,
-          ];
-          return next;
-        });
+              usuario: email,
+            }
+          );
+          aplicarResultantes(resultantes);
+          if (movimiento)
+            setState((prev) => ({ ...prev, movimientos: [movimiento, ...prev.movimientos] }));
+          return { ok: true };
+        } catch (err) {
+          return { ok: false, error: mensajeError(err) };
+        } finally {
+          setGuardando(false);
+        }
       },
-      upsertProducto(p, codigoOriginal) {
-        setState((prev) => {
-          const next = structuredClone(prev);
-          const key = codigoOriginal ?? p.codigo;
-          const idx = next.productos.findIndex((x) => x.codigo === key);
-          if (idx >= 0) next.productos[idx] = p;
-          else next.productos.unshift(p);
-          return next;
-        });
-      },
-      upsertItem(categoria, item, codigoOriginal) {
-        setState((prev) => {
-          const next = structuredClone(prev);
-          const lista = listaDe(next, categoria) as any[];
-          const key = codigoOriginal ?? item.codigo;
-          const idx = lista.findIndex((x) => x.codigo === key);
-          if (idx >= 0) lista[idx] = item;
-          else lista.unshift(item);
-          return next;
-        });
-      },
-      eliminarItem(categoria, codigo) {
-        setState((prev) => {
-          const next = structuredClone(prev);
-          const lista = listaDe(next, categoria) as any[];
-          const idx = lista.findIndex((x) => x.codigo === codigo);
-          if (idx >= 0) lista.splice(idx, 1);
-          return next;
-        });
-      },
-      resetDatos() {
-        setState(seedState());
+
+      upsertProducto: (p, codigoOriginal) =>
+        escribir(async () => {
+          await guardarItem('producto', p, codigoOriginal);
+          setState((prev) => {
+            const next = structuredClone(prev);
+            const key = codigoOriginal ?? p.codigo;
+            const idx = next.productos.findIndex((x) => x.codigo === key);
+            if (idx >= 0) next.productos[idx] = p;
+            else next.productos.unshift(p);
+            return next;
+          });
+        }),
+
+      upsertItem: (categoria, item, codigoOriginal) =>
+        escribir(async () => {
+          await guardarItem(categoria, item, codigoOriginal);
+          setState((prev) => {
+            const next = structuredClone(prev);
+            const lista = listaDe(next, categoria) as any[];
+            const key = codigoOriginal ?? item.codigo;
+            const idx = lista.findIndex((x) => x.codigo === key);
+            if (idx >= 0) lista[idx] = item;
+            else lista.unshift(item);
+            return next;
+          });
+        }),
+
+      eliminarItem: (categoria, codigo) =>
+        escribir(async () => {
+          await borrarItem(categoria, codigo);
+          setState((prev) => {
+            const next = structuredClone(prev);
+            const lista = listaDe(next, categoria) as any[];
+            const idx = lista.findIndex((x) => x.codigo === codigo);
+            if (idx >= 0) lista.splice(idx, 1);
+            return next;
+          });
+        }),
+
+      async restablecerDesdeExcel() {
+        if (!esAdmin) return { ok: false, error: SIN_PERMISO };
+        setGuardando(true);
+        try {
+          await vaciarItems();
+          await subirTodo(estadoDelExcel());
+          await refrescar();
+          return { ok: true };
+        } catch (err) {
+          return { ok: false, error: mensajeError(err) };
+        } finally {
+          setGuardando(false);
+        }
       },
     };
-  }, [state]);
+  }, [
+    state,
+    cargando,
+    errorCarga,
+    vacio,
+    datosLocales,
+    esAdmin,
+    email,
+    guardando,
+    refrescar,
+    aplicarResultantes,
+  ]);
 
   return <Ctx.Provider value={api}>{children}</Ctx.Provider>;
 }

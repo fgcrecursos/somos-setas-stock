@@ -9,7 +9,7 @@ import { useStore } from '../lib/store';
 import type { Producto } from '../lib/types';
 
 export function ProductosView() {
-  const { state } = useStore();
+  const { state, puedeEditar } = useStore();
   const [q, setQ] = useState('');
   const [tipo, setTipo] = useState<string>('Todos');
   const [soloAlerta, setSoloAlerta] = useState(false);
@@ -59,7 +59,9 @@ export function ProductosView() {
     { key: 'estado', header: 'Estado', sortValue: (r) => calcEstado(r.actual, r.minimo).diferencia, render: (r) => <StatusBadge actual={r.actual} minimo={r.minimo} /> },
     { key: 'acc', header: '', sortable: false, align: 'right',
       render: (r) => (
-        <button className="btn btn--sm" onClick={() => setEditar(r)}>Editar</button>
+        <button className="btn btn--sm" onClick={() => (puedeEditar ? setEditar(r) : setVer(r))}>
+          {puedeEditar ? 'Editar' : 'Ver'}
+        </button>
       ) },
   ];
 
@@ -80,9 +82,11 @@ export function ProductosView() {
         </button>
         <div className="toolbar__spacer" />
         <span className="muted" style={{ fontSize: 12 }}>{rows.length} de {state.productos.length}</span>
-        <button className="btn btn--primary" onClick={() => setNuevo(true)}>
-          <Plus size={16} /> Nuevo producto
-        </button>
+        {puedeEditar && (
+          <button className="btn btn--primary" onClick={() => setNuevo(true)}>
+            <Plus size={16} /> Nuevo producto
+          </button>
+        )}
       </div>
 
       <div className="card">

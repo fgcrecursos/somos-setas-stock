@@ -27,7 +27,7 @@ export function LoginView() {
 
   return (
     <div className="login">
-      <form className="login__card" onSubmit={submit}>
+      <form className="login__card" onSubmit={submit} autoComplete="off">
         <img src="/brand/logo-vertical.png" alt="Somos Setas" className="login__logo" />
         <h1 className="login__title">Control de Stock</h1>
         <p className="login__sub">Ingresá con tu cuenta de Somos Setas.</p>
@@ -37,7 +37,7 @@ export function LoginView() {
           <input
             className="input"
             type="email"
-            autoComplete="username"
+            autoComplete="off"
             placeholder="nombre@somossetas.com.ar"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
@@ -51,7 +51,7 @@ export function LoginView() {
             <input
               className="input"
               type={verPass ? 'text' : 'password'}
-              autoComplete="current-password"
+              autoComplete="off"
               placeholder="••••••••"
               value={password}
               onChange={(e) => setPassword(e.target.value)}

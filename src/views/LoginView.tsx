@@ -3,6 +3,10 @@ import { useState } from 'react';
 import { useAuth } from '../lib/auth';
 
 const EMAIL_INVITADO = 'invitado@somossetas.com.ar';
+// Cuenta compartida de solo lectura: cualquiera que toque el botón entra sin
+// tipear nada. No protege nada sensible (RLS igual bloquea toda escritura
+// para este rol), así que no hay problema en que viaje en el bundle.
+const PASSWORD_INVITADO = 'SomosSetas-Invitado-2026';
 
 export function LoginView() {
   const { entrar } = useAuth();
@@ -21,6 +25,14 @@ export function LoginView() {
     setError('');
     setEntrando(true);
     const res = await entrar(email, password);
+    setEntrando(false);
+    if (res.error) setError(res.error);
+  }
+
+  async function entrarComoInvitado() {
+    setError('');
+    setEntrando(true);
+    const res = await entrar(EMAIL_INVITADO, PASSWORD_INVITADO);
     setEntrando(false);
     if (res.error) setError(res.error);
   }
@@ -81,16 +93,13 @@ export function LoginView() {
         <button
           type="button"
           className="login__guest"
-          onClick={() => {
-            setEmail(EMAIL_INVITADO);
-            setError('');
-          }}
+          onClick={entrarComoInvitado}
+          disabled={entrando}
         >
           Solo quiero mirar → entrar como invitado
         </button>
         <p className="login__hint">
           La cuenta de invitado ve todo el inventario y el historial, pero no puede modificar nada.
-          Pedile la contraseña a un administrador.
         </p>
       </form>
     </div>

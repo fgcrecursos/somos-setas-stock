@@ -16,16 +16,33 @@ interface Props {
 }
 
 export function ItemModal({ categoria, item, onClose, onEdit }: Props) {
-  const { ingreso, ajustar, puedeEditar, guardando } = useStore();
+  const { ingreso, ajustar, producir, puedeEditar, guardando } = useStore();
   const toast = useToast();
   const [addQty, setAddQty] = useState(10);
   const [setQty, setSetQty] = useState(item.actual);
   const e = calcEstado(item.actual, item.minimo);
+  const esProducto = categoria === 'producto';
 
   async function correr(fn: () => Promise<{ ok: boolean; error?: string }>, exito: string) {
     const res = await fn();
     toast(res.error ?? exito, !res.ok);
     if (res.ok) onClose();
+  }
+
+  // Sumar stock de un producto significa "se produjo más": hay que descontar
+  // la receta (etiquetas, insumos, materia prima), igual que en Vender/Producir.
+  // Ingreso directo sólo tiene sentido para materia prima/insumos/etiquetas.
+  async function sumarProducto() {
+    const res = await producir(item.codigo, addQty);
+    if (!res.ok) {
+      toast(res.error ?? res.mensaje, true);
+      return;
+    }
+    toast(
+      res.alertas.length ? `${res.mensaje}. ${res.alertas.length} alerta(s) de stock` : res.mensaje,
+      res.alertas.length > 0
+    );
+    onClose();
   }
 
   function printBarcode() {
@@ -89,22 +106,32 @@ export function ItemModal({ categoria, item, onClose, onEdit }: Props) {
           <div className="section-title" style={{ marginTop: 18 }}>Ajustar stock</div>
           <div className="form-row">
             <div className="field" style={{ margin: 0 }}>
-              <label><PackagePlus size={13} style={{ verticalAlign: 'middle' }} /> Ingresar (sumar)</label>
+              <label>
+                <PackagePlus size={13} style={{ verticalAlign: 'middle' }} />{' '}
+                {esProducto ? 'Producir (sumar)' : 'Ingresar (sumar)'}
+              </label>
               <div className="row">
                 <input className="input" type="number" value={addQty} onChange={(ev) => setAddQty(Number(ev.target.value))} />
                 <button
                   className="btn btn--primary"
                   disabled={guardando}
                   onClick={() =>
-                    correr(
-                      () => ingreso(categoria, item.codigo, addQty),
-                      `Ingresaron ${addQty} de ${item.nombre}`
-                    )
+                    esProducto
+                      ? sumarProducto()
+                      : correr(
+                          () => ingreso(categoria, item.codigo, addQty),
+                          `Ingresaron ${addQty} de ${item.nombre}`
+                        )
                   }
                 >
                   + Sumar
                 </button>
               </div>
+              {esProducto && (
+                <p className="hlp" style={{ marginTop: 4 }}>
+                  Descuenta la receta (etiqueta, insumos, materia prima) como una producción.
+                </p>
+              )}
             </div>
             <div className="field" style={{ margin: 0 }}>
               <label><SlidersHorizontal size={13} style={{ verticalAlign: 'middle' }} /> Fijar actual</label>
@@ -123,6 +150,11 @@ export function ItemModal({ categoria, item, onClose, onEdit }: Props) {
                   Fijar
                 </button>
               </div>
+              {esProducto && (
+                <p className="hlp" style={{ marginTop: 4 }}>
+                  Corrección de conteo físico: no toca la receta.
+                </p>
+              )}
             </div>
           </div>
         </>

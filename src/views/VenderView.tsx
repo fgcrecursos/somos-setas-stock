@@ -223,57 +223,63 @@ export function VenderView() {
                 )}
               </div>
 
-              <div className="section-title">
-                Receta — se {modo === 'venta' ? 'descuenta' : 'consume'} automáticamente
-              </div>
-              {preview.length === 0 && (
-                <p className="hlp">Este producto no tiene receta cargada. Agregá componentes desde Productos.</p>
-              )}
-              {preview.map((c) => {
-                const Icon = COMP_ICON[c.categoria];
-                const quedaMal = c.resultante < 0 || c.resultante < c.minimo;
-                return (
-                  <div key={c.categoria + c.codigo} className="comp-row">
-                    <span
-                      className="comp-ico"
-                      style={{ background: 'var(--crema-3)', color: 'var(--verde-700)' }}
-                    >
-                      <Icon size={16} />
-                    </span>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontWeight: 600 }}>{c.nombre}</div>
-                      <div className="hlp">
-                        {c.codigo} · {CATEGORIA_LABEL[c.categoria]} · {c.cantidad}/u
+              {modo === 'produccion' ? (
+                <>
+                  <div className="section-title">Receta — se consume automáticamente</div>
+                  {preview.length === 0 && (
+                    <p className="hlp">Este producto no tiene receta cargada. Agregá componentes desde Productos.</p>
+                  )}
+                  {preview.map((c) => {
+                    const Icon = COMP_ICON[c.categoria];
+                    const quedaMal = c.resultante < 0 || c.resultante < c.minimo;
+                    return (
+                      <div key={c.categoria + c.codigo} className="comp-row">
+                        <span
+                          className="comp-ico"
+                          style={{ background: 'var(--crema-3)', color: 'var(--verde-700)' }}
+                        >
+                          <Icon size={16} />
+                        </span>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontWeight: 600 }}>{c.nombre}</div>
+                          <div className="hlp">
+                            {c.codigo} · {CATEGORIA_LABEL[c.categoria]} · {c.cantidad}/u
+                          </div>
+                        </div>
+                        <div style={{ textAlign: 'right', minWidth: 150 }}>
+                          <span className="muted">{formatNum(c.actual)}</span>
+                          <ArrowRight size={13} style={{ margin: '0 6px', verticalAlign: 'middle' }} className="muted" />
+                          <span className={quedaMal ? 'diff-neg' : 'diff-pos'} style={{ fontWeight: 700 }}>
+                            {formatNum(c.resultante)}
+                          </span>
+                          <div className="hlp">−{formatNum(c.consumo)}</div>
+                        </div>
                       </div>
-                    </div>
-                    <div style={{ textAlign: 'right', minWidth: 150 }}>
-                      <span className="muted">{formatNum(c.actual)}</span>
-                      <ArrowRight size={13} style={{ margin: '0 6px', verticalAlign: 'middle' }} className="muted" />
-                      <span className={quedaMal ? 'diff-neg' : 'diff-pos'} style={{ fontWeight: 700 }}>
-                        {formatNum(c.resultante)}
-                      </span>
-                      <div className="hlp">−{formatNum(c.consumo)}</div>
-                    </div>
-                  </div>
-                );
-              })}
+                    );
+                  })}
 
-              {preview.some((c) => c.resultante < 0) && (
-                <div
-                  className="row"
-                  style={{
-                    marginTop: 12,
-                    padding: '10px 12px',
-                    background: 'var(--critico-bg)',
-                    color: 'var(--critico)',
-                    borderRadius: 10,
-                    fontSize: 12.5,
-                    fontWeight: 600,
-                  }}
-                >
-                  <AlertTriangle size={16} />
-                  Algún componente quedaría en negativo. Podés continuar, pero revisá el stock.
-                </div>
+                  {preview.some((c) => c.resultante < 0) && (
+                    <div
+                      className="row"
+                      style={{
+                        marginTop: 12,
+                        padding: '10px 12px',
+                        background: 'var(--critico-bg)',
+                        color: 'var(--critico)',
+                        borderRadius: 10,
+                        fontSize: 12.5,
+                        fontWeight: 600,
+                      }}
+                    >
+                      <AlertTriangle size={16} />
+                      Algún componente quedaría en negativo. Podés continuar, pero revisá el stock.
+                    </div>
+                  )}
+                </>
+              ) : (
+                <p className="hlp">
+                  La venta sólo descuenta el producto terminado: la receta ya se consumió cuando se produjo.
+                </p>
               )}
             </div>
 

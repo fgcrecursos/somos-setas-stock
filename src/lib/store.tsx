@@ -211,20 +211,25 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           delta: tipoMov === 'venta' ? -cantidad : cantidad,
         },
       ];
-      // La receta siempre se consume, se venda o se produzca.
-      const componentes: ComponenteMovido[] = producto.bom.map((linea) => {
-        const comp = buscarItem(state, linea.categoria, linea.codigo);
-        const consumido = linea.cantidad * cantidad;
-        deltas.push({ categoria: linea.categoria, codigo: linea.codigo, delta: -consumido });
-        return {
-          categoria: linea.categoria,
-          codigo: linea.codigo,
-          nombre: comp?.nombre ?? '(no encontrado)',
-          cantidad: consumido,
-          resultante: (comp?.actual ?? 0) - consumido,
-          faltante: !comp || comp.actual - consumido < 0,
-        };
-      });
+      // La receta se consume al producir (es cuando se elabora el producto y se
+      // gastan los insumos reales). La venta sólo mueve el stock del producto
+      // terminado, que ya salió descontado de la receta al producirse.
+      const componentes: ComponenteMovido[] =
+        tipoMov === 'produccion'
+          ? producto.bom.map((linea) => {
+              const comp = buscarItem(state, linea.categoria, linea.codigo);
+              const consumido = linea.cantidad * cantidad;
+              deltas.push({ categoria: linea.categoria, codigo: linea.codigo, delta: -consumido });
+              return {
+                categoria: linea.categoria,
+                codigo: linea.codigo,
+                nombre: comp?.nombre ?? '(no encontrado)',
+                cantidad: consumido,
+                resultante: (comp?.actual ?? 0) - consumido,
+                faltante: !comp || comp.actual - consumido < 0,
+              };
+            })
+          : [];
 
       const mov: Movimiento = {
         id: uid(),

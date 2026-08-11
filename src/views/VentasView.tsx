@@ -1,22 +1,38 @@
 // =====================================================================
-// VENTAS — cuánto se vendió, de qué y cuándo.
+// ACTIVIDAD — qué se vendió, qué se produjo y qué se consumió puertas adentro.
 //
-// Cuenta lo que se registró EN ESTA PLATAFORMA (ventas por escaneo o carga
-// manual). Las ventas de la tienda online se cuentan aparte, en el panel de
-// somossetas.com.ar, porque son canales distintos.
+// Las tres cosas se miran juntas: producir sin vender infla el stock y vender
+// sin producir lo vacía, así que tenerlas en la misma tabla es lo que permite
+// leer el movimiento real del período.
+//
+// Las ventas cuentan lo registrado en esta plataforma MÁS los pedidos de la
+// tienda que ya se confirmaron (llegan solos, marcados con el cartelito
+// "tienda"). Lo que se factura en el panel de la tienda se mira allá.
 // =====================================================================
-import { Download, PackageSearch, Receipt, ShoppingCart, TrendingUp } from 'lucide-react';
+import {
+  Download,
+  FlaskConical,
+  PackageSearch,
+  Scale,
+  ShoppingCart,
+  Store,
+  TrendingUp,
+  Users,
+} from 'lucide-react';
 import { Fragment, useMemo, useState } from 'react';
 import { useToast } from '../components/Toast';
-import { descargarInforme } from '../lib/backup';
-import { formatFecha, formatNum } from '../lib/helpers';
+import { descargarInforme, type FilaActividad } from '../lib/backup';
+import { MOVIMIENTO_COLOR, MOVIMIENTO_LABEL, formatFecha, formatNum } from '../lib/helpers';
 import { useStore } from '../lib/store';
-import type { Movimiento } from '../lib/types';
+import type { Movimiento, TipoMovimiento } from '../lib/types';
 
 const MESES = [
   'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
   'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre',
 ];
+
+/** Los tres tipos que cuentan como actividad de producto */
+const TIPOS_ACTIVIDAD: TipoMovimiento[] = ['venta', 'produccion', 'consumo_interno'];
 
 type PeriodoId = 'mes-actual' | 'mes-anterior' | 'ult-30' | 'anio' | 'todo' | string;
 
@@ -58,13 +74,13 @@ export function VentasView() {
   const { state } = useStore();
   const toast = useToast();
   const [periodo, setPeriodo] = useState<PeriodoId>('mes-actual');
-  const [tipo, setTipo] = useState<'venta' | 'produccion'>('venta');
+  const [detalle, setDetalle] = useState<TipoMovimiento | 'todo'>('todo');
   const [abierto, setAbierto] = useState<string | null>(null);
 
   const mesesConDatos = useMemo(() => {
     const set = new Set<string>();
     for (const m of state.movimientos) {
-      if (m.tipo !== 'venta' && m.tipo !== 'produccion') continue;
+      if (!TIPOS_ACTIVIDAD.includes(m.tipo)) continue;
       const d = new Date(m.fecha);
       if (isNaN(d.getTime())) continue;
       set.add(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
@@ -72,80 +88,112 @@ export function VentasView() {
     return Array.from(set).sort().reverse();
   }, [state.movimientos]);
 
+  /** Todos los movimientos de actividad del período, sin separar por tipo */
   const movimientos = useMemo(() => {
     const lim = limites(periodo);
     return state.movimientos.filter((m) => {
-      if (m.tipo !== tipo) return false;
+      if (!TIPOS_ACTIVIDAD.includes(m.tipo)) return false;
       if (!lim) return true;
       const t = new Date(m.fecha).getTime();
       return t >= lim.desde && t <= lim.hasta;
     });
-  }, [state.movimientos, periodo, tipo]);
+  }, [state.movimientos, periodo]);
 
-  const ranking = useMemo(() => {
-    const acc = new Map<string, { nombre: string; unidades: number; operaciones: number; ultima: string }>();
+  const ranking = useMemo<FilaActividad[]>(() => {
+    const acc = new Map<string, FilaActividad>();
     for (const m of movimientos) {
-      const prev = acc.get(m.codigo) ?? {
-        nombre: m.nombre,
-        unidades: 0,
-        operaciones: 0,
-        ultima: m.fecha,
-      };
-      prev.unidades += m.cantidad;
-      prev.operaciones += 1;
-      if (m.fecha > prev.ultima) prev.ultima = m.fecha;
-      acc.set(m.codigo, prev);
+      const fila =
+        acc.get(m.codigo) ??
+        ({
+          codigo: m.codigo,
+          nombre: m.nombre,
+          tipo: '—',
+          presentacion: '',
+          vendidas: 0,
+          producidas: 0,
+          consumo: 0,
+          ventasTienda: 0,
+          operaciones: 0,
+          ultima: m.fecha,
+          stock: null,
+        } as FilaActividad);
+      if (m.tipo === 'venta') {
+        fila.vendidas += m.cantidad;
+        if (m.origen === 'tienda') fila.ventasTienda += m.cantidad;
+      } else if (m.tipo === 'produccion') fila.producidas += m.cantidad;
+      else fila.consumo += m.cantidad;
+      fila.operaciones += 1;
+      if (m.fecha > fila.ultima) fila.ultima = m.fecha;
+      acc.set(m.codigo, fila);
     }
-    return Array.from(acc.entries())
-      .map(([codigo, v]) => {
-        const p = state.productos.find((x) => x.codigo === codigo);
-        return { codigo, ...v, tipo: p?.tipo ?? '—', presentacion: p?.presentacion ?? '', stock: p?.actual ?? null };
+    return Array.from(acc.values())
+      .map((fila) => {
+        const p = state.productos.find((x) => x.codigo === fila.codigo);
+        return {
+          ...fila,
+          tipo: p?.tipo ?? '—',
+          presentacion: p?.presentacion ?? '',
+          stock: p?.actual ?? null,
+        };
       })
-      .sort((a, b) => b.unidades - a.unidades);
+      .sort((a, b) => b.vendidas + b.producidas - (a.vendidas + a.producidas));
   }, [movimientos, state.productos]);
 
-  const totalUnidades = ranking.reduce((s, r) => s + r.unidades, 0);
-  const maxUnidades = ranking[0]?.unidades ?? 0;
-
-  const porTipo = useMemo(() => {
-    const acc = new Map<string, number>();
-    for (const r of ranking) acc.set(r.tipo, (acc.get(r.tipo) ?? 0) + r.unidades);
-    return Array.from(acc.entries()).sort((a, b) => b[1] - a[1]);
+  const total = useMemo(() => {
+    const t = { vendidas: 0, producidas: 0, consumo: 0, tienda: 0, ops: 0 };
+    for (const r of ranking) {
+      t.vendidas += r.vendidas;
+      t.producidas += r.producidas;
+      t.consumo += r.consumo;
+      t.tienda += r.ventasTienda;
+      t.ops += r.operaciones;
+    }
+    return t;
   }, [ranking]);
 
-  const esVenta = tipo === 'venta';
-  const palabra = esVenta ? 'venta' : 'producción';
-  const palabraPl = esVenta ? 'ventas' : 'producciones';
+  const maxBarra = Math.max(1, ...ranking.map((r) => Math.max(r.vendidas, r.producidas)));
+
+  const porTipo = useMemo(() => {
+    const acc = new Map<string, { vendidas: number; producidas: number; consumo: number }>();
+    for (const r of ranking) {
+      const prev = acc.get(r.tipo) ?? { vendidas: 0, producidas: 0, consumo: 0 };
+      prev.vendidas += r.vendidas;
+      prev.producidas += r.producidas;
+      prev.consumo += r.consumo;
+      acc.set(r.tipo, prev);
+    }
+    return Array.from(acc.entries()).sort((a, b) => b[1].vendidas - a[1].vendidas);
+  }, [ranking]);
+
+  const masVendido = useMemo(
+    () => [...ranking].sort((a, b) => b.vendidas - a.vendidas)[0],
+    [ranking]
+  );
+
+  const detalleFiltrado = useMemo(
+    () => (detalle === 'todo' ? movimientos : movimientos.filter((m) => m.tipo === detalle)),
+    [movimientos, detalle]
+  );
 
   async function exportar() {
     const nombre = await descargarInforme(
       ranking,
       movimientos,
-      `${esVenta ? 'Ventas' : 'Producción'} · ${etiquetaPeriodo(periodo)}`
+      `Actividad · ${etiquetaPeriodo(periodo)}`
     );
     toast(`Informe descargado: ${nombre}`);
   }
 
+  const balance = total.producidas - total.vendidas - total.consumo;
+
   return (
     <div className="stack">
-      {/* Filtros */}
+      {/* Período */}
       <div className="toolbar">
-        <div className="chips">
-          <button className={'chip' + (tipo === 'venta' ? ' active' : '')} onClick={() => setTipo('venta')}>
-            Ventas
-          </button>
-          <button className={'chip' + (tipo === 'produccion' ? ' active' : '')} onClick={() => setTipo('produccion')}>
-            Producción
-          </button>
-        </div>
-        <div className="toolbar__spacer" />
-        <button className="btn btn--sm" onClick={exportar} disabled={!movimientos.length}>
-          <Download size={14} /> Descargar informe
-        </button>
-      </div>
-
-      <div className="toolbar" style={{ marginTop: -6 }}>
-        <span className="muted" style={{ fontSize: 11.5, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase' }}>
+        <span
+          className="muted"
+          style={{ fontSize: 11.5, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase' }}
+        >
           Período
         </span>
         <div className="chips">
@@ -158,63 +206,86 @@ export function VentasView() {
               ['todo', 'Todo'],
             ] as [PeriodoId, string][]
           ).map(([id, label]) => (
-            <button key={id} className={'chip' + (periodo === id ? ' active' : '')} onClick={() => setPeriodo(id)}>
+            <button
+              key={id}
+              className={'chip' + (periodo === id ? ' active' : '')}
+              onClick={() => setPeriodo(id)}
+            >
               {label}
             </button>
           ))}
           {mesesConDatos.slice(0, 6).map((ym) => (
-            <button key={ym} className={'chip' + (periodo === ym ? ' active' : '')} onClick={() => setPeriodo(ym)}>
+            <button
+              key={ym}
+              className={'chip' + (periodo === ym ? ' active' : '')}
+              onClick={() => setPeriodo(ym)}
+            >
               {etiquetaMes(ym)}
             </button>
           ))}
         </div>
+        <div className="toolbar__spacer" />
+        <button className="btn btn--sm" onClick={exportar} disabled={!movimientos.length}>
+          <Download size={14} /> Descargar informe
+        </button>
       </div>
 
-      {/* KPIs */}
+      {/* KPIs: las tres puntas de la actividad, más el balance */}
       <div className="grid grid--kpi">
         <Kpi
           icon={<ShoppingCart size={19} />}
           color="var(--naranja)"
           bg="var(--naranja-100)"
-          valor={formatNum(totalUnidades)}
-          label={esVenta ? 'Unidades vendidas' : 'Unidades producidas'}
-          foot={etiquetaPeriodo(periodo)}
-        />
-        <Kpi
-          icon={<PackageSearch size={19} />}
-          color="var(--verde-700)"
-          bg="var(--crema-3)"
-          valor={formatNum(ranking.length)}
-          label="Productos distintos"
-          foot={`de ${state.productos.length} del catálogo`}
-        />
-        <Kpi
-          icon={<Receipt size={19} />}
-          color="var(--ok)"
-          bg="var(--ok-bg)"
-          valor={formatNum(movimientos.length)}
-          label={`${palabraPl.charAt(0).toUpperCase() + palabraPl.slice(1)} registradas`}
+          valor={formatNum(total.vendidas)}
+          label="Unidades vendidas"
           foot={
-            movimientos.length
-              ? `promedio ${formatNum(Math.round((totalUnidades / movimientos.length) * 10) / 10)} u por ${palabra}`
-              : 'sin movimientos'
+            total.tienda
+              ? `${formatNum(total.tienda)} de la tienda · ${formatNum(
+                  total.vendidas - total.tienda
+                )} cargadas acá`
+              : etiquetaPeriodo(periodo)
           }
         />
         <Kpi
-          icon={<TrendingUp size={19} />}
-          color="var(--bajo)"
-          bg="var(--bajo-bg)"
-          valor={ranking[0] ? formatNum(ranking[0].unidades) : '—'}
-          label={esVenta ? 'Más vendido' : 'Más producido'}
-          foot={ranking[0]?.nombre ?? 'sin datos'}
+          icon={<FlaskConical size={19} />}
+          color="var(--ok)"
+          bg="var(--ok-bg)"
+          valor={formatNum(total.producidas)}
+          label="Unidades producidas"
+          foot={etiquetaPeriodo(periodo)}
+        />
+        <Kpi
+          icon={<Users size={19} />}
+          color="#6a4f7a"
+          bg="#efe6f5"
+          valor={formatNum(total.consumo)}
+          label="Consumo interno"
+          foot="Salidas sin venta"
+        />
+        <Kpi
+          icon={<Scale size={19} />}
+          color={balance < 0 ? 'var(--bajo)' : 'var(--verde-700)'}
+          bg={balance < 0 ? 'var(--bajo-bg)' : 'var(--crema-3)'}
+          valor={(balance > 0 ? '+' : '') + formatNum(balance)}
+          label="Balance del período"
+          foot={
+            balance < 0
+              ? 'Salió más de lo que se produjo'
+              : balance > 0
+                ? 'Se produjo más de lo que salió'
+                : 'Producción y salidas empatadas'
+          }
         />
       </div>
 
-      {/* Ranking */}
+      {/* Ranking combinado */}
       <div className="card">
         <div className="card__head">
           <TrendingUp size={18} />
-          <h3>Ranking de productos</h3>
+          <h3>Actividad por producto</h3>
+          <span className="muted" style={{ marginLeft: 12, fontSize: 12.5 }}>
+            {formatNum(ranking.length)} productos con movimiento · {formatNum(total.ops)} operaciones
+          </span>
           <span className="pill" style={{ marginLeft: 'auto' }}>{etiquetaPeriodo(periodo)}</span>
         </div>
         <div className="table-wrap">
@@ -224,45 +295,72 @@ export function VentasView() {
                 <th className="no-sort" style={{ width: 40 }}>#</th>
                 <th className="no-sort">Producto</th>
                 <th className="no-sort">Tipo</th>
-                <th className="num">Unidades</th>
-                <th className="no-sort" style={{ width: '22%' }}>Participación</th>
-                <th className="num">{esVenta ? 'Ventas' : 'Lotes'}</th>
-                <th className="num">Stock actual</th>
+                <th className="num">Vendidas</th>
+                <th className="num">Producidas</th>
+                <th className="num">Consumo</th>
+                <th className="no-sort" style={{ width: '18%' }}>Vendido vs. producido</th>
+                <th className="num">Balance</th>
+                <th className="num">Stock</th>
                 <th className="no-sort">Última</th>
               </tr>
             </thead>
             <tbody>
-              {ranking.map((r, i) => (
-                <tr key={r.codigo}>
-                  <td className="muted">{i + 1}</td>
-                  <td className="nombre">
-                    {r.nombre} <span className="codigo">{r.codigo}</span>
-                    {r.presentacion && <div className="hlp">{r.presentacion}</div>}
-                  </td>
-                  <td><span className="pill">{r.tipo}</span></td>
-                  <td className="num" style={{ fontWeight: 700 }}>{formatNum(r.unidades)}</td>
-                  <td>
-                    <div className="barra">
-                      <div
-                        className="barra__fill"
-                        style={{ width: `${maxUnidades ? (r.unidades / maxUnidades) * 100 : 0}%` }}
-                      />
-                    </div>
-                    <span className="hlp">
-                      {totalUnidades ? Math.round((r.unidades / totalUnidades) * 1000) / 10 : 0}%
-                    </span>
-                  </td>
-                  <td className="num muted">{formatNum(r.operaciones)}</td>
-                  <td className="num muted">{r.stock === null ? '—' : formatNum(r.stock)}</td>
-                  <td className="muted" style={{ fontSize: 12 }}>{formatFecha(r.ultima)}</td>
-                </tr>
-              ))}
+              {ranking.map((r, i) => {
+                const bal = r.producidas - r.vendidas - r.consumo;
+                return (
+                  <tr key={r.codigo}>
+                    <td className="muted">{i + 1}</td>
+                    <td className="nombre">
+                      {r.nombre} <span className="codigo">{r.codigo}</span>
+                      {r.presentacion && <div className="hlp">{r.presentacion}</div>}
+                    </td>
+                    <td><span className="pill">{r.tipo}</span></td>
+                    <td className="num" style={{ fontWeight: 700 }}>
+                      {formatNum(r.vendidas)}
+                      {r.ventasTienda > 0 && (
+                        <div className="hlp" title="Vendidas por la tienda online">
+                          {formatNum(r.ventasTienda)} tienda
+                        </div>
+                      )}
+                    </td>
+                    <td className="num" style={{ fontWeight: 700 }}>{formatNum(r.producidas)}</td>
+                    <td className="num muted">{r.consumo ? formatNum(r.consumo) : '—'}</td>
+                    <td>
+                      {/* Dos barras: naranja lo que salió vendido, verde lo producido */}
+                      <div className="barra" title={`Vendidas: ${r.vendidas}`}>
+                        <div
+                          className="barra__fill"
+                          style={{ width: `${(r.vendidas / maxBarra) * 100}%` }}
+                        />
+                      </div>
+                      <div className="barra" style={{ marginTop: 3 }} title={`Producidas: ${r.producidas}`}>
+                        <div
+                          className="barra__fill"
+                          style={{
+                            width: `${(r.producidas / maxBarra) * 100}%`,
+                            background: 'var(--ok)',
+                          }}
+                        />
+                      </div>
+                    </td>
+                    <td
+                      className={'num ' + (bal < 0 ? 'diff-neg' : bal > 0 ? 'diff-pos' : 'muted')}
+                      style={{ fontWeight: 600 }}
+                    >
+                      {bal > 0 ? '+' : ''}
+                      {formatNum(bal)}
+                    </td>
+                    <td className="num muted">{r.stock === null ? '—' : formatNum(r.stock)}</td>
+                    <td className="muted" style={{ fontSize: 12 }}>{formatFecha(r.ultima)}</td>
+                  </tr>
+                );
+              })}
               {ranking.length === 0 && (
                 <tr>
-                  <td colSpan={8}>
+                  <td colSpan={10}>
                     <div className="empty">
                       <ShoppingCart size={30} />
-                      <p>No hay {palabraPl} registradas en {etiquetaPeriodo(periodo).toLowerCase()}.</p>
+                      <p>No hay ventas ni producción en {etiquetaPeriodo(periodo).toLowerCase()}.</p>
                     </div>
                   </td>
                 </tr>
@@ -281,39 +379,65 @@ export function VentasView() {
               <thead>
                 <tr>
                   <th className="no-sort">Tipo</th>
-                  <th className="num">Unidades</th>
-                  <th className="num">%</th>
+                  <th className="num">Vendidas</th>
+                  <th className="num">Producidas</th>
+                  <th className="num">Consumo</th>
                 </tr>
               </thead>
               <tbody>
-                {porTipo.map(([t, u]) => (
+                {porTipo.map(([t, v]) => (
                   <tr key={t}>
                     <td>{t}</td>
-                    <td className="num" style={{ fontWeight: 600 }}>{formatNum(u)}</td>
-                    <td className="num muted">
-                      {totalUnidades ? Math.round((u / totalUnidades) * 1000) / 10 : 0}%
-                    </td>
+                    <td className="num" style={{ fontWeight: 600 }}>{formatNum(v.vendidas)}</td>
+                    <td className="num" style={{ fontWeight: 600 }}>{formatNum(v.producidas)}</td>
+                    <td className="num muted">{v.consumo ? formatNum(v.consumo) : '—'}</td>
                   </tr>
                 ))}
                 {porTipo.length === 0 && (
-                  <tr><td colSpan={3}><div className="empty">Sin datos.</div></td></tr>
+                  <tr><td colSpan={4}><div className="empty">Sin datos.</div></td></tr>
                 )}
               </tbody>
             </table>
           </div>
+          {masVendido && masVendido.vendidas > 0 && (
+            <div className="card__body" style={{ borderTop: '1px solid var(--linea)' }}>
+              <div className="muted" style={{ fontSize: 11.5 }}>Más vendido del período</div>
+              <div style={{ fontWeight: 700, marginTop: 2 }}>{masVendido.nombre}</div>
+              <div className="hlp">{formatNum(masVendido.vendidas)} unidades</div>
+            </div>
+          )}
         </div>
 
-        {/* Detalle */}
+        {/* Detalle operación por operación */}
         <div className="card">
           <div className="card__head">
-            <h3>Detalle de {palabraPl}</h3>
-            <span className="pill" style={{ marginLeft: 'auto' }}>{movimientos.length}</span>
+            <h3>Detalle</h3>
+            <div className="chips" style={{ marginLeft: 12 }}>
+              {(
+                [
+                  ['todo', 'Todo'],
+                  ['venta', 'Ventas'],
+                  ['produccion', 'Producción'],
+                  ['consumo_interno', 'Consumo interno'],
+                ] as [TipoMovimiento | 'todo', string][]
+              ).map(([id, label]) => (
+                <button
+                  key={id}
+                  className={'chip' + (detalle === id ? ' active' : '')}
+                  onClick={() => setDetalle(id)}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            <span className="pill" style={{ marginLeft: 'auto' }}>{detalleFiltrado.length}</span>
           </div>
           <div className="table-wrap">
             <table className="tbl">
               <thead>
                 <tr>
                   <th className="no-sort">Fecha</th>
+                  <th className="no-sort">Tipo</th>
                   <th className="no-sort">Producto</th>
                   <th className="num">Cant.</th>
                   <th className="no-sort">Registró</th>
@@ -321,8 +445,9 @@ export function VentasView() {
                 </tr>
               </thead>
               <tbody>
-                {movimientos.map((m: Movimiento) => {
+                {detalleFiltrado.slice(0, 120).map((m: Movimiento) => {
                   const open = abierto === m.id;
+                  const st = MOVIMIENTO_COLOR[m.tipo];
                   return (
                     <Fragment key={m.id}>
                       <tr
@@ -330,13 +455,26 @@ export function VentasView() {
                         onClick={() => m.componentes?.length && setAbierto(open ? null : m.id)}
                       >
                         <td className="muted" style={{ fontSize: 12 }}>{formatFecha(m.fecha)}</td>
+                        <td>
+                          <span
+                            className="pill"
+                            style={{ background: st.bg, color: st.c, borderColor: 'transparent' }}
+                          >
+                            {MOVIMIENTO_LABEL[m.tipo]}
+                          </span>
+                          {m.origen === 'tienda' && (
+                            <span className="pill" style={{ marginLeft: 4, gap: 3 }} title={m.referencia}>
+                              <Store size={11} /> tienda
+                            </span>
+                          )}
+                        </td>
                         <td className="nombre">{m.nombre} <span className="codigo">{m.codigo}</span></td>
                         <td className="num" style={{ fontWeight: 700 }}>{formatNum(m.cantidad)}</td>
                         <td className="muted" style={{ fontSize: 12 }}>{m.usuario ?? '—'}</td>
                         <td className="muted">
                           {m.componentes?.length
                             ? `${m.componentes.length} · ${open ? 'ocultar' : 'ver'}`
-                            : '—'}
+                            : (m.nota ?? '—')}
                         </td>
                       </tr>
                       {open &&
@@ -346,7 +484,7 @@ export function VentasView() {
                             <td colSpan={2} style={{ paddingLeft: 24 }}>
                               <span className="codigo">{c.codigo}</span> {c.nombre}
                             </td>
-                            <td colSpan={2} className={c.faltante ? 'diff-neg' : 'muted'}>
+                            <td colSpan={3} className={c.faltante ? 'diff-neg' : 'muted'}>
                               −{formatNum(c.cantidad)} → queda {formatNum(c.resultante)}
                             </td>
                           </tr>
@@ -354,14 +492,28 @@ export function VentasView() {
                     </Fragment>
                   );
                 })}
-                {movimientos.length === 0 && (
-                  <tr><td colSpan={5}><div className="empty">Sin movimientos en el período.</div></td></tr>
+                {detalleFiltrado.length === 0 && (
+                  <tr><td colSpan={6}><div className="empty">Sin movimientos en el período.</div></td></tr>
                 )}
               </tbody>
             </table>
           </div>
+          {detalleFiltrado.length > 120 && (
+            <div className="card__body">
+              <p className="hlp" style={{ margin: 0 }}>
+                Se muestran los 120 más recientes. El resto está en Movimientos y en el informe
+                descargable.
+              </p>
+            </div>
+          )}
         </div>
       </div>
+
+      <p className="hlp" style={{ margin: '0 4px' }}>
+        <PackageSearch size={13} style={{ verticalAlign: 'middle' }} /> Las ventas incluyen los
+        pedidos de la tienda ya confirmados. La facturación se sigue mirando en el panel de la
+        tienda: acá se cuentan unidades, no plata.
+      </p>
     </div>
   );
 }

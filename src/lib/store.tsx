@@ -26,7 +26,7 @@ import type {
   Movimiento,
   Producto,
 } from './types';
-import { buscarItem, listaDe, uid } from './helpers';
+import { buscarItem, describirCambios, listaDe, uid } from './helpers';
 import { useAuth } from './auth';
 import {
   aplicarMovimiento,
@@ -99,6 +99,13 @@ interface StoreCtx {
   cargaInicial: (origen: 'navegador' | 'excel') => Promise<Resultado>;
   vender: (codigoProducto: string, cantidad: number, nota?: string) => Promise<VentaResultado>;
   producir: (codigoProducto: string, cantidad: number, nota?: string) => Promise<VentaResultado>;
+  /** Salida de stock que NO es venta: lo usó el equipo (muestras, pruebas, consumo) */
+  consumoInterno: (
+    categoria: Categoria,
+    codigo: string,
+    cantidad: number,
+    nota?: string
+  ) => Promise<Resultado>;
   ingreso: (categoria: Categoria, codigo: string, cantidad: number) => Promise<Resultado>;
   ajustar: (categoria: Categoria, codigo: string, nuevoActual: number) => Promise<Resultado>;
   upsertProducto: (p: Producto, codigoOriginal?: string) => Promise<Resultado>;
@@ -292,6 +299,133 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       }
     }
 
+    /**
+     * Movimiento de una sola línea (sin receta): ingreso, ajuste, consumo
+     * interno, alta, edición o baja. Si `deltas` viene vacío no toca el stock,
+     * sólo deja el movimiento anotado en el historial.
+     */
+    async function movimientoSimple(deltas: Delta[], mov: Movimiento): Promise<Resultado> {
+      if (!esAdmin) return { ok: false, error: SIN_PERMISO };
+      setGuardando(true);
+      try {
+        const { resultantes, movimiento } = await aplicarMovimiento(deltas, mov);
+        aplicarResultantes(resultantes);
+        if (movimiento)
+          setState((prev) => ({ ...prev, movimientos: [movimiento, ...prev.movimientos] }));
+        return { ok: true };
+      } catch (err) {
+        return { ok: false, error: mensajeError(err) };
+      } finally {
+        setGuardando(false);
+      }
+    }
+
+    /** Anota un movimiento en el historial sin tocar el stock (altas, ediciones, bajas) */
+    function anotar(
+      tipo: Movimiento['tipo'],
+      categoria: Categoria,
+      codigo: string,
+      nombre: string,
+      cantidad: number,
+      nota: string
+    ): Movimiento {
+      return {
+        id: uid(),
+        fecha: new Date().toISOString(),
+        tipo,
+        categoria,
+        codigo,
+        nombre,
+        cantidad,
+        nota,
+        usuario: email,
+        origen: 'plataforma',
+      };
+    }
+
+    /**
+     * Alta o edición de una ficha (cualquier categoría).
+     *
+     * Deja anotado en el historial qué se creó o qué campos cambiaron. Si en una
+     * edición cambió el stock, ese cambio va por st_aplicar —con la fila
+     * bloqueada— en vez de viajar en el upsert de la ficha: así editar el
+     * nombre de un producto no pisa una venta que alguien registró mientras el
+     * formulario estaba abierto.
+     */
+    async function guardarFicha(
+      categoria: Categoria,
+      item: any,
+      codigoOriginal?: string
+    ): Promise<Resultado> {
+      if (!esAdmin) return { ok: false, error: SIN_PERMISO };
+      const anterior = codigoOriginal
+        ? buscarItem(state, categoria, codigoOriginal)
+        : buscarItem(state, categoria, item.codigo);
+      const esAlta = !anterior;
+      const actualNuevo = Number(item.actual) || 0;
+      const cambioStock = !esAlta && actualNuevo !== (anterior?.actual ?? 0);
+
+      setGuardando(true);
+      try {
+        await guardarItem(categoria, item, codigoOriginal, !esAlta);
+
+        const guardado = esAlta || cambioStock ? item : { ...item, actual: anterior!.actual };
+        setState((prev) => {
+          const next = structuredClone(prev);
+          const lista = listaDe(next, categoria) as any[];
+          const key = codigoOriginal ?? item.codigo;
+          const idx = lista.findIndex((x) => x.codigo === key);
+          if (idx >= 0) lista[idx] = guardado;
+          else lista.unshift(guardado);
+          return next;
+        });
+
+        if (esAlta) {
+          const mov = await aplicarMovimiento(
+            [],
+            anotar(
+              'alta',
+              categoria,
+              item.codigo,
+              item.nombre,
+              actualNuevo,
+              actualNuevo
+                ? `Ítem creado con ${actualNuevo} en stock`
+                : 'Ítem creado (sin stock inicial)'
+            )
+          );
+          if (mov.movimiento)
+            setState((prev) => ({
+              ...prev,
+              movimientos: [mov.movimiento!, ...prev.movimientos],
+            }));
+        } else {
+          const cambios = describirCambios(anterior, item);
+          if (cambios.length) {
+            const { resultantes, movimiento } = await aplicarMovimiento(
+              cambioStock ? [{ categoria, codigo: item.codigo, set: actualNuevo }] : [],
+              anotar(
+                'edicion',
+                categoria,
+                item.codigo,
+                item.nombre,
+                cambioStock ? actualNuevo - (anterior?.actual ?? 0) : 0,
+                cambios.join(' · ')
+              )
+            );
+            aplicarResultantes(resultantes);
+            if (movimiento)
+              setState((prev) => ({ ...prev, movimientos: [movimiento, ...prev.movimientos] }));
+          }
+        }
+        return { ok: true };
+      } catch (err) {
+        return { ok: false, error: mensajeError(err) };
+      } finally {
+        setGuardando(false);
+      }
+    }
+
     /** Envuelve una escritura simple: chequea permiso, marca guardando y traduce el error */
     async function escribir(fn: () => Promise<void>): Promise<Resultado> {
       if (!esAdmin) return { ok: false, error: SIN_PERMISO };
@@ -336,96 +470,58 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       producir: (codigo, cantidad, nota) => registrar(codigo, cantidad, 'produccion', nota),
 
       async ingreso(categoria, codigo, cantidad) {
-        if (!esAdmin) return { ok: false, error: SIN_PERMISO };
         const item = buscarItem(state, categoria, codigo);
         if (!item) return { ok: false, error: 'No se encontró el ítem.' };
-        setGuardando(true);
-        try {
-          const { resultantes, movimiento } = await aplicarMovimiento(
-            [{ categoria, codigo, delta: cantidad }],
-            {
-              id: uid(),
-              fecha: new Date().toISOString(),
-              tipo: 'ingreso',
-              categoria,
-              codigo,
-              nombre: item.nombre,
-              cantidad,
-              usuario: email,
-            }
-          );
-          aplicarResultantes(resultantes);
-          if (movimiento)
-            setState((prev) => ({ ...prev, movimientos: [movimiento, ...prev.movimientos] }));
-          return { ok: true };
-        } catch (err) {
-          return { ok: false, error: mensajeError(err) };
-        } finally {
-          setGuardando(false);
-        }
+        return movimientoSimple(
+          [{ categoria, codigo, delta: cantidad }],
+          anotar('ingreso', categoria, codigo, item.nombre, cantidad, `Ingreso de ${cantidad}`)
+        );
+      },
+
+      async consumoInterno(categoria, codigo, cantidad, nota) {
+        const item = buscarItem(state, categoria, codigo);
+        if (!item) return { ok: false, error: 'No se encontró el ítem.' };
+        if (cantidad <= 0) return { ok: false, error: 'La cantidad tiene que ser mayor a cero.' };
+        // Sale del stock igual que una venta, pero sin plata de por medio: no
+        // suma a ventas ni a facturación. Como una venta, tampoco toca la receta:
+        // lo que se consume es el producto ya terminado.
+        return movimientoSimple(
+          [{ categoria, codigo, delta: -cantidad }],
+          anotar(
+            'consumo_interno',
+            categoria,
+            codigo,
+            item.nombre,
+            cantidad,
+            nota?.trim() || 'Consumo interno'
+          )
+        );
       },
 
       async ajustar(categoria, codigo, nuevoActual) {
-        if (!esAdmin) return { ok: false, error: SIN_PERMISO };
         const item = buscarItem(state, categoria, codigo);
         if (!item) return { ok: false, error: 'No se encontró el ítem.' };
-        setGuardando(true);
-        try {
-          // `set` en vez de delta: es un conteo físico, vale el número exacto.
-          const { resultantes, movimiento } = await aplicarMovimiento(
-            [{ categoria, codigo, set: nuevoActual }],
-            {
-              id: uid(),
-              fecha: new Date().toISOString(),
-              tipo: 'ajuste',
-              categoria,
-              codigo,
-              nombre: item.nombre,
-              cantidad: nuevoActual - item.actual,
-              nota: `Ajuste manual a ${nuevoActual}`,
-              usuario: email,
-            }
-          );
-          aplicarResultantes(resultantes);
-          if (movimiento)
-            setState((prev) => ({ ...prev, movimientos: [movimiento, ...prev.movimientos] }));
-          return { ok: true };
-        } catch (err) {
-          return { ok: false, error: mensajeError(err) };
-        } finally {
-          setGuardando(false);
-        }
+        // `set` en vez de delta: es un conteo físico, vale el número exacto.
+        return movimientoSimple(
+          [{ categoria, codigo, set: nuevoActual }],
+          anotar(
+            'ajuste',
+            categoria,
+            codigo,
+            item.nombre,
+            nuevoActual - item.actual,
+            `Ajuste manual a ${nuevoActual}`
+          )
+        );
       },
 
-      upsertProducto: (p, codigoOriginal) =>
-        escribir(async () => {
-          await guardarItem('producto', p, codigoOriginal);
-          setState((prev) => {
-            const next = structuredClone(prev);
-            const key = codigoOriginal ?? p.codigo;
-            const idx = next.productos.findIndex((x) => x.codigo === key);
-            if (idx >= 0) next.productos[idx] = p;
-            else next.productos.unshift(p);
-            return next;
-          });
-        }),
-
+      upsertProducto: (p, codigoOriginal) => guardarFicha('producto', p, codigoOriginal),
       upsertItem: (categoria, item, codigoOriginal) =>
-        escribir(async () => {
-          await guardarItem(categoria, item, codigoOriginal);
-          setState((prev) => {
-            const next = structuredClone(prev);
-            const lista = listaDe(next, categoria) as any[];
-            const key = codigoOriginal ?? item.codigo;
-            const idx = lista.findIndex((x) => x.codigo === key);
-            if (idx >= 0) lista[idx] = item;
-            else lista.unshift(item);
-            return next;
-          });
-        }),
+        guardarFicha(categoria, item, codigoOriginal),
 
       eliminarItem: (categoria, codigo) =>
         escribir(async () => {
+          const item = buscarItem(state, categoria, codigo);
           await borrarItem(categoria, codigo);
           setState((prev) => {
             const next = structuredClone(prev);
@@ -433,6 +529,23 @@ export function StoreProvider({ children }: { children: ReactNode }) {
             const idx = lista.findIndex((x) => x.codigo === codigo);
             if (idx >= 0) lista.splice(idx, 1);
             return next;
+          });
+          // El stock que tenía sale del sistema: queda anotado para que el
+          // historial cierre y no aparezca stock evaporado sin explicación.
+          await aplicarMovimiento(
+            [],
+            anotar(
+              'baja',
+              categoria,
+              codigo,
+              item?.nombre ?? codigo,
+              -(item?.actual ?? 0),
+              item?.actual
+                ? `Ítem eliminado del sistema (tenía ${item.actual} en stock)`
+                : 'Ítem eliminado del sistema'
+            )
+          ).catch(() => {
+            /* el ítem ya se borró: que falle el registro no puede revertir la baja */
           });
         }),
 

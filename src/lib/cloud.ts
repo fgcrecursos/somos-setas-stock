@@ -13,9 +13,12 @@ import type {
   DBState,
   Etiqueta,
   Insumo,
+  LineaSinMapear,
   MateriaPrima,
   Movimiento,
+  PedidoTienda,
   Producto,
+  SkuMap,
 } from './types';
 
 const PAGINA = 1000; // límite por consulta de Supabase
@@ -98,6 +101,8 @@ function movFromRow(row: any): Movimiento {
     nota: row.nota ?? undefined,
     componentes: row.componentes ?? [],
     usuario: row.usuario ?? undefined,
+    origen: row.origen ?? 'plataforma',
+    referencia: row.referencia ?? undefined,
   };
 }
 
@@ -180,15 +185,24 @@ export async function subirTodo(state: DBState): Promise<void> {
 export async function guardarItem(
   categoria: Categoria,
   item: any,
-  codigoOriginal?: string
+  codigoOriginal?: string,
+  /**
+   * En una edición el stock NO viaja en el upsert: si alguien vendió mientras
+   * el formulario estaba abierto, guardar la ficha pisaría esa venta. El cambio
+   * de stock (si lo hubo) va aparte por st_aplicar, que bloquea la fila.
+   */
+  conservarActual = false
 ): Promise<void> {
   // Si le cambiaron el código, la fila vieja ya no corresponde a nadie.
   if (codigoOriginal && codigoOriginal !== item.codigo) {
     await borrarItem(categoria, codigoOriginal);
+    conservarActual = false; // es una fila nueva: hay que escribir el stock
   }
+  const fila: any = toRow(categoria, item);
+  if (conservarActual) delete fila.actual;
   const { error } = await sb
     .from('st_items')
-    .upsert(toRow(categoria, item), { onConflict: 'categoria,codigo' });
+    .upsert(fila, { onConflict: 'categoria,codigo' });
   if (error) throw new Error(error.message);
 }
 
@@ -240,6 +254,8 @@ export async function aplicarMovimiento(
           cantidad: mov.cantidad,
           nota: mov.nota ?? null,
           componentes: mov.componentes ?? [],
+          origen: mov.origen ?? 'plataforma',
+          referencia: mov.referencia ?? null,
         }
       : null,
   });
@@ -269,6 +285,154 @@ export async function aplicarMovimiento(
 /** Borra TODO el inventario (no el historial). Solo para restablecer. */
 export async function vaciarItems(): Promise<void> {
   const { error } = await sb.from('st_items').delete().in('categoria', CATEGORIAS);
+  if (error) throw new Error(error.message);
+}
+
+// =====================================================================
+// PUENTE CON LA TIENDA
+// Los pedidos viven en ss_orders (la tienda) y lo que se descontó de cada uno
+// en st_pedidos (el stock). Acá se juntan las dos mitades.
+// =====================================================================
+
+/** Catálogo de la tienda: qué se vende online y en qué presentaciones */
+export interface SkuTienda {
+  producto_id: string;
+  pres_id: string;
+  producto: string;
+  presentacion: string;
+}
+
+export async function traerCatalogoTienda(): Promise<SkuTienda[]> {
+  const { data, error } = await sb.from('ss_store').select('products').eq('id', 1).maybeSingle();
+  if (error) throw new Error(error.message);
+  const productos = (data?.products ?? []) as any[];
+  const out: SkuTienda[] = [];
+  for (const p of productos) {
+    for (const pres of p.presentations ?? []) {
+      out.push({
+        producto_id: p.id,
+        pres_id: pres.id,
+        producto: p.name ?? p.id,
+        presentacion: pres.label ?? pres.id,
+      });
+    }
+  }
+  return out;
+}
+
+/** Vínculos SKU de la tienda → ítem del inventario */
+export async function traerSkuMap(): Promise<SkuMap[]> {
+  const { data, error } = await sb
+    .from('st_sku_map')
+    .select('*')
+    .order('producto_id')
+    .order('pres_id');
+  if (error) throw new Error(error.message);
+  return (data ?? []).map((r: any) => ({
+    producto_id: r.producto_id,
+    pres_id: r.pres_id,
+    categoria: r.categoria,
+    codigo: r.codigo,
+    unidades: Number(r.unidades) || 1,
+    activo: r.activo !== false,
+    revisar: !!r.revisar,
+    etiqueta: r.etiqueta ?? null,
+  }));
+}
+
+export async function guardarSkuMap(fila: SkuMap): Promise<void> {
+  const { error } = await sb.from('st_sku_map').upsert(
+    {
+      producto_id: fila.producto_id,
+      pres_id: fila.pres_id,
+      categoria: fila.categoria,
+      codigo: fila.codigo,
+      unidades: fila.unidades,
+      activo: fila.activo,
+      revisar: fila.revisar,
+      etiqueta: fila.etiqueta ?? null,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: 'producto_id,pres_id' }
+  );
+  if (error) throw new Error(error.message);
+}
+
+export async function borrarSkuMap(producto_id: string, pres_id: string): Promise<void> {
+  const { error } = await sb
+    .from('st_sku_map')
+    .delete()
+    .eq('producto_id', producto_id)
+    .eq('pres_id', pres_id);
+  if (error) throw new Error(error.message);
+}
+
+/** `ts` de la tienda es un epoch en milisegundos, pero llega como número o texto */
+function fechaPedido(ts: unknown): string {
+  if (!ts) return '';
+  const n = Number(ts);
+  const d = Number.isFinite(n) && n > 0 ? new Date(n) : new Date(String(ts));
+  return isNaN(d.getTime()) ? '' : d.toISOString();
+}
+
+/**
+ * Pedidos de la tienda cruzados con lo que se descontó del stock.
+ * Sólo se traen los últimos `limite` para no arrastrar años de historial.
+ */
+export async function traerPedidosTienda(limite = 200): Promise<PedidoTienda[]> {
+  const [pedidos, aplicados] = await Promise.all([
+    sb.from('ss_orders').select('id, ts, status, data').order('ts', { ascending: false }).limit(limite),
+    sb.from('st_pedidos').select('*'),
+  ]);
+  if (pedidos.error) throw new Error(pedidos.error.message);
+  if (aplicados.error) throw new Error(aplicados.error.message);
+
+  const porId = new Map<string, any>();
+  for (const p of aplicados.data ?? []) porId.set(p.order_id, p);
+
+  return (pedidos.data ?? []).map((row: any) => {
+    const d = row.data ?? {};
+    const est = porId.get(row.id);
+    return {
+      order_id: row.id,
+      fecha: fechaPedido(row.ts),
+      cliente: d.name ?? '—',
+      total: Number(d.total) || 0,
+      estado: row.status ?? d.status ?? 'nuevo',
+      interno: !!d.consumoInterno,
+      aplicado: !!est?.aplicado,
+      ignorar: !!est?.ignorar,
+      lineas: est?.lineas ?? [],
+      sinMapear: (est?.sin_mapear ?? []) as LineaSinMapear[],
+      aplicadoAt: est?.aplicado_at ?? null,
+      nota: est?.nota ?? null,
+      items: (d.items ?? []).map((i: any) => ({
+        productId: i.productId,
+        presId: i.presId,
+        productName: i.productName || i.desc || '—',
+        qty: Number(i.qty) || 0,
+      })),
+    };
+  });
+}
+
+/** Descuenta (o devuelve, con revertir=true) el stock de un pedido */
+export async function sincronizarPedido(orderId: string, revertir = false): Promise<any> {
+  const { data, error } = await sb.rpc('st_aplicar_pedido', {
+    p_order_id: orderId,
+    p_revertir: revertir,
+  });
+  if (error) throw new Error(error.message);
+  return data;
+}
+
+/** Marca un pedido como ya descontado a mano (o deshace la marca) */
+export async function ignorarPedido(orderId: string, ignorar = true): Promise<void> {
+  const { error } = await sb.rpc('st_ignorar_pedido', {
+    p_order_id: orderId,
+    p_ignorar: ignorar,
+    p_nota: null,
+  });
   if (error) throw new Error(error.message);
 }
 

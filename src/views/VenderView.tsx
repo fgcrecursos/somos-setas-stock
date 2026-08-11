@@ -1,3 +1,13 @@
+// =====================================================================
+// VENDER / PRODUCIR / CONSUMO INTERNO
+//
+// Tres cosas distintas que mueven el mismo stock:
+//   · Vender          → sale el producto terminado (la receta ya se gastó al producirlo)
+//   · Producir        → entra el producto terminado y se consume la receta
+//   · Consumo interno → sale algo (producto, insumo, bolsa, materia prima) que
+//                       usamos nosotros: no es venta, no factura, pero el stock
+//                       baja igual y tiene que quedar registrado.
+// =====================================================================
 import {
   AlertTriangle,
   ArrowRight,
@@ -9,6 +19,7 @@ import {
   ShoppingCart,
   Tag,
   Trash2,
+  Users,
   Wheat,
 } from 'lucide-react';
 import { useMemo, useState } from 'react';
@@ -16,14 +27,18 @@ import { BarcodeScanner } from '../components/BarcodeScanner';
 import { useToast } from '../components/Toast';
 import {
   CATEGORIA_LABEL,
+  CATEGORIA_LABEL_PLURAL,
+  MOVIMIENTO_COLOR,
+  MOVIMIENTO_LABEL,
   buscarItem,
   buscarPorCodigo,
   calcEstado,
   formatFecha,
   formatNum,
+  listaDe,
 } from '../lib/helpers';
 import { useStore } from '../lib/store';
-import type { Categoria, Producto } from '../lib/types';
+import type { BaseItem, Categoria, Producto } from '../lib/types';
 
 const COMP_ICON: Record<Categoria, any> = {
   producto: ShoppingCart,
@@ -33,13 +48,32 @@ const COMP_ICON: Record<Categoria, any> = {
   materia_prima: Wheat,
 };
 
+const CATEGORIAS: Categoria[] = [
+  'producto',
+  'insumo',
+  'insumo_interno',
+  'etiqueta',
+  'materia_prima',
+];
+
+type Modo = 'venta' | 'produccion' | 'consumo_interno';
+
+interface Seleccion {
+  categoria: Categoria;
+  item: BaseItem;
+}
+
 export function VenderView() {
-  const { state, vender, producir, guardando } = useStore();
+  const { state, vender, producir, consumoInterno, guardando } = useStore();
   const toast = useToast();
-  const [modo, setModo] = useState<'venta' | 'produccion'>('venta');
-  const [sel, setSel] = useState<Producto | null>(null);
+  const [modo, setModo] = useState<Modo>('venta');
+  const [sel, setSel] = useState<Seleccion | null>(null);
   const [cant, setCant] = useState(1);
+  const [nota, setNota] = useState('');
   const [ultima, setUltima] = useState<any>(null);
+
+  const esConsumo = modo === 'consumo_interno';
+  const producto = sel?.categoria === 'producto' ? (sel.item as Producto) : null;
 
   function resolver(code: string) {
     const hit = buscarPorCodigo(state, code);
@@ -47,53 +81,79 @@ export function VenderView() {
       toast(`Código "${code}" no encontrado`, true);
       return;
     }
-    if (hit.categoria !== 'producto') {
+    // Vender y producir sólo aplican a productos terminados; el consumo interno
+    // puede salir de cualquier categoría (bolsas, etiquetas, materia prima…).
+    if (!esConsumo && hit.categoria !== 'producto') {
       toast(`${code} es ${CATEGORIA_LABEL[hit.categoria]}: ${hit.item.nombre}`);
       return;
     }
-    setSel(hit.item as Producto);
+    setSel({ categoria: hit.categoria, item: hit.item });
     setCant(1);
     toast(`Cargado: ${hit.item.nombre}`);
   }
 
+  function cambiarModo(nuevo: Modo) {
+    setModo(nuevo);
+    // Si se estaba por consumir una etiqueta y se pasa a vender, la selección
+    // deja de tener sentido: se limpia en vez de arrastrar algo inválido.
+    if (nuevo !== 'consumo_interno' && sel && sel.categoria !== 'producto') setSel(null);
+  }
+
   const preview = useMemo(() => {
-    if (!sel) return [];
-    return sel.bom.map((b) => {
+    if (!producto) return [];
+    return producto.bom.map((b) => {
       const it = buscarItem(state, b.categoria, b.codigo);
       const consumo = b.cantidad * cant;
       const actual = it?.actual ?? 0;
-      const resultante = actual - consumo;
       return {
         ...b,
         nombre: it?.nombre ?? '(no encontrado)',
         actual,
         minimo: it?.minimo ?? 0,
         consumo,
-        resultante,
+        resultante: actual - consumo,
         existe: !!it,
       };
     });
-  }, [sel, cant, state]);
+  }, [producto, cant, state]);
 
   async function confirmar() {
     if (!sel) return;
-    const fn = modo === 'venta' ? vender : producir;
-    const res = await fn(sel.codigo, cant);
-    if (!res.ok) {
-      toast(res.mensaje, true);
-      return;
-    }
-    setUltima({ ...res, modo, cant, nombre: sel.nombre, codigo: sel.codigo });
-    if (res.alertas.length) {
-      toast(`${res.mensaje}. ${res.alertas.length} alerta(s) de stock`, true);
+    if (esConsumo) {
+      const res = await consumoInterno(sel.categoria, sel.item.codigo, cant, nota);
+      if (!res.ok) {
+        toast(res.error ?? 'No se pudo registrar', true);
+        return;
+      }
+      setUltima({
+        modo,
+        cant,
+        nombre: sel.item.nombre,
+        codigo: sel.item.codigo,
+        componentes: [],
+      });
+      toast(`Consumo interno registrado: ${cant} × ${sel.item.nombre}`);
     } else {
-      toast(res.mensaje);
+      const fn = modo === 'venta' ? vender : producir;
+      const res = await fn(sel.item.codigo, cant);
+      if (!res.ok) {
+        toast(res.mensaje, true);
+        return;
+      }
+      setUltima({ ...res, modo, cant, nombre: sel.item.nombre, codigo: sel.item.codigo });
+      if (res.alertas.length) {
+        toast(`${res.mensaje}. ${res.alertas.length} alerta(s) de stock`, true);
+      } else {
+        toast(res.mensaje);
+      }
     }
     setSel(null);
     setCant(1);
+    setNota('');
   }
 
-  const selEstado = sel ? calcEstado(sel.actual, sel.minimo) : null;
+  const selEstado = sel ? calcEstado(sel.item.actual, sel.item.minimo) : null;
+  const restante = sel ? sel.item.actual - cant : 0;
 
   return (
     <div className="grid" style={{ gridTemplateColumns: '380px 1fr', gap: 20, alignItems: 'start' }}>
@@ -117,7 +177,7 @@ export function VenderView() {
             </div>
             <div className="card__body">
               <p style={{ margin: '0 0 10px', fontWeight: 600 }}>
-                {ultima.modo === 'venta' ? 'Venta' : 'Producción'}: {ultima.cant} × {ultima.nombre}
+                {MOVIMIENTO_LABEL[ultima.modo as Modo]}: {ultima.cant} × {ultima.nombre}
               </p>
               {ultima.componentes.map((c: any) => (
                 <div key={c.codigo} className="comp-row">
@@ -133,34 +193,59 @@ export function VenderView() {
         )}
       </div>
 
-      {/* Panel de venta */}
+      {/* Panel de carga */}
       <div className="stack">
         <div className="toolbar" style={{ margin: 0 }}>
           <div className="chips">
-            <button className={'chip' + (modo === 'venta' ? ' active' : '')} onClick={() => setModo('venta')}>
+            <button
+              className={'chip' + (modo === 'venta' ? ' active' : '')}
+              onClick={() => cambiarModo('venta')}
+            >
               Venta (descuenta)
             </button>
-            <button className={'chip' + (modo === 'produccion' ? ' active' : '')} onClick={() => setModo('produccion')}>
+            <button
+              className={'chip' + (modo === 'produccion' ? ' active' : '')}
+              onClick={() => cambiarModo('produccion')}
+            >
               Producción (suma producto)
+            </button>
+            <button
+              className={'chip' + (esConsumo ? ' active' : '')}
+              onClick={() => cambiarModo('consumo_interno')}
+            >
+              Consumo interno (sin venta)
             </button>
           </div>
           <div className="toolbar__spacer" />
           <select
             className="select"
-            style={{ maxWidth: 320 }}
-            value={sel?.codigo ?? ''}
+            style={{ maxWidth: 360 }}
+            value={sel ? `${sel.categoria}|${sel.item.codigo}` : ''}
             onChange={(e) => {
-              const p = state.productos.find((x) => x.codigo === e.target.value) ?? null;
-              setSel(p);
+              const [cat, cod] = e.target.value.split('|');
+              const item = cat ? buscarItem(state, cat as Categoria, cod) : undefined;
+              setSel(item ? { categoria: cat as Categoria, item } : null);
               setCant(1);
             }}
           >
-            <option value="">Elegí un producto…</option>
-            {state.productos.map((p) => (
-              <option key={p.codigo} value={p.codigo}>
-                {p.codigo} — {p.nombre} ({p.presentacion})
-              </option>
-            ))}
+            <option value="">{esConsumo ? 'Elegí un ítem…' : 'Elegí un producto…'}</option>
+            {esConsumo ? (
+              CATEGORIAS.map((cat) => (
+                <optgroup key={cat} label={CATEGORIA_LABEL_PLURAL[cat]}>
+                  {listaDe(state, cat).map((it) => (
+                    <option key={cat + it.codigo} value={`${cat}|${it.codigo}`}>
+                      {it.codigo} — {it.nombre}
+                    </option>
+                  ))}
+                </optgroup>
+              ))
+            ) : (
+              state.productos.map((p) => (
+                <option key={p.codigo} value={`producto|${p.codigo}`}>
+                  {p.codigo} — {p.nombre} ({p.presentacion})
+                </option>
+              ))
+            )}
           </select>
         </div>
 
@@ -168,7 +253,13 @@ export function VenderView() {
           <div className="card">
             <div className="empty">
               <ShoppingCart size={34} />
-              <p>Escaneá un producto o elegilo de la lista para registrar {modo === 'venta' ? 'una venta' : 'una producción'}.</p>
+              <p>
+                {esConsumo
+                  ? 'Escaneá o elegí lo que se usó puertas adentro: productos, insumos, bolsas, etiquetas o materia prima.'
+                  : `Escaneá un producto o elegilo de la lista para registrar ${
+                      modo === 'venta' ? 'una venta' : 'una producción'
+                    }.`}
+              </p>
             </div>
           </div>
         ) : (
@@ -176,15 +267,18 @@ export function VenderView() {
             <div className="card__head">
               <div>
                 <div className="row" style={{ gap: 8 }}>
-                  <span className="codigo" style={{ fontSize: 14 }}>{sel.codigo}</span>
-                  <span className="pill">{sel.tipo}</span>
+                  <span className="codigo" style={{ fontSize: 14 }}>{sel.item.codigo}</span>
+                  <span className="pill">
+                    {producto ? producto.tipo : CATEGORIA_LABEL[sel.categoria]}
+                  </span>
                 </div>
-                <h3 style={{ marginTop: 4 }}>{sel.nombre}</h3>
+                <h3 style={{ marginTop: 4 }}>{sel.item.nombre}</h3>
               </div>
               <div style={{ marginLeft: 'auto', textAlign: 'right' }}>
                 <div className="muted" style={{ fontSize: 12 }}>Stock actual</div>
                 <div style={{ fontFamily: 'var(--font-head)', fontSize: 24 }}>
-                  {formatNum(sel.actual)} <span className="muted" style={{ fontSize: 13 }}>/ mín {sel.minimo}</span>
+                  {formatNum(sel.item.actual)}{' '}
+                  <span className="muted" style={{ fontSize: 13 }}>/ mín {sel.item.minimo}</span>
                 </div>
               </div>
             </div>
@@ -210,18 +304,38 @@ export function VenderView() {
                     </button>
                   </div>
                 </div>
-                {modo === 'venta' && selEstado && (
+                {(modo === 'venta' || esConsumo) && selEstado && (
                   <div style={{ textAlign: 'right' }}>
-                    <div className="muted" style={{ fontSize: 12 }}>Producto luego de la venta</div>
+                    <div className="muted" style={{ fontSize: 12 }}>
+                      Queda después {esConsumo ? 'del consumo' : 'de la venta'}
+                    </div>
                     <div
                       style={{ fontFamily: 'var(--font-head)', fontSize: 22 }}
-                      className={sel.actual - cant < 0 ? 'diff-neg' : sel.actual - cant < sel.minimo ? '' : 'diff-pos'}
+                      className={
+                        restante < 0 ? 'diff-neg' : restante < sel.item.minimo ? '' : 'diff-pos'
+                      }
                     >
-                      {formatNum(sel.actual - cant)}
+                      {formatNum(restante)}
                     </div>
                   </div>
                 )}
               </div>
+
+              {esConsumo && (
+                <div className="field" style={{ marginBottom: 4 }}>
+                  <label>¿Para qué se usó? (opcional)</label>
+                  <input
+                    className="input"
+                    placeholder="Ej. muestras para la feria, prueba de producción, uso del equipo…"
+                    value={nota}
+                    onChange={(e) => setNota(e.target.value)}
+                  />
+                  <p className="hlp" style={{ marginTop: 4 }}>
+                    Queda como consumo interno: descuenta el stock pero no cuenta como venta ni
+                    suma a la facturación.
+                  </p>
+                </div>
+              )}
 
               {modo === 'produccion' ? (
                 <>
@@ -276,11 +390,11 @@ export function VenderView() {
                     </div>
                   )}
                 </>
-              ) : (
+              ) : modo === 'venta' ? (
                 <p className="hlp">
                   La venta sólo descuenta el producto terminado: la receta ya se consumió cuando se produjo.
                 </p>
-              )}
+              ) : null}
             </div>
 
             <div className="modal__foot" style={{ borderRadius: 0 }}>
@@ -288,10 +402,16 @@ export function VenderView() {
                 <Trash2 size={15} /> Cancelar
               </button>
               <button className="btn btn--primary" onClick={confirmar} disabled={guardando}>
-                <Check size={16} />{' '}
+                {esConsumo ? <Users size={16} /> : <Check size={16} />}{' '}
                 {guardando
                   ? 'Registrando…'
-                  : `Confirmar ${modo === 'venta' ? 'venta' : 'producción'} (${cant})`}
+                  : `Confirmar ${
+                      modo === 'venta'
+                        ? 'venta'
+                        : modo === 'produccion'
+                          ? 'producción'
+                          : 'consumo interno'
+                    } (${cant})`}
               </button>
             </div>
           </div>
@@ -308,27 +428,31 @@ export function VenderView() {
                 <tr>
                   <th className="no-sort">Fecha</th>
                   <th className="no-sort">Tipo</th>
-                  <th className="no-sort">Producto</th>
+                  <th className="no-sort">Ítem</th>
                   <th className="num">Cant.</th>
                   <th className="no-sort">Componentes</th>
                 </tr>
               </thead>
               <tbody>
-                {state.movimientos.slice(0, 8).map((m) => (
-                  <tr key={m.id}>
-                    <td className="muted" style={{ fontSize: 12 }}>{formatFecha(m.fecha)}</td>
-                    <td>
-                      <span className={'pill'} style={{
-                        background: m.tipo === 'venta' ? 'var(--naranja-100)' : 'var(--ok-bg)',
-                        color: m.tipo === 'venta' ? 'var(--naranja-600)' : 'var(--ok)',
-                        borderColor: 'transparent',
-                      }}>{m.tipo}</span>
-                    </td>
-                    <td className="nombre">{m.nombre} <span className="codigo">{m.codigo}</span></td>
-                    <td className="num">{formatNum(m.cantidad)}</td>
-                    <td className="muted">{m.componentes?.length ?? 0} descontados</td>
-                  </tr>
-                ))}
+                {state.movimientos.slice(0, 8).map((m) => {
+                  const st = MOVIMIENTO_COLOR[m.tipo] ?? MOVIMIENTO_COLOR.ajuste;
+                  return (
+                    <tr key={m.id}>
+                      <td className="muted" style={{ fontSize: 12 }}>{formatFecha(m.fecha)}</td>
+                      <td>
+                        <span
+                          className="pill"
+                          style={{ background: st.bg, color: st.c, borderColor: 'transparent' }}
+                        >
+                          {MOVIMIENTO_LABEL[m.tipo] ?? m.tipo}
+                        </span>
+                      </td>
+                      <td className="nombre">{m.nombre} <span className="codigo">{m.codigo}</span></td>
+                      <td className="num">{formatNum(m.cantidad)}</td>
+                      <td className="muted">{m.componentes?.length ?? 0} descontados</td>
+                    </tr>
+                  );
+                })}
                 {state.movimientos.length === 0 && (
                   <tr><td colSpan={5}><div className="empty">Todavía no hay movimientos.</div></td></tr>
                 )}

@@ -3,6 +3,8 @@ import type {
   Categoria,
   CategoriaComponente,
   DBState,
+  Movimiento,
+  TipoMovimiento,
 } from './types';
 
 export type Estado = 'agotado' | 'critico' | 'bajo' | 'ok' | 'sin_minimo';
@@ -103,6 +105,39 @@ export function buscarPorCodigo(
   return undefined;
 }
 
+export const MOVIMIENTO_LABEL: Record<TipoMovimiento, string> = {
+  venta: 'Venta',
+  produccion: 'Producción',
+  ingreso: 'Ingreso',
+  ajuste: 'Ajuste',
+  consumo_interno: 'Consumo interno',
+  alta: 'Alta',
+  edicion: 'Edición',
+  baja: 'Baja',
+};
+
+/** Colores del cartelito de cada tipo de movimiento */
+export const MOVIMIENTO_COLOR: Record<TipoMovimiento, { bg: string; c: string }> = {
+  venta: { bg: 'var(--naranja-100)', c: 'var(--naranja-600)' },
+  produccion: { bg: 'var(--ok-bg)', c: 'var(--ok)' },
+  ingreso: { bg: '#e2eef5', c: '#3f6a7a' },
+  ajuste: { bg: 'var(--crema-3)', c: 'var(--verde-700)' },
+  consumo_interno: { bg: '#efe6f5', c: '#6a4f7a' },
+  alta: { bg: '#e6f2ea', c: '#2f6b47' },
+  edicion: { bg: 'var(--crema-3)', c: '#7a6a3f' },
+  baja: { bg: 'var(--critico-bg)', c: 'var(--critico)' },
+};
+
+/**
+ * Cuánto movió el stock, con signo. Las ventas y el consumo interno se guardan
+ * en positivo (son "3 unidades que salieron"), pero en el historial se leen
+ * como −3; los ajustes y ediciones ya vienen firmados desde la base.
+ */
+export function deltaMovimiento(m: Pick<Movimiento, 'tipo' | 'cantidad'>): number {
+  if (m.tipo === 'venta' || m.tipo === 'consumo_interno') return -Math.abs(m.cantidad);
+  return m.cantidad;
+}
+
 export const COMPONENTE_LABEL: Record<CategoriaComponente, string> = {
   insumo: 'Insumo',
   insumo_interno: 'Insumo interno',
@@ -130,4 +165,57 @@ export function formatFecha(iso?: string | null): string {
 
 export function uid(): string {
   return Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
+}
+
+/** Cómo se llama cada campo de la ficha cuando se cuenta qué cambió */
+const ETIQUETA_CAMPO: Record<string, string> = {
+  codigo: 'código',
+  nombre: 'nombre',
+  actual: 'stock',
+  minimo: 'mínimo',
+  tipo: 'tipo',
+  presentacion: 'presentación',
+  lote: 'lote',
+  vencimiento: 'vencimiento',
+  ubicacion: 'ubicación',
+  observaciones: 'observaciones',
+  proveedor: 'proveedor',
+  cantidadPorPack: 'unidades por pack',
+  packDeCompra: 'pack de compra',
+  unidadCompra: 'unidad de compra',
+  stockUnidad: 'stock por unidad',
+  fecha: 'fecha',
+};
+
+function valorLegible(v: unknown): string {
+  if (v === null || v === undefined || v === '') return '—';
+  if (typeof v === 'number') return formatNum(v);
+  return String(v);
+}
+
+/**
+ * Qué cambió entre dos versiones de una ficha, en castellano.
+ * Es lo que después queda escrito en el movimiento de tipo "edición", para que
+ * el historial diga qué se tocó y no sólo que alguien tocó algo.
+ */
+export function describirCambios(antes: any, despues: any): string[] {
+  const campos = new Set([...Object.keys(antes ?? {}), ...Object.keys(despues ?? {})]);
+  const cambios: string[] = [];
+  for (const campo of campos) {
+    if (campo === 'bom') {
+      const a = JSON.stringify(antes?.bom ?? []);
+      const b = JSON.stringify(despues?.bom ?? []);
+      if (a !== b) {
+        const na = (antes?.bom ?? []).length;
+        const nb = (despues?.bom ?? []).length;
+        cambios.push(na === nb ? 'receta modificada' : `receta: ${na} → ${nb} componentes`);
+      }
+      continue;
+    }
+    const a = antes?.[campo] ?? null;
+    const b = despues?.[campo] ?? null;
+    if (String(a ?? '') === String(b ?? '')) continue;
+    cambios.push(`${ETIQUETA_CAMPO[campo] ?? campo}: ${valorLegible(a)} → ${valorLegible(b)}`);
+  }
+  return cambios;
 }

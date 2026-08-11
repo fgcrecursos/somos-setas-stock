@@ -13,6 +13,7 @@ import {
   RotateCcw,
   ScanLine,
   ShoppingBag,
+  Store,
   Tag,
   TrendingUp,
   Users,
@@ -28,6 +29,7 @@ import type { Categoria } from './lib/types';
 import { CategoriaView } from './views/CategoriaView';
 import { Dashboard } from './views/Dashboard';
 import { MovimientosView } from './views/MovimientosView';
+import { PedidosView } from './views/PedidosView';
 import { ProductosView } from './views/ProductosView';
 import { UsuariosView } from './views/UsuariosView';
 import { VenderView } from './views/VenderView';
@@ -44,19 +46,27 @@ type ViewId =
   | 'etiqueta'
   | 'materia_prima'
   | 'ventas'
+  | 'pedidos'
   | 'movimientos'
   | 'usuarios';
 
 const TITLES: Record<ViewId, { t: string; s: string }> = {
   dashboard: { t: 'Dashboard', s: 'Panorama general del stock' },
-  vender: { t: 'Vender / Producir', s: 'Escaneá y descontá stock con receta automática' },
+  vender: {
+    t: 'Vender / Producir / Consumo',
+    s: 'Escaneá y descontá stock con receta automática',
+  },
   producto: { t: 'Productos', s: 'Catálogo de productos terminados' },
   insumo: { t: 'Insumos de productos', s: 'Envases, frascos, bolsas y tapas' },
   insumo_interno: { t: 'Insumos internos', s: 'Consumibles de producción y logística' },
   etiqueta: { t: 'Etiquetas', s: 'Stock de etiquetas por producto' },
   materia_prima: { t: 'Materia prima', s: 'Hongos, polvos e insumos base' },
-  ventas: { t: 'Ventas', s: 'Cuánto se vendió, de qué y cuándo' },
-  movimientos: { t: 'Movimientos', s: 'Historial de ventas, producción y ajustes' },
+  ventas: { t: 'Ventas y producción', s: 'Qué se vendió, qué se produjo y qué se consumió' },
+  pedidos: { t: 'Pedidos de la tienda', s: 'Los pedidos confirmados descuentan el stock solos' },
+  movimientos: {
+    t: 'Movimientos',
+    s: 'Todo lo que entró, salió o cambió: ventas, producción, ingresos, ajustes, altas y bajas',
+  },
   usuarios: { t: 'Usuarios', s: 'Quién entra a la plataforma y con qué permisos' },
 };
 
@@ -142,7 +152,9 @@ export default function App() {
           {nav('insumo_interno', <FlaskConical size={18} />, 'Insumos internos', alertCounts.insumo_interno)}
 
           <div className="nav__section">Actividad</div>
-          {nav('ventas', <TrendingUp size={18} />, 'Ventas')}
+          {nav('ventas', <TrendingUp size={18} />, 'Ventas y producción')}
+          {/* Los pedidos traen datos de clientes: sólo para quien administra */}
+          {esAdmin && nav('pedidos', <Store size={18} />, 'Pedidos de la tienda')}
           {nav('movimientos', <History size={18} />, 'Movimientos')}
           {esAdmin && nav('usuarios', <Users size={18} />, 'Usuarios')}
         </nav>
@@ -222,6 +234,7 @@ export default function App() {
               {view === 'vender' && puedeEditar && <VenderView />}
               {view === 'producto' && <ProductosView />}
               {view === 'ventas' && <VentasView />}
+              {view === 'pedidos' && esAdmin && <PedidosView />}
               {view === 'movimientos' && <MovimientosView />}
               {view === 'usuarios' && esAdmin && <UsuariosView />}
               {(view === 'insumo' ||

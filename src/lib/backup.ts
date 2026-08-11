@@ -4,7 +4,7 @@
 // Sirve como respaldo y para trabajar los números fuera de la app.
 // =====================================================================
 import type { DBState, Movimiento, Producto } from './types';
-import { CATEGORIA_LABEL, calcEstado } from './helpers';
+import { CATEGORIA_LABEL, MOVIMIENTO_LABEL, calcEstado, deltaMovimiento } from './helpers';
 
 // SheetJS pesa ~400 kB: se carga recién cuando alguien pide una descarga, para
 // no hacer más lento el arranque de la app (que se usa mucho desde el celular).
@@ -72,21 +72,37 @@ export function ventasPorProducto(movimientos: Movimiento[], productos: Producto
     .sort((a, b) => b.unidades - a.unidades);
 }
 
+/** Una fila del ranking de actividad: qué pasó con un producto en el período */
+export interface FilaActividad {
+  codigo: string;
+  nombre: string;
+  tipo: string;
+  presentacion: string;
+  vendidas: number;
+  producidas: number;
+  consumo: number;
+  ventasTienda: number;
+  operaciones: number;
+  ultima: string;
+  stock: number | null;
+}
+
 /**
- * Informe puntual de la sección Ventas: el ranking del período y el detalle
+ * Informe puntual de la sección Actividad: el ranking del período y el detalle
  * de cada operación, sin el resto del inventario.
  */
 export async function descargarInforme(
-  ranking: {
-    codigo: string; nombre: string; tipo: string; presentacion: string;
-    unidades: number; operaciones: number; ultima: string; stock: number | null;
-  }[],
+  ranking: FilaActividad[],
   movimientos: Movimiento[],
   titulo: string
 ) {
   const X = await cargarXlsx();
   const libro = X.utils.book_new();
-  const totalUnidades = ranking.reduce((s, r) => s + r.unidades, 0);
+  const suma = (campo: keyof FilaActividad) =>
+    ranking.reduce((s, r) => s + (Number(r[campo]) || 0), 0);
+  const totalVendidas = suma('vendidas');
+  const totalProducidas = suma('producidas');
+  const totalConsumo = suma('consumo');
 
   hoja(
     X,
@@ -95,11 +111,15 @@ export async function descargarInforme(
     [
       { Dato: 'Informe', Valor: titulo },
       { Dato: 'Generado', Valor: fechaLegible(new Date().toISOString()) },
-      { Dato: 'Unidades', Valor: totalUnidades },
+      { Dato: 'Unidades vendidas', Valor: totalVendidas },
+      { Dato: '· de las cuales por la tienda', Valor: suma('ventasTienda') },
+      { Dato: 'Unidades producidas', Valor: totalProducidas },
+      { Dato: 'Consumo interno', Valor: totalConsumo },
+      { Dato: 'Balance (producido − salidas)', Valor: totalProducidas - totalVendidas - totalConsumo },
       { Dato: 'Productos distintos', Valor: ranking.length },
       { Dato: 'Operaciones', Valor: movimientos.length },
     ],
-    [26, 44]
+    [32, 44]
   );
 
   hoja(
@@ -112,13 +132,18 @@ export async function descargarInforme(
       Producto: r.nombre,
       Tipo: r.tipo,
       Presentación: r.presentacion,
-      Unidades: r.unidades,
-      Operaciones: r.operaciones,
-      'Participación %': totalUnidades ? Math.round((r.unidades / totalUnidades) * 1000) / 10 : 0,
+      Vendidas: r.vendidas,
+      'De la tienda': r.ventasTienda,
+      Producidas: r.producidas,
+      'Consumo interno': r.consumo,
+      Balance: r.producidas - r.vendidas - r.consumo,
+      'Participación en ventas %': totalVendidas
+        ? Math.round((r.vendidas / totalVendidas) * 1000) / 10
+        : 0,
       'Stock actual': r.stock ?? '',
       Última: fechaLegible(r.ultima),
     })),
-    [5, 14, 40, 12, 20, 12, 13, 16, 14, 18]
+    [5, 14, 40, 12, 20, 11, 13, 12, 16, 11, 24, 14, 18]
   );
 
   hoja(
@@ -127,7 +152,9 @@ export async function descargarInforme(
     'Detalle',
     movimientos.map((m) => ({
       Fecha: fechaLegible(m.fecha),
-      Tipo: m.tipo,
+      Tipo: MOVIMIENTO_LABEL[m.tipo] ?? m.tipo,
+      Origen: m.origen === 'tienda' ? 'Tienda' : 'Plataforma',
+      Pedido: m.referencia ?? '',
       Código: m.codigo,
       Producto: m.nombre,
       Cantidad: m.cantidad,
@@ -135,7 +162,7 @@ export async function descargarInforme(
       'Componentes descontados': m.componentes?.length ?? 0,
       Nota: m.nota ?? '',
     })),
-    [18, 12, 14, 40, 11, 28, 22, 28]
+    [18, 14, 12, 22, 14, 40, 11, 28, 22, 34]
   );
 
   // Se sacan los acentos antes de armar el nombre del archivo: si no,
@@ -180,8 +207,20 @@ export async function descargarBackup(state: DBState, quien: string) {
       { Dato: 'Movimientos registrados', Valor: state.movimientos.length },
       { Dato: 'Ventas registradas', Valor: state.movimientos.filter((m) => m.tipo === 'venta').length },
       { Dato: 'Unidades vendidas (histórico)', Valor: ventas.reduce((s, v) => s + v.unidades, 0) },
+      {
+        Dato: 'Unidades producidas (histórico)',
+        Valor: state.movimientos
+          .filter((m) => m.tipo === 'produccion')
+          .reduce((s, m) => s + m.cantidad, 0),
+      },
+      {
+        Dato: 'Consumo interno (histórico)',
+        Valor: state.movimientos
+          .filter((m) => m.tipo === 'consumo_interno')
+          .reduce((s, m) => s + m.cantidad, 0),
+      },
     ],
-    [30, 40]
+    [32, 40]
   );
 
   // --- Inventario ---
@@ -278,16 +317,18 @@ export async function descargarBackup(state: DBState, quien: string) {
     'Movimientos',
     state.movimientos.map((m) => ({
       Fecha: fechaLegible(m.fecha),
-      Tipo: m.tipo,
+      Tipo: MOVIMIENTO_LABEL[m.tipo] ?? m.tipo,
       Categoría: CATEGORIA_LABEL[m.categoria],
       Código: m.codigo,
       Nombre: m.nombre,
-      Cantidad: m.tipo === 'venta' ? -m.cantidad : m.cantidad,
+      Cantidad: deltaMovimiento(m),
+      Origen: m.origen === 'tienda' ? 'Tienda' : 'Plataforma',
+      Pedido: m.referencia ?? '',
       Usuario: m.usuario ?? '',
       'Componentes descontados': m.componentes?.length ?? 0,
       Nota: m.nota ?? '',
     })),
-    [18, 12, 16, 14, 40, 10, 28, 22, 30]
+    [18, 16, 16, 14, 40, 10, 12, 22, 28, 22, 34]
   );
 
   const detalle: any[] = [];

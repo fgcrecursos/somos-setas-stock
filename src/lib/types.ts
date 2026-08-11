@@ -60,7 +60,18 @@ export interface MateriaPrima extends BaseItem {
   proveedor?: string | null;
 }
 
-export type TipoMovimiento = 'venta' | 'produccion' | 'ingreso' | 'ajuste';
+export type TipoMovimiento =
+  | 'venta'            // salió vendido
+  | 'produccion'       // se fabricó: suma producto y descuenta la receta
+  | 'ingreso'          // entró stock (compra, reposición)
+  | 'ajuste'           // conteo físico o corrección
+  | 'consumo_interno'  // lo usó el equipo, no se vendió
+  | 'alta'             // se creó el ítem
+  | 'edicion'          // se modificó la ficha del ítem
+  | 'baja';            // se eliminó el ítem del sistema
+
+/** De dónde salió el movimiento: cargado a mano acá, o un pedido de la tienda */
+export type OrigenMovimiento = 'plataforma' | 'tienda';
 
 export interface ComponenteMovido {
   categoria: Categoria;
@@ -83,6 +94,52 @@ export interface Movimiento {
   componentes?: ComponenteMovido[];
   /** Email de quien lo registró (lo completa la base) */
   usuario?: string;
+  origen?: OrigenMovimiento;
+  /** Id del pedido de la tienda que lo generó, si vino de ahí */
+  referencia?: string;
+}
+
+/** Vínculo entre una presentación de la tienda y un ítem del inventario */
+export interface SkuMap {
+  producto_id: string;
+  pres_id: string;
+  categoria: Categoria;
+  codigo: string;
+  /** Unidades de inventario que consume una unidad vendida (packs) */
+  unidades: number;
+  activo: boolean;
+  /** La presentación de la web y la del inventario no coinciden: revisar */
+  revisar: boolean;
+  etiqueta?: string | null;
+}
+
+/** Una línea que no se pudo descontar de un pedido */
+export interface LineaSinMapear {
+  producto_id?: string;
+  pres_id?: string;
+  descripcion: string;
+  cantidad: number;
+  motivo: string;
+}
+
+/** Un pedido de la tienda y qué pasó con el stock */
+export interface PedidoTienda {
+  order_id: string;
+  fecha: string;
+  cliente: string;
+  total: number;
+  estado: string;
+  interno: boolean;
+  /** ¿Está descontado del stock ahora mismo? */
+  aplicado: boolean;
+  /** Se descontó a mano en su momento: no tocarlo */
+  ignorar: boolean;
+  lineas: { categoria: Categoria; codigo: string; cantidad: number }[];
+  sinMapear: LineaSinMapear[];
+  aplicadoAt?: string | null;
+  nota?: string | null;
+  /** Ítems del pedido tal como los guardó la tienda */
+  items: { productId?: string; presId?: string; productName?: string; qty: number }[];
 }
 
 /** admin edita todo · invitado solo mira */

@@ -130,11 +130,13 @@ export const MOVIMIENTO_COLOR: Record<TipoMovimiento, { bg: string; c: string }>
 
 /**
  * Cuánto movió el stock, con signo. Las ventas y el consumo interno se guardan
- * en positivo (son "3 unidades que salieron"), pero en el historial se leen
- * como −3; los ajustes y ediciones ya vienen firmados desde la base.
+ * como "unidades que salieron" (3 = salieron 3), así que en el historial se
+ * leen como −3. Cuando un pedido se anula o se corrige hacia abajo, la venta se
+ * guarda en negativo (−3 = volvieron 3): ahí el stock sube. Los ingresos,
+ * producciones, ajustes y ediciones ya vienen firmados desde la base.
  */
 export function deltaMovimiento(m: Pick<Movimiento, 'tipo' | 'cantidad'>): number {
-  if (m.tipo === 'venta' || m.tipo === 'consumo_interno') return -Math.abs(m.cantidad);
+  if (m.tipo === 'venta' || m.tipo === 'consumo_interno') return -m.cantidad;
   return m.cantidad;
 }
 

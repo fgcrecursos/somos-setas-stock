@@ -381,17 +381,20 @@ begin
        set actual = viejo + delta, updated_at = now(), updated_by = 'tienda'
      where categoria = cat and codigo = cod;
 
-    -- Qué clase de movimiento fue
+    -- El movimiento SIEMPRE es del mismo tipo que la operación original (venta
+    -- o consumo interno), con la cantidad firmada: positiva cuando salió y
+    -- NEGATIVA cuando volvió. Así, al anular un pedido, las unidades dejan de
+    -- contarse como vendidas —que es lo correcto: esa venta no existió— sin
+    -- necesidad de tocar el historial. Registrarlo como 'ajuste' dejaba la
+    -- venta contada para siempre.
+    tipo_mov := case when es_interno then 'consumo_interno' else 'venta' end;
     if cant_ya = 0 then
-      tipo_mov := case when es_interno then 'consumo_interno' else 'venta' end;
       nota_mov := 'Pedido ' || p_order_id ||
                   coalesce(' · ' || nullif(fila.data ->> 'name', ''), '') ||
                   case when es_interno then ' · consumo interno' else '' end;
     elsif cant_obj = 0 then
-      tipo_mov := 'ajuste';
       nota_mov := 'Pedido ' || p_order_id || ' anulado: vuelven ' || cant_ya || ' al stock';
     else
-      tipo_mov := 'ajuste';
       nota_mov := 'Pedido ' || p_order_id || ' editado: pasó de ' || cant_ya || ' a ' || cant_obj;
     end if;
 
@@ -401,7 +404,7 @@ begin
       p_order_id || '-' || cod || '-' || floor(extract(epoch from clock_timestamp()) * 1000)::bigint::text,
       now(), tipo_mov, cat, cod,
       coalesce((select i.nombre from public.st_items i where i.categoria = cat and i.codigo = cod), cod),
-      case when tipo_mov = 'ajuste' then delta else cant_obj end,
+      cant_obj - cant_ya,   -- lo que salió (+) o volvió (−) con este cambio
       nota_mov, '[]'::jsonb, 'tienda', 'tienda', p_order_id
     )
     on conflict (id) do nothing;

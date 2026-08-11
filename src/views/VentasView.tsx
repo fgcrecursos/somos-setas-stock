@@ -34,6 +34,9 @@ const MESES = [
 /** Los tres tipos que cuentan como actividad de producto */
 const TIPOS_ACTIVIDAD: TipoMovimiento[] = ['venta', 'produccion', 'consumo_interno'];
 
+const anchoBarra = (valor: number, maximo: number) =>
+  Math.min(100, Math.max(0, (valor / maximo) * 100));
+
 type PeriodoId = 'mes-actual' | 'mes-anterior' | 'ult-30' | 'anio' | 'todo' | string;
 
 function limites(periodo: PeriodoId): { desde: number; hasta: number } | null {
@@ -326,20 +329,17 @@ export function VentasView() {
                     <td className="num" style={{ fontWeight: 700 }}>{formatNum(r.producidas)}</td>
                     <td className="num muted">{r.consumo ? formatNum(r.consumo) : '—'}</td>
                     <td>
-                      {/* Dos barras: naranja lo que salió vendido, verde lo producido */}
+                      {/* Dos barras: naranja lo que salió vendido, verde lo producido.
+                          Se recorta a 0-100%: un producto puede quedar en negativo
+                          si se anularon más pedidos de los que se vendieron en el
+                          período, y una barra no puede medir menos que nada. */}
                       <div className="barra" title={`Vendidas: ${r.vendidas}`}>
-                        <div
-                          className="barra__fill"
-                          style={{ width: `${(r.vendidas / maxBarra) * 100}%` }}
-                        />
+                        <div className="barra__fill" style={{ width: `${anchoBarra(r.vendidas, maxBarra)}%` }} />
                       </div>
                       <div className="barra" style={{ marginTop: 3 }} title={`Producidas: ${r.producidas}`}>
                         <div
                           className="barra__fill"
-                          style={{
-                            width: `${(r.producidas / maxBarra) * 100}%`,
-                            background: 'var(--ok)',
-                          }}
+                          style={{ width: `${anchoBarra(r.producidas, maxBarra)}%`, background: 'var(--ok)' }}
                         />
                       </div>
                     </td>

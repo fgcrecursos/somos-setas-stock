@@ -4,7 +4,14 @@
 // Sirve como respaldo y para trabajar los números fuera de la app.
 // =====================================================================
 import type { DBState, Movimiento, Producto } from './types';
-import { CATEGORIA_LABEL, MOVIMIENTO_LABEL, calcEstado, deltaMovimiento } from './helpers';
+import {
+  CATEGORIA_LABEL,
+  MOVIMIENTO_LABEL,
+  alertasVencimiento,
+  calcEstado,
+  calcVencimiento,
+  deltaMovimiento,
+} from './helpers';
 
 // SheetJS pesa ~400 kB: se carga recién cuando alguien pide una descarga, para
 // no hacer más lento el arranque de la app (que se usa mucho desde el celular).
@@ -204,6 +211,7 @@ export async function descargarBackup(state: DBState, quien: string) {
       { Dato: 'Ítems bajo el mínimo', Valor:
           bajoMinimo(state.productos) + bajoMinimo(state.insumos) + bajoMinimo(state.insumosInternos) +
           bajoMinimo(state.etiquetas) + bajoMinimo(state.materiaPrima) },
+      { Dato: 'Ítems vencidos o por vencer', Valor: alertasVencimiento(state).length },
       { Dato: 'Movimientos registrados', Valor: state.movimientos.length },
       { Dato: 'Ventas registradas', Valor: state.movimientos.filter((m) => m.tipo === 'venta').length },
       { Dato: 'Unidades vendidas (histórico)', Valor: ventas.reduce((s, v) => s + v.unidades, 0) },
@@ -288,10 +296,13 @@ export async function descargarBackup(state: DBState, quien: string) {
       Presentación: m.presentacion,
       'Stock por unidad': m.stockUnidad ?? '',
       'Cantidad por pack': m.cantidadPorPack ?? '',
+      Lote: m.lote ?? '',
       Proveedor: m.proveedor ?? '',
+      Vencimiento: m.vencimiento ?? '',
+      'Estado del vencimiento': calcVencimiento(m.vencimiento)?.label ?? '',
       Ubicación: m.ubicacion ?? '',
     })),
-    [14, 40, 10, 10, 11, 11, 14, 20, 16, 16, 22, 16]
+    [14, 40, 10, 10, 11, 11, 14, 20, 16, 16, 14, 22, 12, 22, 16]
   );
 
   // --- Recetas: una fila por componente ---

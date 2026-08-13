@@ -3,10 +3,12 @@ import { useMemo, useState } from 'react';
 import { DataTable, type Column } from '../components/DataTable';
 import { ItemForm } from '../components/ItemForm';
 import { ItemModal } from '../components/ItemModal';
-import { DiffCell, StatusBadge, StockBar } from '../components/StatusBadge';
+import { DiffCell, StatusBadge, StockBar, VencimientoCell } from '../components/StatusBadge';
 import {
   CATEGORIA_LABEL_PLURAL,
   calcEstado,
+  calcVencimiento,
+  diasAvisoGuardado,
   formatNum,
   listaDe,
 } from '../lib/helpers';
@@ -17,24 +19,43 @@ export function CategoriaView({ categoria }: { categoria: Categoria }) {
   const { state, puedeEditar } = useStore();
   const [q, setQ] = useState('');
   const [soloAlerta, setSoloAlerta] = useState(false);
+  const [soloVencer, setSoloVencer] = useState(false);
   const [ver, setVer] = useState<BaseItem | null>(null);
   const [editar, setEditar] = useState<any | null>(null);
   const [nuevo, setNuevo] = useState(false);
+  const diasAviso = diasAvisoGuardado();
 
   const all = listaDe(state, categoria);
+
+  /** ¿Está vencido o por vencer, y todavía tiene stock? */
+  const porVencer = (it: BaseItem) => {
+    const info = calcVencimiento((it as any).vencimiento, diasAviso);
+    return !!info && info.estado !== 'ok' && it.actual > 0;
+  };
+
   const rows = useMemo(() => {
     const query = q.trim().toLowerCase();
     return all.filter((it) => {
       if (soloAlerta && calcEstado(it.actual, it.minimo).faltan <= 0) return false;
+      if (soloVencer && !porVencer(it)) return false;
       if (!query) return true;
+      const d = it as any;
       return (
         it.nombre.toLowerCase().includes(query) ||
-        it.codigo.toLowerCase().includes(query)
+        it.codigo.toLowerCase().includes(query) ||
+        String(d.lote ?? '').toLowerCase().includes(query) ||
+        String(d.proveedor ?? '').toLowerCase().includes(query)
       );
     });
-  }, [all, q, soloAlerta]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [all, q, soloAlerta, soloVencer, diasAviso]);
 
   const hasTipo = categoria === 'etiqueta' || categoria === 'materia_prima';
+  // La columna de vencimiento se muestra siempre en materia prima (aunque esté
+  // vacía, para que se note que hay que cargarla) y en el resto sólo si alguien
+  // cargó alguna fecha.
+  const hasVencimiento =
+    categoria === 'materia_prima' || all.some((it) => !!(it as any).vencimiento);
 
   const columns: Column<BaseItem>[] = [
     { key: 'codigo', header: 'Código', sortValue: (r) => r.codigo, className: 'codigo', render: (r) => r.codigo },
@@ -65,6 +86,16 @@ export function CategoriaView({ categoria }: { categoria: Categoria }) {
     { key: 'nivel', header: 'Nivel', sortable: false, render: (r) => <StockBar actual={r.actual} minimo={r.minimo} /> },
     { key: 'diff', header: 'Diferencia', align: 'right', sortValue: (r) => r.actual - r.minimo, render: (r) => <DiffCell actual={r.actual} minimo={r.minimo} /> },
     { key: 'estado', header: 'Estado', sortValue: (r) => calcEstado(r.actual, r.minimo).diferencia, render: (r) => <StatusBadge actual={r.actual} minimo={r.minimo} /> },
+    ...(hasVencimiento
+      ? [{
+          key: 'venc', header: 'Vencimiento',
+          // Sin fecha van al final: `zzzz` ordena después de cualquier aaaa-mm-dd
+          sortValue: (r: BaseItem) => String((r as any).vencimiento ?? 'zzzz'),
+          render: (r: BaseItem) => (
+            <VencimientoCell vencimiento={(r as any).vencimiento} diasAviso={diasAviso} />
+          ),
+        } as Column<BaseItem>]
+      : []),
     { key: 'acc', header: '', sortable: false, align: 'right',
       render: (r) => (
         <button className="btn btn--sm" onClick={() => (puedeEditar ? setEditar(r) : setVer(r))}>
@@ -74,6 +105,7 @@ export function CategoriaView({ categoria }: { categoria: Categoria }) {
   ];
 
   const alertas = all.filter((it) => calcEstado(it.actual, it.minimo).faltan > 0).length;
+  const vencen = all.filter(porVencer).length;
 
   return (
     <div className="stack">
@@ -85,6 +117,15 @@ export function CategoriaView({ categoria }: { categoria: Categoria }) {
         <button className={'chip' + (soloAlerta ? ' active' : '')} onClick={() => setSoloAlerta((s) => !s)}>
           Solo faltantes {alertas > 0 && `(${alertas})`}
         </button>
+        {(hasVencimiento || vencen > 0) && (
+          <button
+            className={'chip' + (soloVencer ? ' active' : '')}
+            onClick={() => setSoloVencer((s) => !s)}
+            title={`Vencidos o que vencen dentro de ${diasAviso} días`}
+          >
+            Por vencer {vencen > 0 && `(${vencen})`}
+          </button>
+        )}
         <div className="toolbar__spacer" />
         <span className="muted" style={{ fontSize: 12 }}>{rows.length} de {all.length}</span>
         {puedeEditar && (

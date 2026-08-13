@@ -1,6 +1,7 @@
 import {
   AlertTriangle,
   Boxes,
+  CalendarClock,
   CloudUpload,
   Database,
   Download,
@@ -19,11 +20,11 @@ import {
   Users,
   Wheat,
 } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useToast } from './components/Toast';
 import { useAuth } from './lib/auth';
 import { descargarBackup } from './lib/backup';
-import { calcEstado, listaDe } from './lib/helpers';
+import { alertasVencimiento, calcEstado, diasAvisoGuardado, listaDe } from './lib/helpers';
 import { useStore } from './lib/store';
 import type { Categoria } from './lib/types';
 import { CategoriaView } from './views/CategoriaView';
@@ -89,6 +90,45 @@ export default function App() {
       materia_prima: count('materia_prima'),
     };
   }, [state]);
+
+  // Vencimientos: se recalculan con cada cambio del stock, así el aviso del
+  // encabezado desaparece solo cuando se da de baja o se repone lo vencido.
+  const vencimientos = useMemo(
+    () => alertasVencimiento(state, diasAvisoGuardado()),
+    [state]
+  );
+
+  // Aviso al entrar: un solo toast por día y por navegador, para que no
+  // moleste a quien abre la plataforma veinte veces en la jornada.
+  const avisado = useRef(false);
+  useEffect(() => {
+    if (cargando || avisado.current || vencimientos.length === 0) return;
+    const hoy = new Date().toISOString().slice(0, 10);
+    const clave = 'somos-setas-stock:aviso-venc-visto';
+    let visto: string | null = null;
+    try {
+      visto = localStorage.getItem(clave);
+    } catch {
+      /* storage bloqueado: se avisa igual, una vez por sesión */
+    }
+    avisado.current = true;
+    if (visto === hoy) return;
+    try {
+      localStorage.setItem(clave, hoy);
+    } catch {
+      /* ídem */
+    }
+    const vencidos = vencimientos.filter((v) => v.info.estado === 'vencido').length;
+    const primero = vencimientos[0];
+    toast(
+      vencidos > 0
+        ? `${vencidos} ítem(s) vencidos y ${vencimientos.length - vencidos} por vencer. El más urgente: ${primero.nombre}.`
+        : `${vencimientos.length} ítem(s) por vencer. ${primero.nombre}: ${primero.info.label.toLowerCase()}.`,
+      true
+    );
+    // toast cambia de identidad en cada render del provider: no va en las deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cargando, vencimientos]);
 
   const nav = (id: ViewId, icon: any, label: string, badge?: number) => (
     <button className={'nav__item' + (view === id ? ' active' : '')} onClick={() => setView(id)}>
@@ -201,6 +241,19 @@ export default function App() {
             <div className="subtitle">{TITLES[view].s}</div>
           </div>
           <div className="topbar__spacer" />
+          {vencimientos.length > 0 && (
+            <button
+              className="btn btn--sm btn--venc"
+              onClick={() => setView('dashboard')}
+              title={vencimientos
+                .slice(0, 6)
+                .map((v) => `${v.nombre}: ${v.info.label}`)
+                .join('\n')}
+            >
+              <CalendarClock size={14} />
+              {vencimientos.length} por vencer
+            </button>
+          )}
           {!puedeEditar && (
             <span className="pill" title="Tu usuario puede mirar todo pero no modificar nada">
               <Eye size={12} /> Modo lectura

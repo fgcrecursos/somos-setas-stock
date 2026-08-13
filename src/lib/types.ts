@@ -58,6 +58,9 @@ export interface MateriaPrima extends BaseItem {
   cantidadPorPack?: number | null;
   ubicacion?: string | null;
   proveedor?: string | null;
+  lote?: string | null;
+  /** Fecha de vencimiento (aaaa-mm-dd): dispara las alertas de vencimiento */
+  vencimiento?: string | null;
 }
 
 export type TipoMovimiento =

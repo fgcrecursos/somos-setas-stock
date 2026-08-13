@@ -16,9 +16,18 @@ Plataforma web de gestión de inventario para [Somos Setas](https://somossetas.c
 - **Cada movimiento queda firmado** con el email de quien lo hizo
 
 ### Dashboard
-- **KPIs en tiempo real**: total de ítems, stock bajo mínimo, productos agotados, producción requerida
+- **KPIs en tiempo real**: total de ítems, stock bajo mínimo, productos agotados, producción requerida, ítems por vencer
 - **Alertas de reposición**: tabla filtrable de ítems por debajo del mínimo con diferencia visual
+- **Alertas de vencimiento**: qué está vencido o por vencer, con lote y proveedor, ordenado por urgencia
 - **Estado de stock**: indicadores por categoría (Productos, Insumos, Etiquetas, Materia prima)
+
+### Vencimientos
+- **Lote, proveedor y vencimiento** en la ficha de materia prima
+- **Aviso configurable**: 15, 30, 60 o 90 días antes (se elige en el Dashboard, queda guardado en el navegador)
+- **Tres formas de enterarse**: aviso en la barra superior desde cualquier pantalla, cartel al entrar
+  (una vez por día) y la tabla del Dashboard
+- **Filtro "Por vencer"** y columna de vencimiento en el inventario; la búsqueda también encuentra por lote y proveedor
+- Sólo alerta lo que **todavía tiene stock**: si no queda nada, la fecha no molesta a nadie
 
 ### Gestión de Stock Vinculado (BOM)
 - **Recetas automáticas**: cada producto vincula su etiqueta + envases + materia prima

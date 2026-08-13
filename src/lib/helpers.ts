@@ -83,18 +83,20 @@ export function buscarItem(
   return listaDe(state, categoria).find((x) => x.codigo === codigo);
 }
 
+export const CATEGORIAS_TODAS: Categoria[] = [
+  'producto',
+  'insumo',
+  'insumo_interno',
+  'etiqueta',
+  'materia_prima',
+];
+
 /** Busca un producto por su código en cualquier categoría (para escaneo) */
 export function buscarPorCodigo(
   state: DBState,
   codigo: string
 ): { categoria: Categoria; item: BaseItem } | undefined {
-  const cats: Categoria[] = [
-    'producto',
-    'insumo',
-    'insumo_interno',
-    'etiqueta',
-    'materia_prima',
-  ];
+  const cats = CATEGORIAS_TODAS;
   const clean = codigo.trim().toUpperCase();
   for (const c of cats) {
     const item = listaDe(state, c).find(
@@ -165,8 +167,144 @@ export function formatFecha(iso?: string | null): string {
   });
 }
 
+/** Sólo el día, sin la hora: para fechas de vencimiento (aaaa-mm-dd) */
+export function formatFechaCorta(iso?: string | null): string {
+  if (!iso) return '—';
+  const d = soloFecha(String(iso));
+  if (!d) return String(iso);
+  return d.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+}
+
 export function uid(): string {
   return Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
+}
+
+// =====================================================================
+// VENCIMIENTOS
+// La materia prima (y los productos) llevan fecha de vencimiento. Acá esa
+// fecha se traduce a "cuántos días faltan" y a un nivel de alerta, para
+// poder avisar antes de que se venza algo que todavía tiene stock.
+// =====================================================================
+
+export type EstadoVencimiento = 'vencido' | 'critico' | 'proximo' | 'ok';
+
+export interface VencimientoInfo {
+  estado: EstadoVencimiento;
+  label: string;
+  /** Días que faltan para la fecha (negativo = ya venció) */
+  dias: number;
+}
+
+/** Cuántos días antes se empieza a avisar (se puede cambiar en el Dashboard) */
+export const DIAS_AVISO_DEFAULT = 30;
+/** Dentro de esta franja el aviso deja de ser "próximo" y pasa a "crítico" */
+export const DIAS_CRITICO = 7;
+export const OPCIONES_AVISO = [15, 30, 60, 90];
+
+const CLAVE_AVISO = 'somos-setas-stock:aviso-vencimiento';
+
+export function diasAvisoGuardado(): number {
+  try {
+    const n = Number(localStorage.getItem(CLAVE_AVISO));
+    return Number.isFinite(n) && n > 0 ? n : DIAS_AVISO_DEFAULT;
+  } catch {
+    return DIAS_AVISO_DEFAULT;
+  }
+}
+
+export function guardarDiasAviso(dias: number): void {
+  try {
+    localStorage.setItem(CLAVE_AVISO, String(dias));
+  } catch {
+    /* modo incógnito o storage bloqueado: se sigue con el valor por defecto */
+  }
+}
+
+const DIA_MS = 86_400_000;
+
+/**
+ * Convierte `aaaa-mm-dd` (o un ISO completo) a medianoche LOCAL.
+ * `new Date('2026-09-01')` se interpreta como UTC y en Argentina cae el 31 de
+ * agosto a las 21 h: por eso la fecha se arma a mano, componente por componente.
+ */
+function soloFecha(v: string): Date | null {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(v.trim());
+  if (m) return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+  const d = new Date(v);
+  return isNaN(d.getTime()) ? null : new Date(d.getFullYear(), d.getMonth(), d.getDate());
+}
+
+export function calcVencimiento(
+  vencimiento?: string | null,
+  diasAviso = DIAS_AVISO_DEFAULT
+): VencimientoInfo | null {
+  if (!vencimiento) return null;
+  const fecha = soloFecha(String(vencimiento));
+  if (!fecha) return null;
+  const ahora = new Date();
+  const hoy = new Date(ahora.getFullYear(), ahora.getMonth(), ahora.getDate());
+  const dias = Math.round((fecha.getTime() - hoy.getTime()) / DIA_MS);
+
+  if (dias < 0)
+    return {
+      estado: 'vencido',
+      dias,
+      label: dias === -1 ? 'Vencido ayer' : `Vencido hace ${-dias} días`,
+    };
+  if (dias === 0) return { estado: 'critico', dias, label: 'Vence hoy' };
+  const label = dias === 1 ? 'Vence mañana' : `Vence en ${dias} días`;
+  if (dias <= Math.min(DIAS_CRITICO, diasAviso)) return { estado: 'critico', dias, label };
+  if (dias <= diasAviso) return { estado: 'proximo', dias, label };
+  return { estado: 'ok', dias, label };
+}
+
+/** El cartelito de vencimiento reusa la paleta de estados de stock */
+export const VENCIMIENTO_CLASE: Record<EstadoVencimiento, string> = {
+  vencido: 'st-agotado',
+  critico: 'st-critico',
+  proximo: 'st-bajo',
+  ok: 'st-ok',
+};
+
+export interface AlertaVencimiento {
+  categoria: Categoria;
+  codigo: string;
+  nombre: string;
+  lote: string | null;
+  proveedor: string | null;
+  actual: number;
+  vencimiento: string;
+  info: VencimientoInfo;
+}
+
+/**
+ * Todo lo que está vencido o por vencer dentro de `diasAviso`, de lo más
+ * urgente a lo menos. Se ignora lo que ya no tiene stock: si no queda nada en
+ * el depósito, la fecha no le importa a nadie.
+ */
+export function alertasVencimiento(
+  state: DBState,
+  diasAviso = DIAS_AVISO_DEFAULT
+): AlertaVencimiento[] {
+  const out: AlertaVencimiento[] = [];
+  for (const categoria of CATEGORIAS_TODAS) {
+    for (const it of listaDe(state, categoria) as any[]) {
+      const info = calcVencimiento(it.vencimiento, diasAviso);
+      if (!info || info.estado === 'ok') continue;
+      if ((Number(it.actual) || 0) <= 0) continue;
+      out.push({
+        categoria,
+        codigo: it.codigo,
+        nombre: it.nombre,
+        lote: it.lote ?? null,
+        proveedor: it.proveedor ?? null,
+        actual: Number(it.actual) || 0,
+        vencimiento: String(it.vencimiento),
+        info,
+      });
+    }
+  }
+  return out.sort((a, b) => a.info.dias - b.info.dias);
 }
 
 /** Cómo se llama cada campo de la ficha cuando se cuenta qué cambió */

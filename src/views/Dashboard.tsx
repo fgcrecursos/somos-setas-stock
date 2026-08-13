@@ -1,6 +1,7 @@
 import {
   AlertTriangle,
   Boxes,
+  CalendarClock,
   FlaskConical,
   PackageX,
   ShoppingBag,
@@ -9,12 +10,16 @@ import {
   TrendingDown,
   ArrowRight,
 } from 'lucide-react';
-import { useMemo } from 'react';
-import { DiffCell, StatusBadge, StockBar } from '../components/StatusBadge';
+import { useMemo, useState } from 'react';
+import { DiffCell, StatusBadge, StockBar, VencimientoCell } from '../components/StatusBadge';
 import {
   CATEGORIA_LABEL_PLURAL,
+  OPCIONES_AVISO,
+  alertasVencimiento,
   calcEstado,
+  diasAvisoGuardado,
   formatNum,
+  guardarDiasAviso,
   listaDe,
 } from '../lib/helpers';
 import type { Categoria } from '../lib/types';
@@ -30,6 +35,18 @@ const CATS: { cat: Categoria; icon: any; color: string }[] = [
 
 export function Dashboard({ onNav }: { onNav: (v: string) => void }) {
   const { state } = useStore();
+  const [diasAviso, setDiasAviso] = useState(diasAvisoGuardado);
+
+  const vencimientos = useMemo(
+    () => alertasVencimiento(state, diasAviso),
+    [state, diasAviso]
+  );
+  const vencidos = vencimientos.filter((v) => v.info.estado === 'vencido').length;
+
+  function cambiarAviso(dias: number) {
+    setDiasAviso(dias);
+    guardarDiasAviso(dias);
+  }
 
   const stats = useMemo(() => {
     const perCat = CATS.map(({ cat, icon, color }) => {
@@ -127,6 +144,22 @@ export function Dashboard({ onNav }: { onNav: (v: string) => void }) {
           <div className="kpi__label">Productos a fabricar</div>
           <div className="kpi__foot">Por debajo del stock mínimo</div>
         </div>
+
+        <div className="kpi">
+          <div className="kpi__icon" style={{ background: 'var(--critico-bg)', color: 'var(--critico)' }}>
+            <CalendarClock size={20} />
+          </div>
+          <div
+            className="kpi__value"
+            style={{ color: vencimientos.length ? 'var(--critico)' : undefined }}
+          >
+            {vencimientos.length}
+          </div>
+          <div className="kpi__label">Por vencer</div>
+          <div className="kpi__foot">
+            {vencidos > 0 ? `${vencidos} ya vencido(s)` : `Dentro de ${diasAviso} días`}
+          </div>
+        </div>
       </div>
 
       {/* Resumen por categoría */}
@@ -156,6 +189,82 @@ export function Dashboard({ onNav }: { onNav: (v: string) => void }) {
             </button>
           );
         })}
+      </div>
+
+      {/* Vencimientos */}
+      <div className="card">
+        <div className="card__head">
+          <CalendarClock size={18} color="var(--critico)" />
+          <h3>Alertas de vencimiento</h3>
+          <div className="row" style={{ marginLeft: 'auto', gap: 8 }}>
+            <span className="muted" style={{ fontSize: 12 }}>Avisar con</span>
+            <select
+              className="input"
+              style={{ width: 'auto', padding: '5px 8px', fontSize: 12.5 }}
+              value={diasAviso}
+              onChange={(ev) => cambiarAviso(Number(ev.target.value))}
+              title="Cuántos días antes del vencimiento se empieza a avisar"
+            >
+              {OPCIONES_AVISO.map((d) => (
+                <option key={d} value={d}>{d} días</option>
+              ))}
+            </select>
+            <span className="pill">{vencimientos.length} ítems</span>
+          </div>
+        </div>
+        <div className="table-wrap">
+          <table className="tbl">
+            <thead>
+              <tr>
+                <th>Código</th>
+                <th>Ítem</th>
+                <th className="no-sort">Categoría</th>
+                <th>Lote</th>
+                <th>Proveedor</th>
+                <th className="num">Stock</th>
+                <th className="no-sort">Vencimiento</th>
+              </tr>
+            </thead>
+            <tbody>
+              {vencimientos.slice(0, 14).map((v) => (
+                <tr key={v.categoria + v.codigo}>
+                  <td className="codigo">{v.codigo}</td>
+                  <td className="nombre">
+                    <button
+                      className="btn btn--ghost btn--sm"
+                      style={{ padding: 0, border: 'none', fontWeight: 600 }}
+                      onClick={() => onNav(v.categoria)}
+                    >
+                      {v.nombre}
+                    </button>
+                  </td>
+                  <td><span className="pill">{CATEGORIA_LABEL_PLURAL[v.categoria]}</span></td>
+                  <td>{v.lote || <span className="muted">—</span>}</td>
+                  <td>{v.proveedor || <span className="muted">—</span>}</td>
+                  <td className="num">{formatNum(v.actual)}</td>
+                  <td><VencimientoCell vencimiento={v.vencimiento} diasAviso={diasAviso} /></td>
+                </tr>
+              ))}
+              {vencimientos.length === 0 && (
+                <tr>
+                  <td colSpan={7}>
+                    <div className="empty">
+                      Nada vencido ni por vencer en los próximos {diasAviso} días. 🍄
+                    </div>
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+        {vencimientos.length > 14 && (
+          <div className="card__body" style={{ paddingTop: 0 }}>
+            <p className="hlp" style={{ margin: 0 }}>
+              Se muestran los 14 más urgentes de {vencimientos.length}. El resto está en cada
+              categoría, con el filtro <strong>Por vencer</strong>.
+            </p>
+          </div>
+        )}
       </div>
 
       {/* Alertas */}

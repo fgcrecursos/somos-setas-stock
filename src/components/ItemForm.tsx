@@ -1,6 +1,11 @@
 import { Boxes } from 'lucide-react';
 import { useState } from 'react';
-import { CATEGORIA_LABEL } from '../lib/helpers';
+import {
+  CATEGORIA_LABEL,
+  VENCIMIENTO_CLASE,
+  calcVencimiento,
+  diasAvisoGuardado,
+} from '../lib/helpers';
 import { useStore } from '../lib/store';
 import type { BaseItem, Categoria } from '../lib/types';
 import { Modal } from './Modal';
@@ -22,6 +27,8 @@ export function ItemForm({ categoria, initial, onClose }: Props) {
       : { codigo: '', nombre: '', actual: 0, minimo: 0, tipo: '', presentacion: '' }
   );
   const [error, setError] = useState('');
+  const diasAviso = diasAvisoGuardado();
+  const venc = calcVencimiento(item.vencimiento, diasAviso);
 
   function set(k: string, v: any) {
     setItem((prev: any) => ({ ...prev, [k]: v }));
@@ -41,7 +48,13 @@ export function ItemForm({ categoria, initial, onClose }: Props) {
     ] as BaseItem[];
     const dup = lista.find((x) => x.codigo === item.codigo && x.codigo !== initial?.codigo);
     if (dup) return setError(`Ya existe ${item.codigo} en ${CATEGORIA_LABEL[categoria]}.`);
-    const res = await upsertItem(categoria, item, initial?.codigo);
+    // Un campo de texto vacío se guarda como null y no como "": así la ficha no
+    // se llena de cadenas vacías y el historial de ediciones no las cuenta.
+    const limpio = { ...item };
+    for (const campo of ['lote', 'proveedor', 'vencimiento', 'ubicacion', 'observaciones']) {
+      if (typeof limpio[campo] === 'string' && !limpio[campo].trim()) limpio[campo] = null;
+    }
+    const res = await upsertItem(categoria, limpio, initial?.codigo);
     if (!res.ok) return setError(res.error ?? 'No se pudo guardar.');
     onClose();
   }
@@ -109,10 +122,46 @@ export function ItemForm({ categoria, initial, onClose }: Props) {
       )}
 
       {categoria === 'materia_prima' && (
-        <div className="field">
-          <label>Proveedor</label>
-          <input className="input" value={item.proveedor ?? ''} onChange={(e) => set('proveedor', e.target.value)} />
-        </div>
+        <>
+          <div className="form-row">
+            <div className="field">
+              <label>Lote</label>
+              <input
+                className="input"
+                placeholder="Ej: L-2026-014"
+                value={item.lote ?? ''}
+                onChange={(e) => set('lote', e.target.value)}
+              />
+            </div>
+            <div className="field">
+              <label>Proveedor</label>
+              <input
+                className="input"
+                value={item.proveedor ?? ''}
+                onChange={(e) => set('proveedor', e.target.value)}
+              />
+            </div>
+          </div>
+          <div className="field">
+            <label>Vencimiento</label>
+            <input
+              className="input"
+              type="date"
+              value={item.vencimiento ?? ''}
+              onChange={(e) => set('vencimiento', e.target.value)}
+            />
+            {venc ? (
+              <p className="hlp" style={{ marginTop: 6 }}>
+                <span className={`badge-estado ${VENCIMIENTO_CLASE[venc.estado]}`}>{venc.label}</span>{' '}
+                Se avisa en el Dashboard desde {diasAviso} días antes.
+              </p>
+            ) : (
+              <p className="hlp" style={{ marginTop: 6 }}>
+                Cargá la fecha y el sistema avisa solo cuando falten {diasAviso} días o menos.
+              </p>
+            )}
+          </div>
+        </>
       )}
 
       {error && (

@@ -1,4 +1,9 @@
-import { calcEstado } from '../lib/helpers';
+import {
+  VENCIMIENTO_CLASE,
+  calcEstado,
+  calcVencimiento,
+  formatFechaCorta,
+} from '../lib/helpers';
 
 export function StatusBadge({ actual, minimo }: { actual: number; minimo: number }) {
   const { estado, label } = calcEstado(actual, minimo);
@@ -14,6 +19,33 @@ export function DiffCell({ actual, minimo }: { actual: number; minimo: number })
   if (diferencia > 0)
     return <span className="diff-pos">Sobran {sobran}</span>;
   return <span className="diff-zero">Justo</span>;
+}
+
+/**
+ * Fecha de vencimiento + cuánto le falta. Si todavía está lejos se muestra
+ * sólo la fecha, para no llenar la tabla de cartelitos verdes.
+ */
+export function VencimientoCell({
+  vencimiento,
+  diasAviso,
+}: {
+  vencimiento?: string | null;
+  diasAviso?: number;
+}) {
+  const info = calcVencimiento(vencimiento, diasAviso);
+  if (!info) return <span className="muted">—</span>;
+  return (
+    <span className="row" style={{ gap: 7 }}>
+      <span style={{ whiteSpace: 'nowrap' }}>{formatFechaCorta(vencimiento)}</span>
+      {info.estado === 'ok' ? (
+        <span className="muted" style={{ fontSize: 11.5, whiteSpace: 'nowrap' }}>
+          {info.label}
+        </span>
+      ) : (
+        <span className={`badge-estado ${VENCIMIENTO_CLASE[info.estado]}`}>{info.label}</span>
+      )}
+    </span>
+  );
 }
 
 export function StockBar({ actual, minimo }: { actual: number; minimo: number }) {

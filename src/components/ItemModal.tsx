@@ -1,11 +1,25 @@
-import { Barcode as BarcodeIcon, PackagePlus, Pencil, Printer, SlidersHorizontal } from 'lucide-react';
+import {
+  AlertTriangle,
+  Barcode as BarcodeIcon,
+  PackagePlus,
+  Pencil,
+  Printer,
+  SlidersHorizontal,
+} from 'lucide-react';
 import { useState } from 'react';
-import { CATEGORIA_LABEL, calcEstado, formatNum } from '../lib/helpers';
+import {
+  CATEGORIA_LABEL,
+  VENCIMIENTO_CLASE,
+  calcEstado,
+  calcVencimiento,
+  diasAvisoGuardado,
+  formatNum,
+} from '../lib/helpers';
 import { useStore } from '../lib/store';
 import type { BaseItem, Categoria } from '../lib/types';
 import { Barcode } from './Barcode';
 import { Modal } from './Modal';
-import { DiffCell, StatusBadge } from './StatusBadge';
+import { DiffCell, StatusBadge, VencimientoCell } from './StatusBadge';
 import { useToast } from './Toast';
 
 interface Props {
@@ -22,6 +36,24 @@ export function ItemModal({ categoria, item, onClose, onEdit }: Props) {
   const [setQty, setSetQty] = useState(item.actual);
   const e = calcEstado(item.actual, item.minimo);
   const esProducto = categoria === 'producto';
+
+  // Datos de la ficha que no son stock: lote, proveedor, vencimiento…
+  const d = item as any;
+  const diasAviso = diasAvisoGuardado();
+  const venc = calcVencimiento(d.vencimiento, diasAviso);
+  const ficha: { label: string; value: React.ReactNode }[] = [];
+  if (d.tipo) ficha.push({ label: 'Tipo', value: d.tipo });
+  if (d.presentacion) ficha.push({ label: 'Presentación', value: d.presentacion });
+  if (d.lote) ficha.push({ label: 'Lote', value: d.lote });
+  if (d.proveedor) ficha.push({ label: 'Proveedor', value: d.proveedor });
+  if (d.ubicacion) ficha.push({ label: 'Ubicación', value: d.ubicacion });
+  if (d.vencimiento)
+    ficha.push({
+      label: 'Vencimiento',
+      value: <VencimientoCell vencimiento={d.vencimiento} diasAviso={diasAviso} />,
+    });
+  const fichaVacia =
+    categoria === 'materia_prima' && !d.lote && !d.proveedor && !d.vencimiento;
 
   async function correr(fn: () => Promise<{ ok: boolean; error?: string }>, exito: string) {
     const res = await fn();
@@ -81,11 +113,45 @@ export function ItemModal({ categoria, item, onClose, onEdit }: Props) {
         <StatusBadge actual={item.actual} minimo={item.minimo} />
       </div>
 
+      {venc && venc.estado !== 'ok' && (
+        <div className={`row aviso-venc ${VENCIMIENTO_CLASE[venc.estado]}`}>
+          <AlertTriangle size={17} />
+          <span>
+            {venc.label}
+            {d.lote ? ` · lote ${d.lote}` : ''}
+            {venc.estado === 'vencido' && item.actual > 0
+              ? ` · quedan ${formatNum(item.actual)} en stock`
+              : ''}
+          </span>
+        </div>
+      )}
+
       <div className="grid" style={{ gridTemplateColumns: '1fr 1fr 1fr', margin: '16px 0' }}>
         <Stat label="Actual" value={formatNum(item.actual)} />
         <Stat label="Mínimo" value={formatNum(item.minimo)} />
         <Stat label="Diferencia" value={<DiffCell actual={item.actual} minimo={item.minimo} />} />
       </div>
+
+      {/* Ficha: lote, proveedor, vencimiento y demás datos de la ficha */}
+      {ficha.length > 0 && (
+        <>
+          <div className="section-title">Ficha</div>
+          <div className="ficha-datos">
+            {ficha.map((f) => (
+              <div key={f.label} className="ficha-datos__fila">
+                <span className="muted">{f.label}</span>
+                <span>{f.value}</span>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+      {fichaVacia && (
+        <p className="hlp" style={{ marginTop: 0, marginBottom: 14 }}>
+          Esta materia prima todavía no tiene lote, proveedor ni vencimiento cargados.
+          {puedeEditar && ' Cargalos desde "Editar" para que entre en las alertas de vencimiento.'}
+        </p>
+      )}
 
       {/* Barcode */}
       <div className="section-title">Código de barras</div>

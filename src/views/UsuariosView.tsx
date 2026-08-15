@@ -4,7 +4,7 @@
 //   Solo lectura  → mira el inventario y el historial, no toca nada.
 // Dar de alta crea la cuenta de acceso (email + contraseña) y el permiso.
 // =====================================================================
-import { Eye, Pencil, ShieldCheck, Trash2, UserPlus, Users } from 'lucide-react';
+import { AlertTriangle, Eye, KeyRound, Pencil, ShieldCheck, Trash2, UserPlus, Users } from 'lucide-react';
 import { useState } from 'react';
 import { Modal } from '../components/Modal';
 import { useToast } from '../components/Toast';
@@ -18,10 +18,25 @@ const ROL_LABEL: Record<Rol, string> = {
 };
 
 export function UsuariosView() {
-  const { usuarios, email: yo, crearUsuario, actualizarUsuario, eliminarUsuario } = useAuth();
+  const {
+    usuarios,
+    email: yo,
+    crearUsuario,
+    actualizarUsuario,
+    eliminarUsuario,
+    enviarLinkPassword,
+  } = useAuth();
   const toast = useToast();
   const [nuevo, setNuevo] = useState(false);
   const [editar, setEditar] = useState<UsuarioStock | null>(null);
+
+  async function mandarLink(u: UsuarioStock) {
+    const res = await enviarLinkPassword(u.email);
+    toast(
+      res.error ?? `Le mandamos un mail a ${u.email} para que ponga su contraseña`,
+      !!res.error
+    );
+  }
 
   async function cambiarRol(u: UsuarioStock, rol: Rol) {
     const res = await actualizarUsuario(u.email, { rol });
@@ -118,6 +133,13 @@ export function UsuariosView() {
                       </button>{' '}
                       <button
                         className="btn btn--sm"
+                        title="Le manda un mail con un link para que ponga su propia contraseña"
+                        onClick={() => mandarLink(u)}
+                      >
+                        <KeyRound size={13} /> Contraseña
+                      </button>{' '}
+                      <button
+                        className="btn btn--sm"
                         disabled={soyYo}
                         title={soyYo ? 'No podés quitarte el acceso a vos mismo' : ''}
                         onClick={() => alternarActivo(u)}
@@ -186,17 +208,23 @@ function FormUsuario({
   onGuardar: (u: { email: string; password: string; nombre: string; rol: Rol }) => Promise<{
     ok?: boolean;
     error?: string;
-    aviso?: string;
+    cuentaExistente?: boolean;
   }>;
 }) {
   const editando = !!usuario;
   const toast = useToast();
+  const { enviarLinkPassword } = useAuth();
   const [email, setEmail] = useState(usuario?.email ?? '');
   const [nombre, setNombre] = useState(usuario?.nombre ?? '');
   const [password, setPassword] = useState('');
   const [rol, setRol] = useState<Rol>(usuario?.rol ?? 'invitado');
   const [error, setError] = useState('');
   const [guardando, setGuardando] = useState(false);
+  // La cuenta ya existía: el permiso quedó dado, pero la contraseña tipeada acá
+  // no sirve. Esto NO se avisa con un toast que se va solo: se traba el modal
+  // hasta que quien da el alta lo lee, porque si no la persona no puede entrar.
+  const [yaExistia, setYaExistia] = useState(false);
+  const [linkMandado, setLinkMandado] = useState(false);
 
   async function guardar() {
     setError('');
@@ -207,9 +235,55 @@ function FormUsuario({
     const res = await onGuardar({ email, password, nombre, rol });
     setGuardando(false);
     if (res.error) return setError(res.error);
-    if (res.aviso) toast(res.aviso);
-    else toast(editando ? 'Usuario actualizado' : `${email} ya puede entrar`);
+    if (res.cuentaExistente) return setYaExistia(true);
+    toast(editando ? 'Usuario actualizado' : `${email} ya puede entrar`);
     onClose();
+  }
+
+  async function mandarLink() {
+    setGuardando(true);
+    const res = await enviarLinkPassword(email);
+    setGuardando(false);
+    if (res.error) return setError(res.error);
+    setLinkMandado(true);
+  }
+
+  if (yaExistia) {
+    const mail = email.trim().toLowerCase();
+    return (
+      <Modal
+        title="Ya tenía cuenta de Somos Setas"
+        icon={<AlertTriangle size={20} color="var(--naranja)" />}
+        onClose={onClose}
+        footer={
+          <>
+            <button className="btn" onClick={onClose}>Cerrar</button>
+            <button className="btn btn--primary" onClick={mandarLink} disabled={guardando || linkMandado}>
+              <KeyRound size={15} />
+              {guardando ? 'Enviando…' : linkMandado ? 'Link enviado' : 'Mandarle un link para su contraseña'}
+            </button>
+          </>
+        }
+      >
+        <p style={{ marginTop: 0 }}>
+          <strong>{mail}</strong> ya tenía una cuenta de Somos Setas, así que el acceso al stock
+          quedó dado y ya aparece en la lista.
+        </p>
+        <div
+          className="badge-estado st-agotado"
+          style={{ display: 'block', padding: '12px 14px', borderRadius: 10, margin: '14px 0', lineHeight: 1.5 }}
+        >
+          Ojo: la contraseña que escribiste acá <strong>no se aplicó</strong>. Esta persona sigue
+          entrando con la contraseña que ya usaba. Si le pasás la que acabás de tipear, le va a decir
+          “email o contraseña incorrectos”.
+        </div>
+        <p className="hlp" style={{ marginBottom: 0 }}>
+          {linkMandado
+            ? `Listo: le mandamos un mail a ${mail} con un link para que ponga la contraseña que quiera. Decile que revise el correo no deseado.`
+            : 'Si no se acuerda de su contraseña, mandale el link y la define ella misma. También puede hacerlo sola desde “Olvidé mi contraseña” en la pantalla de ingreso.'}
+        </p>
+      </Modal>
+    );
   }
 
   return (
@@ -255,8 +329,9 @@ function FormUsuario({
             placeholder="Se la pasás por privado; después puede cambiarla"
           />
           <p className="hlp">
-            Si la persona ya tenía cuenta de Somos Setas, se mantiene su contraseña actual y solo se
-            le suma el acceso al stock.
+            Sirve solo si la persona <strong>no</strong> tenía cuenta de Somos Setas. Si ya tenía
+            (por ejemplo, porque compró en la tienda), sigue entrando con la suya y esta no se
+            aplica: te lo vamos a avisar al guardar.
           </p>
         </div>
       )}

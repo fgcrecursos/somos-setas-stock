@@ -11,11 +11,11 @@ import App from './App.tsx';
 import { AuthProvider, useAuth } from './lib/auth';
 import { StoreProvider } from './lib/store';
 import { ToastProvider } from './components/Toast';
-import { LoginView, SinAccesoView } from './views/LoginView';
+import { ErrorAccesoView, LoginView, NuevaPasswordView, SinAccesoView } from './views/LoginView';
 
 /** Decide qué mostrar según la sesión: login, aviso de sin acceso, o la app. */
 function Raiz() {
-  const { cargando, session, sinAcceso } = useAuth();
+  const { cargando, session, sinAcceso, errorPerfil, recuperando } = useAuth();
 
   if (cargando) {
     return (
@@ -28,6 +28,9 @@ function Raiz() {
     );
   }
   if (!session) return <LoginView />;
+  // Antes que nada: si vino por el link de recuperación, que fije su contraseña.
+  if (recuperando) return <NuevaPasswordView />;
+  if (errorPerfil) return <ErrorAccesoView />;
   if (sinAcceso) return <SinAccesoView />;
 
   return (

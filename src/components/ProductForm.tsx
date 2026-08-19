@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { CATEGORIA_LABEL, listaDe } from '../lib/helpers';
 import { useStore } from '../lib/store';
 import type { BomItem, CategoriaComponente, Producto } from '../lib/types';
+import { ItemPicker } from './ItemPicker';
 import { Modal } from './Modal';
 
 const TIPOS = ['Aceite', 'Cápsulas', 'Extracto', 'Polvo', 'Setas'];
@@ -167,12 +168,11 @@ export function ProductForm({ initial, onClose, onEliminar }: Props) {
             >
               {CATS_COMP.map((c) => <option key={c} value={c}>{CATEGORIA_LABEL[c]}</option>)}
             </select>
-            <select className="select" value={b.codigo} onChange={(e) => updBom(i, { codigo: e.target.value })}>
-              <option value="">Elegir…</option>
-              {opciones.map((o) => (
-                <option key={o.codigo} value={o.codigo}>{o.codigo} — {o.nombre}</option>
-              ))}
-            </select>
+            <ItemPicker
+              opciones={opciones}
+              value={b.codigo}
+              onChange={(codigo) => updBom(i, { codigo })}
+            />
             <input
               className="input qty"
               type="number"

@@ -14,6 +14,7 @@ import {
   FlaskConical,
   PackageSearch,
   Scale,
+  Search,
   ShoppingCart,
   Store,
   TrendingUp,
@@ -79,6 +80,7 @@ export function VentasView() {
   const [periodo, setPeriodo] = useState<PeriodoId>('mes-actual');
   const [detalle, setDetalle] = useState<TipoMovimiento | 'todo'>('todo');
   const [abierto, setAbierto] = useState<string | null>(null);
+  const [q, setQ] = useState('');
 
   const mesesConDatos = useMemo(() => {
     const set = new Set<string>();
@@ -141,6 +143,22 @@ export function VentasView() {
       })
       .sort((a, b) => b.vendidas + b.producidas - (a.vendidas + a.producidas));
   }, [movimientos, state.productos]);
+
+  /**
+   * Lo que se ve en la tabla. El buscador filtra SÓLO la tabla: los totales y
+   * los gráficos de arriba siguen mostrando el período completo, porque son la
+   * foto del negocio y no del término buscado. El número de puesto se calcula
+   * antes de filtrar, así "#7" sigue queriendo decir séptimo del período.
+   */
+  const rankingFiltrado = useMemo(() => {
+    const conPuesto = ranking.map((r, i) => ({ ...r, puesto: i + 1 }));
+    const partes = q.trim().toLowerCase().split(/\s+/).filter(Boolean);
+    if (!partes.length) return conPuesto;
+    return conPuesto.filter((r) => {
+      const texto = `${r.codigo} ${r.nombre} ${r.tipo} ${r.presentacion}`.toLowerCase();
+      return partes.every((p) => texto.includes(p));
+    });
+  }, [ranking, q]);
 
   const total = useMemo(() => {
     const t = { vendidas: 0, producidas: 0, consumo: 0, tienda: 0, ops: 0 };
@@ -287,9 +305,20 @@ export function VentasView() {
           <TrendingUp size={18} />
           <h3>Actividad por producto</h3>
           <span className="muted" style={{ marginLeft: 12, fontSize: 12.5 }}>
-            {formatNum(ranking.length)} productos con movimiento · {formatNum(total.ops)} operaciones
+            {q.trim()
+              ? `${formatNum(rankingFiltrado.length)} de ${formatNum(ranking.length)} productos`
+              : `${formatNum(ranking.length)} productos con movimiento · ${formatNum(total.ops)} operaciones`}
           </span>
-          <span className="pill" style={{ marginLeft: 'auto' }}>{etiquetaPeriodo(periodo)}</span>
+          <div className="searchbox" style={{ marginLeft: 'auto' }}>
+            <Search size={16} />
+            <input
+              className="input"
+              placeholder="Buscar producto o código…"
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+            />
+          </div>
+          <span className="pill">{etiquetaPeriodo(periodo)}</span>
         </div>
         <div className="table-wrap">
           <table className="tbl">
@@ -308,11 +337,11 @@ export function VentasView() {
               </tr>
             </thead>
             <tbody>
-              {ranking.map((r, i) => {
+              {rankingFiltrado.map((r) => {
                 const bal = r.producidas - r.vendidas - r.consumo;
                 return (
                   <tr key={r.codigo}>
-                    <td className="muted">{i + 1}</td>
+                    <td className="muted">{r.puesto}</td>
                     <td className="nombre">
                       {r.nombre} <span className="codigo">{r.codigo}</span>
                       {r.presentacion && <div className="hlp">{r.presentacion}</div>}
@@ -355,12 +384,16 @@ export function VentasView() {
                   </tr>
                 );
               })}
-              {ranking.length === 0 && (
+              {rankingFiltrado.length === 0 && (
                 <tr>
                   <td colSpan={10}>
                     <div className="empty">
                       <ShoppingCart size={30} />
-                      <p>No hay ventas ni producción en {etiquetaPeriodo(periodo).toLowerCase()}.</p>
+                      <p>
+                        {q.trim()
+                          ? `Ningún producto coincide con “${q.trim()}”.`
+                          : `No hay ventas ni producción en ${etiquetaPeriodo(periodo).toLowerCase()}.`}
+                      </p>
                     </div>
                   </td>
                 </tr>

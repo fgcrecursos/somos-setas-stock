@@ -2,6 +2,7 @@ import {
   AlertTriangle,
   Boxes,
   CalendarClock,
+  ClipboardList,
   CloudUpload,
   Database,
   Download,
@@ -32,6 +33,7 @@ import { Dashboard } from './views/Dashboard';
 import { MovimientosView } from './views/MovimientosView';
 import { PedidosView } from './views/PedidosView';
 import { ProductosView } from './views/ProductosView';
+import { ReposicionView } from './views/ReposicionView';
 import { UsuariosView } from './views/UsuariosView';
 import { VenderView } from './views/VenderView';
 import { VentasView } from './views/VentasView';
@@ -46,6 +48,7 @@ type ViewId =
   | 'insumo_interno'
   | 'etiqueta'
   | 'materia_prima'
+  | 'reposicion'
   | 'ventas'
   | 'pedidos'
   | 'movimientos'
@@ -62,6 +65,10 @@ const TITLES: Record<ViewId, { t: string; s: string }> = {
   insumo_interno: { t: 'Insumos internos', s: 'Consumibles de producción y logística' },
   etiqueta: { t: 'Etiquetas', s: 'Stock de etiquetas por producto' },
   materia_prima: { t: 'Materia prima', s: 'Hongos, polvos e insumos base' },
+  reposicion: {
+    t: 'Reposición',
+    s: 'Qué hay que producir y qué hay que comprar para poder producirlo',
+  },
   ventas: { t: 'Ventas y producción', s: 'Qué se vendió, qué se produjo y qué se consumió' },
   pedidos: { t: 'Pedidos de la tienda', s: 'Los pedidos confirmados descuentan el stock solos' },
   movimientos: {
@@ -183,6 +190,7 @@ export default function App() {
         <nav className="nav">
           {nav('dashboard', <LayoutDashboard size={18} />, 'Dashboard')}
           {puedeEditar && nav('vender', <ScanLine size={18} />, 'Vender / Escanear')}
+          {nav('reposicion', <ClipboardList size={18} />, 'Reposición', alertCounts.producto)}
 
           <div className="nav__section">Inventario</div>
           {nav('producto', <ShoppingBag size={18} />, 'Productos', alertCounts.producto)}
@@ -286,6 +294,7 @@ export default function App() {
               {view === 'dashboard' && <Dashboard onNav={(v) => setView(v as ViewId)} />}
               {view === 'vender' && puedeEditar && <VenderView />}
               {view === 'producto' && <ProductosView />}
+              {view === 'reposicion' && <ReposicionView />}
               {view === 'ventas' && <VentasView />}
               {view === 'pedidos' && esAdmin && <PedidosView />}
               {view === 'movimientos' && <MovimientosView />}

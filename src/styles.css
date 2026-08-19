@@ -202,6 +202,14 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: 13px; }
 .tbl .pill { font-size: 10.5px; padding: 2px 7px; }
 .tbl .badge-estado { font-size: 11px; padding: 3px 7px; }
 
+/* Fila desplegable: la receta de un producto dentro de la tabla de reposición */
+.tbl tbody tr.row-detalle:hover { background: var(--crema-3); }
+.row-detalle > td { background: var(--crema-3); padding: 4px 8px 12px 34px !important; }
+table.tbl--anidada { font-size: 12.5px; background: #fff; border-radius: 10px; overflow: hidden; }
+.tbl--anidada thead th { background: #fff; position: static; padding: 8px; }
+.tbl--anidada tbody td { padding: 7px 8px; }
+.tbl--anidada tbody tr:hover { background: var(--crema-2); }
+
 .mini-bar { height: 6px; border-radius: 4px; background: var(--crema-3); overflow: hidden; min-width: 44px; }
 
 /* El botón de la fila muestra el texto; en pantallas angostas queda el ícono */
@@ -266,6 +274,46 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: 13px; }
 .comp-row { display: flex; align-items: center; gap: 10px; padding: 9px 0; border-bottom: 1px dashed var(--borde); }
 .comp-row:last-child { border-bottom: none; }
 .comp-ico { width: 30px; height: 30px; border-radius: 8px; display: grid; place-items: center; flex: none; }
+
+/* Selector con buscador (reemplaza al <select> cuando la lista es larga) */
+.picker { position: relative; min-width: 0; }
+.picker__btn {
+  width: 100%; display: flex; align-items: center; gap: 6px; text-align: left;
+  border: 1px solid var(--borde); border-radius: 9px; padding: 9px 11px; background: #fff;
+  color: var(--texto); font: inherit; cursor: pointer;
+}
+.picker__btn:hover:not(:disabled) { border-color: var(--verde-600); }
+.picker__btn:disabled { opacity: .55; cursor: not-allowed; }
+.picker__btn--vacio { color: var(--texto-3); }
+.picker__btn svg { flex: none; color: var(--texto-3); }
+.picker__txt { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.picker__pop {
+  position: absolute; z-index: 60; top: calc(100% + 4px); left: 0; right: 0; min-width: 280px;
+  background: #fff; border: 1px solid var(--borde); border-radius: 11px;
+  box-shadow: var(--shadow-lg); overflow: hidden;
+}
+.picker__search { position: relative; padding: 8px; border-bottom: 1px solid var(--borde); }
+.picker__search input { padding-left: 32px; padding-right: 30px; }
+.picker__search > svg { position: absolute; left: 18px; top: 50%; transform: translateY(-50%); color: var(--texto-3); }
+.picker__clear {
+  position: absolute; right: 16px; top: 50%; transform: translateY(-50%);
+  border: none; background: none; color: var(--texto-3); cursor: pointer; padding: 2px; line-height: 0;
+}
+.picker__clear:hover { color: var(--texto); }
+
+.picker__list { max-height: 260px; overflow-y: auto; }
+.picker__opt {
+  width: 100%; display: flex; align-items: baseline; gap: 8px; text-align: left;
+  border: none; background: none; font: inherit; color: var(--texto);
+  padding: 8px 12px; cursor: pointer;
+}
+.picker__opt.is-marcado { background: var(--crema-3); }
+.picker__opt.is-elegido { font-weight: 700; }
+.picker__opt.is-elegido .picker__cod { color: var(--naranja-600); }
+.picker__cod { flex: none; font-size: 12px; font-weight: 700; color: var(--texto-2); font-variant-numeric: tabular-nums; }
+.picker__nom { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
+.picker__vacio { padding: 16px 12px; text-align: center; color: var(--texto-3); font-size: 12.5px; }
 
 .empty { text-align: center; color: var(--texto-3); padding: 44px 20px; }
 .empty svg { margin-bottom: 10px; opacity: .5; }

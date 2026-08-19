@@ -1,4 +1,4 @@
-import { Link2, Package, Plus, Search, Trash2 } from 'lucide-react';
+import { Eye, Link2, Package, Pencil, Plus, Search, Trash2 } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { ConfirmarBaja } from '../components/ConfirmarBaja';
 import { DataTable, type Column } from '../components/DataTable';
@@ -62,8 +62,13 @@ export function ProductosView() {
     { key: 'acc', header: '', sortable: false, align: 'right', className: 'actions',
       render: (r) => (
         <div className="row-acciones">
-          <button className="btn btn--sm" onClick={() => (puedeEditar ? setEditar(r) : setVer(r))}>
-            {puedeEditar ? 'Editar' : 'Ver'}
+          <button
+            className="btn btn--sm btn--fila"
+            title={puedeEditar ? `Editar ${r.codigo}` : `Ver ${r.codigo}`}
+            onClick={() => (puedeEditar ? setEditar(r) : setVer(r))}
+          >
+            {puedeEditar ? <Pencil className="btn__ico" size={14} /> : <Eye className="btn__ico" size={14} />}
+            <span className="btn__txt">{puedeEditar ? 'Editar' : 'Ver'}</span>
           </button>
           {puedeEditar && (
             <button

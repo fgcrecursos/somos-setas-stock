@@ -181,23 +181,42 @@ a { color: inherit; text-decoration: none; }
 .table-wrap { overflow-x: auto; }
 table.tbl { width: 100%; border-collapse: collapse; font-size: 13px; }
 .tbl thead th {
-  text-align: left; font-family: var(--font-body); font-weight: 700; font-size: 11px; text-transform: uppercase;
-  letter-spacing: 0.05em; color: var(--texto-2); padding: 11px 10px; border-bottom: 1px solid var(--borde);
+  text-align: left; font-family: var(--font-body); font-weight: 700; font-size: 10.5px; text-transform: uppercase;
+  letter-spacing: 0.02em; color: var(--texto-2); padding: 11px 8px; border-bottom: 1px solid var(--borde);
   position: sticky; top: 0; background: var(--crema-2); white-space: nowrap; cursor: pointer; user-select: none;
 }
 .tbl thead th.no-sort { cursor: default; }
-.tbl tbody td { padding: 11px 10px; border-bottom: 1px solid var(--borde-2); vertical-align: middle; }
+.tbl tbody td { padding: 11px 8px; border-bottom: 1px solid var(--borde-2); vertical-align: middle; }
 .tbl tbody tr:hover { background: var(--crema-2); }
 .tbl tbody tr:last-child td { border-bottom: none; }
 .tbl .num { text-align: right; font-variant-numeric: tabular-nums; }
 .tbl .codigo { font-family: 'SFMono-Regular', ui-monospace, monospace; font-size: 12px; color: var(--verde-700); font-weight: 600; }
-/* El nombre es lo que se lee: se lleva el ancho que necesita para no partirse
-   en dos líneas en cada fila. Los pocos nombres muy largos sí se parten. */
-.tbl .nombre { font-weight: 600; min-width: 220px; }
+/* El nombre es lo que se lee: pide 240px para no partirse en dos renglones en
+   cada fila. Es `width` y no `min-width` a propósito: si la pantalla es chica
+   la columna cede y la tabla entra entera, en vez de aparecer scroll lateral. */
+.tbl .nombre { font-weight: 600; width: 240px; }
 /* La columna de acciones ocupa lo justo: el resto del ancho es para los datos */
-.tbl .actions { text-align: right; white-space: nowrap; width: 1%; padding-left: 6px; }
+.tbl .actions { text-align: right; white-space: nowrap; width: 1%; padding-left: 4px; }
+/* Dentro de la tabla, pills y badges van más ajustados: son 10 columnas y cada
+   milímetro que ahorran acá es ancho que no obliga a scrollear de costado. */
+.tbl .pill { font-size: 10.5px; padding: 2px 7px; }
+.tbl .badge-estado { font-size: 11px; padding: 3px 7px; }
 
-.mini-bar { height: 6px; border-radius: 4px; background: var(--crema-3); overflow: hidden; min-width: 60px; }
+.mini-bar { height: 6px; border-radius: 4px; background: var(--crema-3); overflow: hidden; min-width: 44px; }
+
+/* El botón de la fila muestra el texto; en pantallas angostas queda el ícono */
+.btn--fila .btn__ico { display: none; }
+
+/* Con la ventana angosta la tabla se compacta —márgenes finos, celdas más
+   juntas, el botón de la fila reducido a su ícono— para que sigan entrando
+   todas las columnas. Antes eso que obligar a scrollear de costado. */
+@media (max-width: 1340px) {
+  .content { padding-left: 16px; padding-right: 16px; }
+  .tbl thead th, .tbl tbody td { padding-left: 6px; padding-right: 6px; }
+  .tbl .nombre { width: 200px; }
+  .btn--fila .btn__ico { display: inline-flex; }
+  .btn--fila .btn__txt { display: none; }
+}
 .mini-bar > span { display: block; height: 100%; border-radius: 4px; }
 
 /* ===================== FORM ===================== */

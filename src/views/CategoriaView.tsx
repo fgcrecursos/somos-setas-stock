@@ -98,7 +98,7 @@ export function CategoriaView({ categoria }: { categoria: Categoria }) {
           ),
         } as Column<BaseItem>]
       : []),
-    { key: 'acc', header: '', sortable: false, align: 'right',
+    { key: 'acc', header: '', sortable: false, align: 'right', className: 'actions',
       render: (r) => (
         <div className="row-acciones">
           <button className="btn btn--sm" onClick={() => (puedeEditar ? setEditar(r) : setVer(r))}>

@@ -59,7 +59,7 @@ export function ProductosView() {
         </span>
       ) },
     { key: 'estado', header: 'Estado', sortValue: (r) => calcEstado(r.actual, r.minimo).diferencia, render: (r) => <StatusBadge actual={r.actual} minimo={r.minimo} /> },
-    { key: 'acc', header: '', sortable: false, align: 'right',
+    { key: 'acc', header: '', sortable: false, align: 'right', className: 'actions',
       render: (r) => (
         <div className="row-acciones">
           <button className="btn btn--sm" onClick={() => (puedeEditar ? setEditar(r) : setVer(r))}>

@@ -137,6 +137,11 @@ a { color: inherit; text-decoration: none; }
 .btn--venc { background: var(--critico-bg); border-color: var(--critico); color: var(--critico); }
 .btn--venc:hover { background: var(--critico); border-color: var(--critico); color: #fff; }
 .btn--sm { padding: 6px 10px; font-size: 12px; border-radius: 8px; }
+/* Acciones que no se deshacen (eliminar): rojas, pero sin gritar hasta el hover */
+.btn--peligro { background: var(--agotado-bg); border-color: var(--agotado-bg); color: var(--agotado); }
+.btn--peligro:hover { background: var(--agotado); border-color: var(--agotado); color: #fff; }
+/* Botones al final de una fila de tabla: siempre visibles, uno al lado del otro */
+.row-acciones { display: inline-flex; gap: 6px; justify-content: flex-end; }
 .btn:disabled { opacity: .5; cursor: not-allowed; }
 
 /* ===================== CARDS ===================== */

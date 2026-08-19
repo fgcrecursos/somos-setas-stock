@@ -1,5 +1,6 @@
-import { Link2, Package, Plus, Search } from 'lucide-react';
+import { Link2, Package, Plus, Search, Trash2 } from 'lucide-react';
 import { useMemo, useState } from 'react';
+import { ConfirmarBaja } from '../components/ConfirmarBaja';
 import { DataTable, type Column } from '../components/DataTable';
 import { ItemModal } from '../components/ItemModal';
 import { ProductForm } from '../components/ProductForm';
@@ -16,6 +17,7 @@ export function ProductosView() {
   const [ver, setVer] = useState<Producto | null>(null);
   const [editar, setEditar] = useState<Producto | null>(null);
   const [nuevo, setNuevo] = useState(false);
+  const [borrar, setBorrar] = useState<Producto | null>(null);
 
   const tipos = useMemo(
     () => ['Todos', ...Array.from(new Set(state.productos.map((p) => p.tipo)))],
@@ -59,9 +61,21 @@ export function ProductosView() {
     { key: 'estado', header: 'Estado', sortValue: (r) => calcEstado(r.actual, r.minimo).diferencia, render: (r) => <StatusBadge actual={r.actual} minimo={r.minimo} /> },
     { key: 'acc', header: '', sortable: false, align: 'right',
       render: (r) => (
-        <button className="btn btn--sm" onClick={() => (puedeEditar ? setEditar(r) : setVer(r))}>
-          {puedeEditar ? 'Editar' : 'Ver'}
-        </button>
+        <div className="row-acciones">
+          <button className="btn btn--sm" onClick={() => (puedeEditar ? setEditar(r) : setVer(r))}>
+            {puedeEditar ? 'Editar' : 'Ver'}
+          </button>
+          {puedeEditar && (
+            <button
+              className="btn btn--sm btn--peligro"
+              title={`Eliminar ${r.codigo}`}
+              aria-label={`Eliminar ${r.codigo}`}
+              onClick={() => setBorrar(r)}
+            >
+              <Trash2 size={14} />
+            </button>
+          )}
+        </div>
       ) },
   ];
 
@@ -112,8 +126,22 @@ export function ProductosView() {
           onEdit={() => { setEditar(ver); setVer(null); }}
         />
       )}
-      {editar && <ProductForm initial={editar} onClose={() => setEditar(null)} />}
+      {editar && (
+        <ProductForm
+          initial={editar}
+          onClose={() => setEditar(null)}
+          onEliminar={() => setBorrar(editar)}
+        />
+      )}
       {nuevo && <ProductForm onClose={() => setNuevo(false)} />}
+      {borrar && (
+        <ConfirmarBaja
+          categoria="producto"
+          item={borrar}
+          onClose={() => setBorrar(null)}
+          onEliminado={() => { setEditar(null); setVer(null); }}
+        />
+      )}
     </div>
   );
 }

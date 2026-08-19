@@ -1,4 +1,4 @@
-import { Boxes } from 'lucide-react';
+import { Boxes, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import {
   CATEGORIA_LABEL,
@@ -14,11 +14,13 @@ interface Props {
   categoria: Categoria;
   initial?: any;
   onClose: () => void;
+  /** Sólo en edición: abre la confirmación de baja del ítem */
+  onEliminar?: () => void;
 }
 
 const usaTipoPres: Categoria[] = ['etiqueta', 'materia_prima'];
 
-export function ItemForm({ categoria, initial, onClose }: Props) {
+export function ItemForm({ categoria, initial, onClose, onEliminar }: Props) {
   const { state, upsertItem, guardando } = useStore();
   const editing = !!initial;
   const [item, setItem] = useState<any>(
@@ -66,6 +68,16 @@ export function ItemForm({ categoria, initial, onClose }: Props) {
       onClose={onClose}
       footer={
         <>
+          {editing && onEliminar && (
+            <button
+              className="btn btn--peligro"
+              style={{ marginRight: 'auto' }}
+              onClick={onEliminar}
+              disabled={guardando}
+            >
+              <Trash2 size={15} /> Eliminar
+            </button>
+          )}
           <button className="btn" onClick={onClose}>Cancelar</button>
           <button className="btn btn--primary" onClick={guardar} disabled={guardando}>
             {guardando ? 'Guardando…' : editing ? 'Guardar' : 'Crear'}

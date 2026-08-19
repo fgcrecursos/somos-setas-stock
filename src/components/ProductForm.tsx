@@ -16,9 +16,11 @@ const CATS_COMP: CategoriaComponente[] = [
 interface Props {
   initial?: Producto;
   onClose: () => void;
+  /** Sólo en edición: abre la confirmación de baja del producto */
+  onEliminar?: () => void;
 }
 
-export function ProductForm({ initial, onClose }: Props) {
+export function ProductForm({ initial, onClose, onEliminar }: Props) {
   const { state, upsertProducto, guardando } = useStore();
   const editing = !!initial;
   const [p, setP] = useState<Producto>(
@@ -80,6 +82,16 @@ export function ProductForm({ initial, onClose }: Props) {
       onClose={onClose}
       footer={
         <>
+          {editing && onEliminar && (
+            <button
+              className="btn btn--peligro"
+              style={{ marginRight: 'auto' }}
+              onClick={onEliminar}
+              disabled={guardando}
+            >
+              <Trash2 size={15} /> Eliminar
+            </button>
+          )}
           <button className="btn" onClick={onClose}>Cancelar</button>
           <button className="btn btn--primary" onClick={guardar} disabled={guardando}>
             {guardando ? 'Guardando…' : editing ? 'Guardar cambios' : 'Crear producto'}

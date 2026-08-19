@@ -10,11 +10,26 @@ interface Props {
   footer?: ReactNode;
 }
 
+// Modales abiertos, en orden. Escape cierra sólo el de arriba de todo: si
+// sobre un formulario hay una confirmación, cerrarla no tiene que cerrar
+// también el formulario de atrás y perder lo que se estaba cargando.
+const abiertos: symbol[] = [];
+
 export function Modal({ title, icon, wide, onClose, children, footer }: Props) {
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
+    const id = Symbol('modal');
+    abiertos.push(id);
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      if (abiertos[abiertos.length - 1] !== id) return;
+      onClose();
+    };
     window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      const i = abiertos.indexOf(id);
+      if (i >= 0) abiertos.splice(i, 1);
+    };
   }, [onClose]);
 
   return (

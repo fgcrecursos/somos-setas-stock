@@ -1,5 +1,6 @@
-import { Plus, Search } from 'lucide-react';
+import { Plus, Search, Trash2 } from 'lucide-react';
 import { useMemo, useState } from 'react';
+import { ConfirmarBaja } from '../components/ConfirmarBaja';
 import { DataTable, type Column } from '../components/DataTable';
 import { ItemForm } from '../components/ItemForm';
 import { ItemModal } from '../components/ItemModal';
@@ -23,6 +24,7 @@ export function CategoriaView({ categoria }: { categoria: Categoria }) {
   const [ver, setVer] = useState<BaseItem | null>(null);
   const [editar, setEditar] = useState<any | null>(null);
   const [nuevo, setNuevo] = useState(false);
+  const [borrar, setBorrar] = useState<BaseItem | null>(null);
   const diasAviso = diasAvisoGuardado();
 
   const all = listaDe(state, categoria);
@@ -98,9 +100,21 @@ export function CategoriaView({ categoria }: { categoria: Categoria }) {
       : []),
     { key: 'acc', header: '', sortable: false, align: 'right',
       render: (r) => (
-        <button className="btn btn--sm" onClick={() => (puedeEditar ? setEditar(r) : setVer(r))}>
-          {puedeEditar ? 'Editar' : 'Ver'}
-        </button>
+        <div className="row-acciones">
+          <button className="btn btn--sm" onClick={() => (puedeEditar ? setEditar(r) : setVer(r))}>
+            {puedeEditar ? 'Editar' : 'Ver'}
+          </button>
+          {puedeEditar && (
+            <button
+              className="btn btn--sm btn--peligro"
+              title={`Eliminar ${r.codigo}`}
+              aria-label={`Eliminar ${r.codigo}`}
+              onClick={() => setBorrar(r)}
+            >
+              <Trash2 size={14} />
+            </button>
+          )}
+        </div>
       ) },
   ];
 
@@ -153,8 +167,23 @@ export function CategoriaView({ categoria }: { categoria: Categoria }) {
           onEdit={() => { setEditar(ver); setVer(null); }}
         />
       )}
-      {editar && <ItemForm categoria={categoria} initial={editar} onClose={() => setEditar(null)} />}
+      {editar && (
+        <ItemForm
+          categoria={categoria}
+          initial={editar}
+          onClose={() => setEditar(null)}
+          onEliminar={() => setBorrar(editar)}
+        />
+      )}
       {nuevo && <ItemForm categoria={categoria} onClose={() => setNuevo(false)} />}
+      {borrar && (
+        <ConfirmarBaja
+          categoria={categoria}
+          item={borrar}
+          onClose={() => setBorrar(null)}
+          onEliminado={() => { setEditar(null); setVer(null); }}
+        />
+      )}
     </div>
   );
 }

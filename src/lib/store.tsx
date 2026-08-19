@@ -532,7 +532,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           });
           // El stock que tenía sale del sistema: queda anotado para que el
           // historial cierre y no aparezca stock evaporado sin explicación.
-          await aplicarMovimiento(
+          const baja = await aplicarMovimiento(
             [],
             anotar(
               'baja',
@@ -546,7 +546,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
             )
           ).catch(() => {
             /* el ítem ya se borró: que falle el registro no puede revertir la baja */
+            return null;
           });
+          if (baja?.movimiento)
+            setState((prev) => ({ ...prev, movimientos: [baja.movimiento!, ...prev.movimientos] }));
         }),
 
       async restablecerDesdeExcel() {

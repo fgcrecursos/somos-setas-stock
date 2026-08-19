@@ -45,6 +45,8 @@ Plataforma web de gestión de inventario para [Somos Setas](https://somossetas.c
 - **Búsqueda y filtros**: por código, nombre, solo items con faltantes
 - **Tabla ordenable**: click en encabezados para ordenar por cualquier columna
 - **Acciones rápidas**: ver código de barras, ingresar stock, ajustar cantidad
+- **Eliminar ítems**: botón de baja en cada fila (y en el formulario de edición), con aviso del
+  stock que se pierde y de las recetas que lo usan; queda anotado como `baja` en el historial
 
 ### Ventas
 - **Conteo de productos vendidos**: unidades por producto, con filtros por período (mes, año, histórico)

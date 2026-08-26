@@ -154,7 +154,15 @@ export function CalendarioDia({ value, onChange }: Props) {
 
       {abierto &&
         createPortal(
-          <div ref={pop} className="cal__pop" style={{ top: pos.top, left: pos.left }}>
+          <div
+            ref={pop}
+            className="cal__pop"
+            style={{ top: pos.top, left: pos.left }}
+            /* Adentro de un modal, el overlay cierra al apretar el mouse afuera del
+               cuadro. Como el calendario cuelga de <body>, para React sigue estando
+               "adentro" del modal: sin esto, elegir un día lo cerraría. */
+            onMouseDown={(e) => e.stopPropagation()}
+          >
             <div className="cal__head">
               <button type="button" className="cal__nav" onClick={() => mover(-1)} title="Mes anterior">
                 <ChevronLeft size={16} />

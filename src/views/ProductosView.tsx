@@ -1,10 +1,11 @@
-import { Eye, Link2, Package, Pencil, Plus, Search, Trash2 } from 'lucide-react';
+import { Eye, Link2, Package, Pencil, Plus, Trash2 } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { ConfirmarBaja } from '../components/ConfirmarBaja';
 import { DataTable, type Column } from '../components/DataTable';
 import { ItemModal } from '../components/ItemModal';
 import { ProductForm } from '../components/ProductForm';
 import { DiffCell, StatusBadge, StockBar } from '../components/StatusBadge';
+import { BarraFiltros, GrupoFiltro } from '../components/BarraFiltros';
 import { calcEstado, camposBuscables, coincideBusqueda, formatNum } from '../lib/helpers';
 import { useStore } from '../lib/store';
 import type { Producto } from '../lib/types';
@@ -81,18 +82,26 @@ export function ProductosView() {
   return (
     <div className="stack">
       <div className="toolbar">
-        <div className="searchbox">
-          <Search size={16} />
-          <input className="input" placeholder="Buscar producto o código…" value={q} onChange={(e) => setQ(e.target.value)} />
-        </div>
-        <div className="chips">
-          {tipos.map((t) => (
-            <button key={t} className={'chip' + (tipo === t ? ' active' : '')} onClick={() => setTipo(t)}>{t}</button>
-          ))}
-        </div>
-        <button className={'chip' + (soloAlerta ? ' active' : '')} onClick={() => setSoloAlerta((s) => !s)}>
-          Solo faltantes
-        </button>
+        <BarraFiltros
+          q={q}
+          setQ={setQ}
+          placeholder="Buscar producto, tipo, código…"
+          activos={[...(tipo !== 'Todos' ? [tipo] : []), ...(soloAlerta ? ['Solo faltantes'] : [])]}
+          onLimpiar={() => {
+            setTipo('Todos');
+            setSoloAlerta(false);
+          }}
+        >
+          <GrupoFiltro titulo="Tipo de producto">
+            {tipos.map((t) => (
+              <button key={t} className={'chip' + (tipo === t ? ' active' : '')} onClick={() => setTipo(t)}>{t}</button>
+            ))}
+          </GrupoFiltro>
+          <GrupoFiltro titulo="Estado del stock">
+            <button className={'chip' + (!soloAlerta ? ' active' : '')} onClick={() => setSoloAlerta(false)}>Todos</button>
+            <button className={'chip' + (soloAlerta ? ' active' : '')} onClick={() => setSoloAlerta(true)}>Solo faltantes</button>
+          </GrupoFiltro>
+        </BarraFiltros>
         <div className="toolbar__spacer" />
         <span className="muted" style={{ fontSize: 12 }}>{rows.length} de {state.productos.length}</span>
         {puedeEditar && (

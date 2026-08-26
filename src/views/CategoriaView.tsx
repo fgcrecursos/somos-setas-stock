@@ -1,5 +1,6 @@
-import { Eye, Pencil, Plus, Search, Trash2 } from 'lucide-react';
+import { Eye, Pencil, Plus, Trash2 } from 'lucide-react';
 import { useMemo, useState } from 'react';
+import { BarraFiltros, GrupoFiltro } from '../components/BarraFiltros';
 import { ConfirmarBaja } from '../components/ConfirmarBaja';
 import { DataTable, type Column } from '../components/DataTable';
 import { ItemForm } from '../components/ItemForm';
@@ -123,22 +124,34 @@ export function CategoriaView({ categoria }: { categoria: Categoria }) {
   return (
     <div className="stack">
       <div className="toolbar">
-        <div className="searchbox">
-          <Search size={16} />
-          <input className="input" placeholder="Buscar…" value={q} onChange={(e) => setQ(e.target.value)} />
-        </div>
-        <button className={'chip' + (soloAlerta ? ' active' : '')} onClick={() => setSoloAlerta((s) => !s)}>
-          Solo faltantes {alertas > 0 && `(${alertas})`}
-        </button>
-        {(hasVencimiento || vencen > 0) && (
-          <button
-            className={'chip' + (soloVencer ? ' active' : '')}
-            onClick={() => setSoloVencer((s) => !s)}
-            title={`Vencidos o que vencen dentro de ${diasAviso} días`}
-          >
-            Por vencer {vencen > 0 && `(${vencen})`}
-          </button>
-        )}
+        <BarraFiltros
+          q={q}
+          setQ={setQ}
+          placeholder="Buscar por nombre, código, tipo, lote…"
+          activos={[
+            ...(soloAlerta ? ['Solo faltantes'] : []),
+            ...(soloVencer ? ['Por vencer'] : []),
+          ]}
+          onLimpiar={() => {
+            setSoloAlerta(false);
+            setSoloVencer(false);
+          }}
+        >
+          <GrupoFiltro titulo="Estado del stock">
+            <button className={'chip' + (!soloAlerta ? ' active' : '')} onClick={() => setSoloAlerta(false)}>Todos</button>
+            <button className={'chip' + (soloAlerta ? ' active' : '')} onClick={() => setSoloAlerta(true)}>
+              Solo faltantes {alertas > 0 && `(${alertas})`}
+            </button>
+          </GrupoFiltro>
+          {(hasVencimiento || vencen > 0) && (
+            <GrupoFiltro titulo="Vencimiento" ayuda={`Vencidos o que vencen dentro de ${diasAviso} días.`}>
+              <button className={'chip' + (!soloVencer ? ' active' : '')} onClick={() => setSoloVencer(false)}>Todos</button>
+              <button className={'chip' + (soloVencer ? ' active' : '')} onClick={() => setSoloVencer(true)}>
+                Por vencer {vencen > 0 && `(${vencen})`}
+              </button>
+            </GrupoFiltro>
+          )}
+        </BarraFiltros>
         <div className="toolbar__spacer" />
         <span className="muted" style={{ fontSize: 12 }}>{rows.length} de {all.length}</span>
         {puedeEditar && (

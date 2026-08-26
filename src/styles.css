@@ -249,6 +249,16 @@ table.tbl--anidada { font-size: 12.5px; background: #fff; border-radius: 10px; o
 .chip:hover { border-color: var(--verde-600); }
 .chip.active { background: var(--verde-800); color: #fff; border-color: var(--verde-800); }
 
+/* Botón que abre el modal con todos los filtros de la sección */
+.chip--filtrar { display: inline-flex; align-items: center; gap: 6px; }
+.chip--filtrar svg { flex: none; opacity: .8; }
+.chip__num { display: inline-grid; place-items: center; min-width: 17px; height: 17px; padding: 0 5px; border-radius: 9px; background: var(--naranja); color: #fff; font-size: 10.5px; font-weight: 800; }
+
+/* Contenido del modal de filtros */
+.filtros { display: flex; flex-direction: column; gap: 20px; }
+.filtro-grupo__tit { font-size: 11px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: var(--texto-3); margin-bottom: 9px; }
+.filtro-grupo__ayuda { margin: -4px 0 8px; }
+
 /* ===================== MINI CALENDARIO ===================== */
 /* Propio, no el <input type="date"> del navegador: ese se dibuja con los
    colores del sistema y no acepta CSS, así que rompía la paleta del panel. */

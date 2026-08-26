@@ -15,12 +15,12 @@ import {
   ChevronRight,
   FlaskConical,
   PackageCheck,
-  Search,
   ShoppingCart,
   Tag,
   Wheat,
 } from 'lucide-react';
 import { Fragment, useMemo, useState } from 'react';
+import { BarraFiltros, GrupoFiltro } from '../components/BarraFiltros';
 import { StatusBadge } from '../components/StatusBadge';
 import { COMPONENTE_LABEL, coincideBusqueda, formatNum } from '../lib/helpers';
 import { calcularReposicion } from '../lib/reposicion';
@@ -176,8 +176,23 @@ export function ReposicionView() {
           </button>
         </div>
 
-        {tab === 'comprar' && (
-          <div className="chips" style={{ marginLeft: 8 }}>
+        <div className="toolbar__spacer" />
+        <BarraFiltros
+          q={q}
+          setQ={setQ}
+          placeholder={tab === 'producir' ? 'Buscar producto o código…' : 'Buscar componente…'}
+          activos={tab === 'comprar' ? cats.map((c) => COMPONENTE_LABEL[c]) : []}
+          onLimpiar={() => setCats([])}
+        >
+          {/* Los componentes se agrupan por categoría sólo en la lista de compra */}
+          <GrupoFiltro
+            titulo="Categoría del componente"
+            ayuda={
+              tab === 'producir'
+                ? 'Se aplica a la lista "A comprar".'
+                : 'Sin ninguna marcada se ven todas.'
+            }
+          >
             {CATS_COMP.map((c) => {
               const n = porCat.get(c) ?? 0;
               const Icono = ICONO_CAT[c];
@@ -194,24 +209,8 @@ export function ReposicionView() {
                 </button>
               );
             })}
-            {cats.length > 0 && (
-              <button className="chip" onClick={() => setCats([])}>
-                Ver todo
-              </button>
-            )}
-          </div>
-        )}
-
-        <div className="toolbar__spacer" />
-        <div className="searchbox">
-          <Search size={16} />
-          <input
-            className="input"
-            placeholder={tab === 'producir' ? 'Buscar producto o código…' : 'Buscar componente…'}
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-          />
-        </div>
+          </GrupoFiltro>
+        </BarraFiltros>
       </div>
 
       {/* ---------- A PRODUCIR ---------- */}

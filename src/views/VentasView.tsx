@@ -21,6 +21,7 @@ import {
   Users,
 } from 'lucide-react';
 import { Fragment, useMemo, useState } from 'react';
+import { BarraFiltros, GrupoFiltro } from '../components/BarraFiltros';
 import { CalendarioDia } from '../components/CalendarioDia';
 import { useToast } from '../components/Toast';
 import { descargarInforme, type FilaActividad } from '../lib/backup';
@@ -229,45 +230,52 @@ export function VentasView() {
     <div className="stack">
       {/* Período */}
       <div className="toolbar">
-        <span
-          className="muted"
-          style={{ fontSize: 11.5, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase' }}
+        <BarraFiltros
+          activos={periodo === 'mes-actual' ? [] : [etiquetaPeriodo(periodo)]}
+          onLimpiar={() => setPeriodo('mes-actual')}
         >
-          Período
-        </span>
-        <div className="chips">
-          {(
-            [
-              ['mes-actual', 'Este mes'],
-              ['mes-anterior', 'Mes anterior'],
-              ['ult-30', 'Últimos 30 días'],
-              ['anio', 'Este año'],
-              ['todo', 'Todo'],
-            ] as [PeriodoId, string][]
-          ).map(([id, label]) => (
-            <button
-              key={id}
-              className={'chip' + (periodo === id ? ' active' : '')}
-              onClick={() => setPeriodo(id)}
-            >
-              {label}
-            </button>
-          ))}
-          {/* Un día concreto. Al quitarlo el filtro vuelve al mes en curso. */}
-          <CalendarioDia
-            value={esDia(periodo) ? periodo : null}
-            onChange={(dia) => setPeriodo(dia ?? 'mes-actual')}
-          />
-          {mesesConDatos.slice(0, 6).map((ym) => (
-            <button
-              key={ym}
-              className={'chip' + (periodo === ym ? ' active' : '')}
-              onClick={() => setPeriodo(ym)}
-            >
-              {etiquetaMes(ym)}
-            </button>
-          ))}
-        </div>
+          <GrupoFiltro titulo="Período">
+            {(
+              [
+                ['mes-actual', 'Este mes'],
+                ['mes-anterior', 'Mes anterior'],
+                ['ult-30', 'Últimos 30 días'],
+                ['anio', 'Este año'],
+                ['todo', 'Todo'],
+              ] as [PeriodoId, string][]
+            ).map(([id, label]) => (
+              <button
+                key={id}
+                className={'chip' + (periodo === id ? ' active' : '')}
+                onClick={() => setPeriodo(id)}
+              >
+                {label}
+              </button>
+            ))}
+          </GrupoFiltro>
+
+          <GrupoFiltro titulo="Un día concreto">
+            <CalendarioDia
+              value={esDia(periodo) ? periodo : null}
+              onChange={(dia) => setPeriodo(dia ?? 'mes-actual')}
+            />
+          </GrupoFiltro>
+
+          {mesesConDatos.length > 0 && (
+            <GrupoFiltro titulo="Mes" ayuda="Los últimos meses con movimiento.">
+              {mesesConDatos.slice(0, 12).map((ym) => (
+                <button
+                  key={ym}
+                  className={'chip' + (periodo === ym ? ' active' : '')}
+                  onClick={() => setPeriodo(ym)}
+                >
+                  {etiquetaMes(ym)}
+                </button>
+              ))}
+            </GrupoFiltro>
+          )}
+        </BarraFiltros>
+        <span className="pill">{etiquetaPeriodo(periodo)}</span>
         <div className="toolbar__spacer" />
         <button className="btn btn--sm" onClick={exportar} disabled={!movimientos.length}>
           <Download size={14} /> Descargar informe

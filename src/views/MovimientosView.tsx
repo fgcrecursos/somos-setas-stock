@@ -6,8 +6,9 @@
 // ediciones y bajas de ficha. Si algo cambió el inventario, tiene que estar
 // en esta lista.
 // =====================================================================
-import { History, Search, Store, X } from 'lucide-react';
+import { History, Store } from 'lucide-react';
 import { Fragment, useMemo, useState } from 'react';
+import { BarraFiltros, GrupoFiltro } from '../components/BarraFiltros';
 import {
   CATEGORIA_LABEL,
   coincideBusqueda,
@@ -19,6 +20,14 @@ import {
 } from '../lib/helpers';
 import { useStore } from '../lib/store';
 import type { Categoria, TipoMovimiento } from '../lib/types';
+
+const PERIODO_LABEL: Record<string, string> = {
+  'ult-7': 'Últimos 7 días',
+  'ult-30': 'Últimos 30 días',
+  'mes-actual': 'Este mes',
+  anio: 'Este año',
+  todo: 'Todo',
+};
 
 const TIPOS: TipoMovimiento[] = [
   'venta',
@@ -111,101 +120,78 @@ export function MovimientosView() {
     return { entraron, salieron };
   }, [filtrados]);
 
-  const hayFiltro = !!busca || tipos.size > 0 || !!categoria || periodo !== 'todo';
-
   return (
     <div className="stack">
       {/* Filtros */}
       <div className="toolbar">
-        <div className="row" style={{ position: 'relative', flex: '0 1 280px' }}>
-          <Search
-            size={15}
-            className="muted"
-            style={{ position: 'absolute', left: 10, pointerEvents: 'none' }}
-          />
-          <input
-            className="input"
-            style={{ paddingLeft: 30 }}
-            placeholder="Buscar ítem, código, nota, pedido…"
-            value={busca}
-            onChange={(e) => {
-              setBusca(e.target.value);
-              setTope(150);
-            }}
-          />
-        </div>
-        <select
-          className="select"
-          style={{ maxWidth: 200 }}
-          value={categoria}
-          onChange={(e) => setCategoria(e.target.value as Categoria | '')}
+        <BarraFiltros
+          q={busca}
+          setQ={(v) => {
+            setBusca(v);
+            setTope(150);
+          }}
+          placeholder="Buscar ítem, código, nota, pedido…"
+          activos={[
+            ...(periodo !== 'todo' ? [PERIODO_LABEL[periodo]] : []),
+            ...(categoria ? [CATEGORIA_LABEL[categoria]] : []),
+            ...Array.from(tipos).map((t) => MOVIMIENTO_LABEL[t]),
+          ]}
+          onLimpiar={() => {
+            setTipos(new Set());
+            setCategoria('');
+            setPeriodo('todo');
+            setTope(150);
+          }}
         >
-          <option value="">Todas las categorías</option>
-          {CATEGORIAS.map((c) => (
-            <option key={c} value={c}>
-              {CATEGORIA_LABEL[c]}
-            </option>
-          ))}
-        </select>
-        <div className="toolbar__spacer" />
-        <div className="chips">
-          {(
-            [
-              ['ult-7', '7 días'],
-              ['ult-30', '30 días'],
-              ['mes-actual', 'Este mes'],
-              ['anio', 'Este año'],
-              ['todo', 'Todo'],
-            ] as [PeriodoId, string][]
-          ).map(([id, label]) => (
-            <button
-              key={id}
-              className={'chip' + (periodo === id ? ' active' : '')}
-              onClick={() => {
-                setPeriodo(id);
-                setTope(150);
-              }}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-      </div>
+          <GrupoFiltro titulo="Período">
+            {(['ult-7', 'ult-30', 'mes-actual', 'anio', 'todo'] as PeriodoId[]).map((id) => (
+              <button
+                key={id}
+                className={'chip' + (periodo === id ? ' active' : '')}
+                onClick={() => {
+                  setPeriodo(id);
+                  setTope(150);
+                }}
+              >
+                {PERIODO_LABEL[id]}
+              </button>
+            ))}
+          </GrupoFiltro>
 
-      <div className="toolbar" style={{ marginTop: -6 }}>
-        <div className="chips">
-          <button
-            className={'chip' + (tipos.size === 0 ? ' active' : '')}
-            onClick={() => setTipos(new Set())}
-          >
-            Todos los tipos
-          </button>
-          {TIPOS.map((t) => (
-            <button
-              key={t}
-              className={'chip' + (tipos.has(t) ? ' active' : '')}
-              onClick={() => toggleTipo(t)}
-            >
-              {MOVIMIENTO_LABEL[t]}
+          <GrupoFiltro titulo="Categoría">
+            <button className={'chip' + (!categoria ? ' active' : '')} onClick={() => setCategoria('')}>
+              Todas
             </button>
-          ))}
-        </div>
-        {hayFiltro && (
-          <>
-            <div className="toolbar__spacer" />
+            {CATEGORIAS.map((c) => (
+              <button
+                key={c}
+                className={'chip' + (categoria === c ? ' active' : '')}
+                onClick={() => setCategoria(c)}
+              >
+                {CATEGORIA_LABEL[c]}
+              </button>
+            ))}
+          </GrupoFiltro>
+
+          <GrupoFiltro titulo="Tipo de movimiento" ayuda="Se pueden marcar varios a la vez.">
             <button
-              className="btn btn--sm"
-              onClick={() => {
-                setBusca('');
-                setTipos(new Set());
-                setCategoria('');
-                setPeriodo('todo');
-              }}
+              className={'chip' + (tipos.size === 0 ? ' active' : '')}
+              onClick={() => setTipos(new Set())}
             >
-              <X size={14} /> Limpiar filtros
+              Todos
             </button>
-          </>
-        )}
+            {TIPOS.map((t) => (
+              <button
+                key={t}
+                className={'chip' + (tipos.has(t) ? ' active' : '')}
+                onClick={() => toggleTipo(t)}
+              >
+                {MOVIMIENTO_LABEL[t]}
+              </button>
+            ))}
+          </GrupoFiltro>
+        </BarraFiltros>
+        <div className="toolbar__spacer" />
       </div>
 
       <div className="card">

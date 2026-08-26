@@ -249,13 +249,34 @@ table.tbl--anidada { font-size: 12.5px; background: #fff; border-radius: 10px; o
 .chip:hover { border-color: var(--verde-600); }
 .chip.active { background: var(--verde-800); color: #fff; border-color: var(--verde-800); }
 
-/* Chip con el mini calendario del navegador para elegir un día concreto */
-.chip--dia { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; cursor: pointer; }
-.chip--dia svg { flex: none; }
-.chip--dia input { border: none; background: none; font: inherit; color: inherit; padding: 0; width: 100px; cursor: pointer; }
-.chip--dia input::-webkit-calendar-picker-indicator { cursor: pointer; opacity: .5; padding: 0; }
-.chip--dia:hover input::-webkit-calendar-picker-indicator { opacity: .8; }
-.chip--dia.active input::-webkit-calendar-picker-indicator { filter: invert(1); opacity: .9; }
+/* ===================== MINI CALENDARIO ===================== */
+/* Propio, no el <input type="date"> del navegador: ese se dibuja con los
+   colores del sistema y no acepta CSS, así que rompía la paleta del panel. */
+.cal { position: relative; display: inline-flex; }
+.cal__btn { display: inline-flex; align-items: center; gap: 6px; }
+.cal__btn svg { flex: none; opacity: .75; }
+.cal__btn.active svg { opacity: 1; }
+
+.cal__pop { position: absolute; top: calc(100% + 8px); left: 0; z-index: 60; width: 262px; padding: 13px; background: var(--panel); border: 1px solid var(--borde); border-radius: var(--radius); box-shadow: var(--shadow-lg); }
+.cal__head { display: flex; align-items: center; gap: 6px; margin-bottom: 11px; }
+.cal__mes { flex: 1; text-align: center; font-family: var(--font-head); font-size: 15px; text-transform: uppercase; letter-spacing: .04em; color: var(--verde-900); }
+.cal__nav { width: 27px; height: 27px; display: grid; place-items: center; border-radius: 8px; border: 1px solid var(--borde); background: #fff; color: var(--texto-2); }
+.cal__nav:hover:not(:disabled) { background: var(--crema-3); border-color: var(--verde-600); color: var(--verde-800); }
+.cal__nav:disabled { opacity: .3; cursor: default; }
+
+.cal__grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
+.cal__dow { text-align: center; font-size: 9.5px; font-weight: 800; letter-spacing: .07em; text-transform: uppercase; color: var(--texto-3); padding-bottom: 5px; }
+.cal__dia { height: 31px; border: none; background: none; border-radius: 9px; font-size: 12.5px; font-weight: 600; color: var(--texto); }
+.cal__dia:hover:not(:disabled) { background: var(--crema-3); }
+.cal__dia:disabled { color: var(--texto-3); opacity: .38; cursor: default; }
+.cal__dia.hoy { color: var(--naranja); font-weight: 800; }
+.cal__dia.sel { background: var(--verde-800); color: #fff; font-weight: 700; }
+.cal__dia.sel:hover { background: var(--verde-700); }
+
+.cal__foot { display: flex; align-items: center; margin-top: 11px; padding-top: 10px; border-top: 1px solid var(--borde-2); }
+.cal__link { background: none; border: none; padding: 4px 7px; border-radius: 7px; font-size: 12px; font-weight: 700; color: var(--verde-700); }
+.cal__link:hover { background: var(--crema-3); }
+.cal__link--der { margin-left: auto; color: var(--naranja-600); }
 
 /* ===================== MODAL ===================== */
 .overlay { position: fixed; inset: 0; background: rgba(27, 31, 26, 0.55); backdrop-filter: blur(3px); z-index: 50; display: flex; align-items: flex-start; justify-content: center; padding: 40px 16px; overflow-y: auto; }

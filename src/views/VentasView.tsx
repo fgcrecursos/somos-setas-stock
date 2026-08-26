@@ -10,7 +10,6 @@
 // "tienda"). Lo que se factura en el panel de la tienda se mira allá.
 // =====================================================================
 import {
-  CalendarDays,
   Download,
   FlaskConical,
   PackageSearch,
@@ -22,6 +21,7 @@ import {
   Users,
 } from 'lucide-react';
 import { Fragment, useMemo, useState } from 'react';
+import { CalendarioDia } from '../components/CalendarioDia';
 import { useToast } from '../components/Toast';
 import { descargarInforme, type FilaActividad } from '../lib/backup';
 import {
@@ -49,14 +49,6 @@ type PeriodoId = 'mes-actual' | 'mes-anterior' | 'ult-30' | 'anio' | 'todo' | st
 
 /** Un período de un solo día, elegido en el mini calendario: AAAA-MM-DD */
 const esDia = (periodo: PeriodoId) => /^\d{4}-\d{2}-\d{2}$/.test(periodo);
-
-/** Hoy en el formato que espera <input type="date">, en hora local */
-function hoyISO() {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(
-    d.getDate()
-  ).padStart(2, '0')}`;
-}
 
 function limites(periodo: PeriodoId): { desde: number; hasta: number } | null {
   const hoy = new Date();
@@ -264,19 +256,11 @@ export function VentasView() {
               {label}
             </button>
           ))}
-          {/* Un día concreto: el calendario del navegador, sin salir de la fila */}
-          <label
-            className={'chip chip--dia' + (esDia(periodo) ? ' active' : '')}
-            title="Elegir un día"
-          >
-            <CalendarDays size={14} />
-            <input
-              type="date"
-              value={esDia(periodo) ? periodo : ''}
-              max={hoyISO()}
-              onChange={(e) => e.target.value && setPeriodo(e.target.value)}
-            />
-          </label>
+          {/* Un día concreto. Al quitarlo el filtro vuelve al mes en curso. */}
+          <CalendarioDia
+            value={esDia(periodo) ? periodo : null}
+            onChange={(dia) => setPeriodo(dia ?? 'mes-actual')}
+          />
           {mesesConDatos.slice(0, 6).map((ym) => (
             <button
               key={ym}

@@ -266,8 +266,10 @@ table.tbl--anidada { font-size: 12.5px; background: #fff; border-radius: 10px; o
 .cal__btn svg { flex: none; opacity: .75; }
 .cal__btn.active svg { opacity: 1; }
 
-/* Va montado en <body>: los paneles con overflow oculto lo cortaban */
-.cal__pop { position: absolute; z-index: 80; width: 262px; padding: 13px; background: var(--panel); border: 1px solid var(--borde); border-radius: var(--radius); box-shadow: var(--shadow-lg); }
+/* Va montado en <body>: los paneles con overflow oculto lo cortaban.
+   El z-index tiene que ganarle al .overlay de los modales (50) porque el
+   calendario también se abre adentro del modal de filtros. */
+.cal__pop { position: absolute; z-index: 120; width: 262px; padding: 13px; background: var(--panel); border: 1px solid var(--borde); border-radius: var(--radius); box-shadow: var(--shadow-lg); }
 .cal__head { display: flex; align-items: center; gap: 6px; margin-bottom: 11px; }
 .cal__mes { flex: 1; text-align: center; font-family: var(--font-head); font-size: 15px; text-transform: uppercase; letter-spacing: .04em; color: var(--verde-900); }
 .cal__nav { width: 27px; height: 27px; display: grid; place-items: center; border-radius: 8px; border: 1px solid var(--borde); background: #fff; color: var(--texto-2); }

@@ -22,7 +22,7 @@ import {
 } from 'lucide-react';
 import { Fragment, useMemo, useState } from 'react';
 import { StatusBadge } from '../components/StatusBadge';
-import { COMPONENTE_LABEL, formatNum } from '../lib/helpers';
+import { COMPONENTE_LABEL, formatNum, normalizarBusqueda } from '../lib/helpers';
 import { calcularReposicion } from '../lib/reposicion';
 import { useStore } from '../lib/store';
 import type { CategoriaComponente } from '../lib/types';
@@ -39,9 +39,9 @@ const CATS_COMP: CategoriaComponente[] = ['insumo', 'etiqueta', 'materia_prima',
 type Tab = 'producir' | 'comprar';
 
 function coincide(q: string, ...campos: (string | undefined)[]): boolean {
-  const partes = q.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  const partes = normalizarBusqueda(q.trim()).split(/\s+/).filter(Boolean);
   if (!partes.length) return true;
-  const texto = campos.filter(Boolean).join(' ').toLowerCase();
+  const texto = normalizarBusqueda(campos.filter(Boolean).join(' '));
   return partes.every((p) => texto.includes(p));
 }
 

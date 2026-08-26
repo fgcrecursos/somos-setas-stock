@@ -107,6 +107,20 @@ export function buscarPorCodigo(
   return undefined;
 }
 
+/**
+ * Texto listo para comparar en un buscador: en minúscula y sin tildes ni
+ * diéresis, así "capsula" encuentra "Cápsula" y al revés. Al buscar se escribe
+ * rápido y sin acentos, pero los nombres del catálogo sí los llevan.
+ * La descomposición NFD también separa la virgulilla de la ñ, de modo que
+ * "nino" encuentra "Niño": es el mismo criterio, buscar sin diacríticos.
+ */
+export function normalizarBusqueda(v: unknown): string {
+  return (v == null ? '' : String(v))
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
+}
+
 export const MOVIMIENTO_LABEL: Record<TipoMovimiento, string> = {
   venta: 'Venta',
   produccion: 'Producción',

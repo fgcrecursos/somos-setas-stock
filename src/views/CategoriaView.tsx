@@ -12,6 +12,7 @@ import {
   diasAvisoGuardado,
   formatNum,
   listaDe,
+  normalizarBusqueda,
 } from '../lib/helpers';
 import { useStore } from '../lib/store';
 import type { BaseItem, Categoria, Etiqueta, MateriaPrima } from '../lib/types';
@@ -36,17 +37,17 @@ export function CategoriaView({ categoria }: { categoria: Categoria }) {
   };
 
   const rows = useMemo(() => {
-    const query = q.trim().toLowerCase();
+    const query = normalizarBusqueda(q.trim());
     return all.filter((it) => {
       if (soloAlerta && calcEstado(it.actual, it.minimo).faltan <= 0) return false;
       if (soloVencer && !porVencer(it)) return false;
       if (!query) return true;
       const d = it as any;
       return (
-        it.nombre.toLowerCase().includes(query) ||
-        it.codigo.toLowerCase().includes(query) ||
-        String(d.lote ?? '').toLowerCase().includes(query) ||
-        String(d.proveedor ?? '').toLowerCase().includes(query)
+        normalizarBusqueda(it.nombre).includes(query) ||
+        normalizarBusqueda(it.codigo).includes(query) ||
+        normalizarBusqueda(d.lote).includes(query) ||
+        normalizarBusqueda(d.proveedor).includes(query)
       );
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps

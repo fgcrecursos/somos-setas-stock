@@ -249,6 +249,14 @@ table.tbl--anidada { font-size: 12.5px; background: #fff; border-radius: 10px; o
 .chip:hover { border-color: var(--verde-600); }
 .chip.active { background: var(--verde-800); color: #fff; border-color: var(--verde-800); }
 
+/* Chip con el mini calendario del navegador para elegir un día concreto */
+.chip--dia { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; cursor: pointer; }
+.chip--dia svg { flex: none; }
+.chip--dia input { border: none; background: none; font: inherit; color: inherit; padding: 0; width: 100px; cursor: pointer; }
+.chip--dia input::-webkit-calendar-picker-indicator { cursor: pointer; opacity: .5; padding: 0; }
+.chip--dia:hover input::-webkit-calendar-picker-indicator { opacity: .8; }
+.chip--dia.active input::-webkit-calendar-picker-indicator { filter: invert(1); opacity: .9; }
+
 /* ===================== MODAL ===================== */
 .overlay { position: fixed; inset: 0; background: rgba(27, 31, 26, 0.55); backdrop-filter: blur(3px); z-index: 50; display: flex; align-items: flex-start; justify-content: center; padding: 40px 16px; overflow-y: auto; }
 .modal { background: var(--crema-2); border-radius: 18px; width: 100%; max-width: 620px; box-shadow: var(--shadow-lg); overflow: hidden; }

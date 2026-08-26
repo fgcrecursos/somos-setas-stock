@@ -5,7 +5,7 @@ import { DataTable, type Column } from '../components/DataTable';
 import { ItemModal } from '../components/ItemModal';
 import { ProductForm } from '../components/ProductForm';
 import { DiffCell, StatusBadge, StockBar } from '../components/StatusBadge';
-import { calcEstado, formatNum } from '../lib/helpers';
+import { calcEstado, formatNum, normalizarBusqueda } from '../lib/helpers';
 import { useStore } from '../lib/store';
 import type { Producto } from '../lib/types';
 
@@ -25,15 +25,15 @@ export function ProductosView() {
   );
 
   const rows = useMemo(() => {
-    const query = q.trim().toLowerCase();
+    const query = normalizarBusqueda(q.trim());
     return state.productos.filter((p) => {
       if (tipo !== 'Todos' && p.tipo !== tipo) return false;
       if (soloAlerta && calcEstado(p.actual, p.minimo).faltan <= 0) return false;
       if (!query) return true;
       return (
-        p.nombre.toLowerCase().includes(query) ||
-        p.codigo.toLowerCase().includes(query) ||
-        p.presentacion.toLowerCase().includes(query)
+        normalizarBusqueda(p.nombre).includes(query) ||
+        normalizarBusqueda(p.codigo).includes(query) ||
+        normalizarBusqueda(p.presentacion).includes(query)
       );
     });
   }, [state.productos, q, tipo, soloAlerta]);

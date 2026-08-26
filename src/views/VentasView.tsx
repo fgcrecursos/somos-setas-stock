@@ -10,6 +10,7 @@
 // "tienda"). Lo que se factura en el panel de la tienda se mira allá.
 // =====================================================================
 import {
+  CalendarDays,
   Download,
   FlaskConical,
   PackageSearch,
@@ -23,7 +24,13 @@ import {
 import { Fragment, useMemo, useState } from 'react';
 import { useToast } from '../components/Toast';
 import { descargarInforme, type FilaActividad } from '../lib/backup';
-import { MOVIMIENTO_COLOR, MOVIMIENTO_LABEL, formatFecha, formatNum } from '../lib/helpers';
+import {
+  MOVIMIENTO_COLOR,
+  MOVIMIENTO_LABEL,
+  formatFecha,
+  formatNum,
+  normalizarBusqueda,
+} from '../lib/helpers';
 import { useStore } from '../lib/store';
 import type { Movimiento, TipoMovimiento } from '../lib/types';
 
@@ -39,6 +46,17 @@ const anchoBarra = (valor: number, maximo: number) =>
   Math.min(100, Math.max(0, (valor / maximo) * 100));
 
 type PeriodoId = 'mes-actual' | 'mes-anterior' | 'ult-30' | 'anio' | 'todo' | string;
+
+/** Un período de un solo día, elegido en el mini calendario: AAAA-MM-DD */
+const esDia = (periodo: PeriodoId) => /^\d{4}-\d{2}-\d{2}$/.test(periodo);
+
+/** Hoy en el formato que espera <input type="date">, en hora local */
+function hoyISO() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(
+    d.getDate()
+  ).padStart(2, '0')}`;
+}
 
 function limites(periodo: PeriodoId): { desde: number; hasta: number } | null {
   const hoy = new Date();
@@ -56,6 +74,13 @@ function limites(periodo: PeriodoId): { desde: number; hasta: number } | null {
     const [aa, mm] = periodo.split('-').map(Number);
     return { desde: new Date(aa, mm - 1, 1).getTime(), hasta: new Date(aa, mm, 1).getTime() - 1 };
   }
+  if (esDia(periodo)) {
+    const [aa, mm, dd] = periodo.split('-').map(Number);
+    return {
+      desde: new Date(aa, mm - 1, dd).getTime(),
+      hasta: new Date(aa, mm - 1, dd + 1).getTime() - 1,
+    };
+  }
   return null;
 }
 
@@ -71,6 +96,10 @@ function etiquetaPeriodo(periodo: PeriodoId) {
   if (periodo === 'ult-30') return 'Últimos 30 días';
   if (periodo === 'anio') return 'Año en curso';
   if (/^\d{4}-\d{2}$/.test(periodo)) return etiquetaMes(periodo);
+  if (esDia(periodo)) {
+    const [aa, mm, dd] = periodo.split('-').map(Number);
+    return `${dd} de ${MESES[mm - 1].toLowerCase()} de ${aa}`;
+  }
   return '';
 }
 
@@ -152,10 +181,10 @@ export function VentasView() {
    */
   const rankingFiltrado = useMemo(() => {
     const conPuesto = ranking.map((r, i) => ({ ...r, puesto: i + 1 }));
-    const partes = q.trim().toLowerCase().split(/\s+/).filter(Boolean);
+    const partes = normalizarBusqueda(q.trim()).split(/\s+/).filter(Boolean);
     if (!partes.length) return conPuesto;
     return conPuesto.filter((r) => {
-      const texto = `${r.codigo} ${r.nombre} ${r.tipo} ${r.presentacion}`.toLowerCase();
+      const texto = normalizarBusqueda(`${r.codigo} ${r.nombre} ${r.tipo} ${r.presentacion}`);
       return partes.every((p) => texto.includes(p));
     });
   }, [ranking, q]);
@@ -235,6 +264,19 @@ export function VentasView() {
               {label}
             </button>
           ))}
+          {/* Un día concreto: el calendario del navegador, sin salir de la fila */}
+          <label
+            className={'chip chip--dia' + (esDia(periodo) ? ' active' : '')}
+            title="Elegir un día"
+          >
+            <CalendarDays size={14} />
+            <input
+              type="date"
+              value={esDia(periodo) ? periodo : ''}
+              max={hoyISO()}
+              onChange={(e) => e.target.value && setPeriodo(e.target.value)}
+            />
+          </label>
           {mesesConDatos.slice(0, 6).map((ym) => (
             <button
               key={ym}
@@ -392,7 +434,9 @@ export function VentasView() {
                       <p>
                         {q.trim()
                           ? `Ningún producto coincide con “${q.trim()}”.`
-                          : `No hay ventas ni producción en ${etiquetaPeriodo(periodo).toLowerCase()}.`}
+                          : `No hay ventas ni producción en ${
+                              esDia(periodo) ? 'el ' : ''
+                            }${etiquetaPeriodo(periodo).toLowerCase()}.`}
                       </p>
                     </div>
                   </td>

@@ -15,6 +15,7 @@ import {
   deltaMovimiento,
   formatFecha,
   formatNum,
+  normalizarBusqueda,
 } from '../lib/helpers';
 import { useStore } from '../lib/store';
 import type { Categoria, TipoMovimiento } from '../lib/types';
@@ -77,7 +78,7 @@ export function MovimientosView() {
 
   const filtrados = useMemo(() => {
     const desde = desdeDe(periodo);
-    const q = busca.trim().toLowerCase();
+    const q = normalizarBusqueda(busca.trim());
     return state.movimientos.filter((m) => {
       if (tipos.size && !tipos.has(m.tipo)) return false;
       if (categoria && m.categoria !== categoria) return false;
@@ -86,9 +87,9 @@ export function MovimientosView() {
         if (isNaN(t) || t < desde) return false;
       }
       if (q) {
-        const heno = `${m.codigo} ${m.nombre} ${m.nota ?? ''} ${m.usuario ?? ''} ${
-          m.referencia ?? ''
-        }`.toLowerCase();
+        const heno = normalizarBusqueda(
+          `${m.codigo} ${m.nombre} ${m.nota ?? ''} ${m.usuario ?? ''} ${m.referencia ?? ''}`
+        );
         if (!heno.includes(q)) return false;
       }
       return true;

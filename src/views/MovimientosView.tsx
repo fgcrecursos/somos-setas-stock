@@ -10,12 +10,12 @@ import { History, Search, Store, X } from 'lucide-react';
 import { Fragment, useMemo, useState } from 'react';
 import {
   CATEGORIA_LABEL,
+  coincideBusqueda,
   MOVIMIENTO_COLOR,
   MOVIMIENTO_LABEL,
   deltaMovimiento,
   formatFecha,
   formatNum,
-  normalizarBusqueda,
 } from '../lib/helpers';
 import { useStore } from '../lib/store';
 import type { Categoria, TipoMovimiento } from '../lib/types';
@@ -78,7 +78,6 @@ export function MovimientosView() {
 
   const filtrados = useMemo(() => {
     const desde = desdeDe(periodo);
-    const q = normalizarBusqueda(busca.trim());
     return state.movimientos.filter((m) => {
       if (tipos.size && !tipos.has(m.tipo)) return false;
       if (categoria && m.categoria !== categoria) return false;
@@ -86,13 +85,17 @@ export function MovimientosView() {
         const t = new Date(m.fecha).getTime();
         if (isNaN(t) || t < desde) return false;
       }
-      if (q) {
-        const heno = normalizarBusqueda(
-          `${m.codigo} ${m.nombre} ${m.nota ?? ''} ${m.usuario ?? ''} ${m.referencia ?? ''}`
-        );
-        if (!heno.includes(q)) return false;
-      }
-      return true;
+      return coincideBusqueda(
+        busca,
+        m.codigo,
+        m.nombre,
+        m.nota,
+        m.usuario,
+        m.referencia,
+        m.origen,
+        CATEGORIA_LABEL[m.categoria],
+        MOVIMIENTO_LABEL[m.tipo]
+      );
     });
   }, [state.movimientos, tipos, categoria, periodo, busca]);
 

@@ -22,7 +22,7 @@ import {
 } from 'lucide-react';
 import { Fragment, useMemo, useState } from 'react';
 import { StatusBadge } from '../components/StatusBadge';
-import { COMPONENTE_LABEL, formatNum, normalizarBusqueda } from '../lib/helpers';
+import { COMPONENTE_LABEL, coincideBusqueda, formatNum } from '../lib/helpers';
 import { calcularReposicion } from '../lib/reposicion';
 import { useStore } from '../lib/store';
 import type { CategoriaComponente } from '../lib/types';
@@ -38,13 +38,6 @@ const CATS_COMP: CategoriaComponente[] = ['insumo', 'etiqueta', 'materia_prima',
 
 type Tab = 'producir' | 'comprar';
 
-function coincide(q: string, ...campos: (string | undefined)[]): boolean {
-  const partes = normalizarBusqueda(q.trim()).split(/\s+/).filter(Boolean);
-  if (!partes.length) return true;
-  const texto = normalizarBusqueda(campos.filter(Boolean).join(' '));
-  return partes.every((p) => texto.includes(p));
-}
-
 export function ReposicionView() {
   const { state } = useStore();
   const [tab, setTab] = useState<Tab>('producir');
@@ -55,7 +48,7 @@ export function ReposicionView() {
   const rep = useMemo(() => calcularReposicion(state), [state]);
 
   const producir = useMemo(
-    () => rep.producir.filter((p) => coincide(q, p.codigo, p.nombre, p.tipo, p.presentacion)),
+    () => rep.producir.filter((p) => coincideBusqueda(q, p.codigo, p.nombre, p.tipo, p.presentacion)),
     [rep.producir, q]
   );
 
@@ -64,7 +57,7 @@ export function ReposicionView() {
       rep.comprar.filter(
         (c) =>
           (cats.length === 0 || cats.includes(c.categoria)) &&
-          coincide(q, c.codigo, c.nombre, COMPONENTE_LABEL[c.categoria])
+          coincideBusqueda(q, c.codigo, c.nombre, COMPONENTE_LABEL[c.categoria])
       ),
     [rep.comprar, q, cats]
   );

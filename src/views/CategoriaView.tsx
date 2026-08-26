@@ -10,9 +10,10 @@ import {
   calcEstado,
   calcVencimiento,
   diasAvisoGuardado,
+  camposBuscables,
+  coincideBusqueda,
   formatNum,
   listaDe,
-  normalizarBusqueda,
 } from '../lib/helpers';
 import { useStore } from '../lib/store';
 import type { BaseItem, Categoria, Etiqueta, MateriaPrima } from '../lib/types';
@@ -37,18 +38,10 @@ export function CategoriaView({ categoria }: { categoria: Categoria }) {
   };
 
   const rows = useMemo(() => {
-    const query = normalizarBusqueda(q.trim());
     return all.filter((it) => {
       if (soloAlerta && calcEstado(it.actual, it.minimo).faltan <= 0) return false;
       if (soloVencer && !porVencer(it)) return false;
-      if (!query) return true;
-      const d = it as any;
-      return (
-        normalizarBusqueda(it.nombre).includes(query) ||
-        normalizarBusqueda(it.codigo).includes(query) ||
-        normalizarBusqueda(d.lote).includes(query) ||
-        normalizarBusqueda(d.proveedor).includes(query)
-      );
+      return coincideBusqueda(q, ...camposBuscables(it));
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [all, q, soloAlerta, soloVencer, diasAviso]);

@@ -121,6 +121,39 @@ export function normalizarBusqueda(v: unknown): string {
     .replace(/[\u0300-\u036f]/g, '');
 }
 
+/**
+ * ¿Lo escrito en el buscador coincide? La consulta se parte en palabras y
+ * todas tienen que aparecer, en cualquier orden y repartidas entre los campos:
+ * así "capsulas melena" encuentra la Melena de León de tipo Cápsulas.
+ */
+export function coincideBusqueda(q: string, ...campos: unknown[]): boolean {
+  const partes = normalizarBusqueda(q).split(/\s+/).filter(Boolean);
+  if (!partes.length) return true;
+  const texto = campos.map(normalizarBusqueda).filter(Boolean).join(' ');
+  return partes.every((p) => texto.includes(p));
+}
+
+/**
+ * Todo lo que identifica a un ítem del inventario. Va junto al buscador para
+ * que se pueda llegar por cualquier dato de la ficha —el tipo, la presentación,
+ * el lote, el proveedor, dónde está guardado— y no solo por código y nombre.
+ * Cada categoría tiene sus campos: los que no existen quedan en undefined.
+ */
+export function camposBuscables(it: BaseItem): unknown[] {
+  const d = it as unknown as Record<string, unknown>;
+  return [
+    it.codigo,
+    it.nombre,
+    d.tipo,
+    d.presentacion,
+    d.lote,
+    d.proveedor,
+    d.ubicacion,
+    d.unidadCompra,
+    d.observaciones,
+  ];
+}
+
 export const MOVIMIENTO_LABEL: Record<TipoMovimiento, string> = {
   venta: 'Venta',
   produccion: 'Producción',

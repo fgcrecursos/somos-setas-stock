@@ -26,10 +26,10 @@ import { useToast } from '../components/Toast';
 import { descargarInforme, type FilaActividad } from '../lib/backup';
 import {
   MOVIMIENTO_COLOR,
+  coincideBusqueda,
   MOVIMIENTO_LABEL,
   formatFecha,
   formatNum,
-  normalizarBusqueda,
 } from '../lib/helpers';
 import { useStore } from '../lib/store';
 import type { Movimiento, TipoMovimiento } from '../lib/types';
@@ -173,12 +173,9 @@ export function VentasView() {
    */
   const rankingFiltrado = useMemo(() => {
     const conPuesto = ranking.map((r, i) => ({ ...r, puesto: i + 1 }));
-    const partes = normalizarBusqueda(q.trim()).split(/\s+/).filter(Boolean);
-    if (!partes.length) return conPuesto;
-    return conPuesto.filter((r) => {
-      const texto = normalizarBusqueda(`${r.codigo} ${r.nombre} ${r.tipo} ${r.presentacion}`);
-      return partes.every((p) => texto.includes(p));
-    });
+    return conPuesto.filter((r) =>
+      coincideBusqueda(q, r.codigo, r.nombre, r.tipo, r.presentacion)
+    );
   }, [ranking, q]);
 
   const total = useMemo(() => {

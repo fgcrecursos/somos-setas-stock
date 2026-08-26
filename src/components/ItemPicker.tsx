@@ -1,6 +1,6 @@
 import { ChevronDown, Search, X } from 'lucide-react';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { normalizarBusqueda } from '../lib/helpers';
+import { coincideBusqueda } from '../lib/helpers';
 
 export interface OpcionPicker {
   codigo: string;
@@ -42,12 +42,8 @@ export function ItemPicker({
   const elegido = opciones.find((o) => o.codigo === value);
 
   const filtradas = useMemo(() => {
-    const partes = normalizarBusqueda(q.trim()).split(/\s+/).filter(Boolean);
-    if (!partes.length) return opciones;
-    return opciones.filter((o) => {
-      const texto = normalizarBusqueda(`${o.codigo} ${o.nombre}`);
-      return partes.every((p) => texto.includes(p));
-    });
+    if (!q.trim()) return opciones;
+    return opciones.filter((o) => coincideBusqueda(q, o.codigo, o.nombre));
   }, [opciones, q]);
 
   // Al abrir: foco en el buscador y la lista arranca en lo que ya estaba elegido

@@ -134,6 +134,28 @@ export function VenderView() {
       });
       toast(`Consumo interno registrado: ${cant} × ${sel.item.nombre}`);
     } else {
+      // Producción con receta vacía o con componentes que no están en el
+      // inventario: no se bloquea, pero se pide confirmar de nuevo.
+      if (modo === 'produccion') {
+        const faltan = preview.filter((c) => !c.existe).map((c) => c.codigo);
+        if (preview.length === 0) {
+          if (
+            !window.confirm(
+              `${sel.item.nombre} no tiene receta cargada. Se va a registrar la producción ` +
+                `pero no se va a descontar ningún insumo. ¿Confirmás igual?`
+            )
+          )
+            return;
+        } else if (faltan.length) {
+          if (
+            !window.confirm(
+              `Estos componentes de la receta no están en el inventario y no se van a ` +
+                `descontar: ${faltan.join(', ')}. La producción se registra igual. ¿Confirmás?`
+            )
+          )
+            return;
+        }
+      }
       const fn = modo === 'venta' ? vender : producir;
       const res = await fn(sel.item.codigo, cant);
       if (!res.ok) {
@@ -179,15 +201,44 @@ export function VenderView() {
               <p style={{ margin: '0 0 10px', fontWeight: 600 }}>
                 {MOVIMIENTO_LABEL[ultima.modo as Modo]}: {ultima.cant} × {ultima.nombre}
               </p>
+              {ultima.producto && (
+                <div className="comp-row" style={{ fontWeight: 600 }}>
+                  <span className="codigo">{ultima.codigo}</span>
+                  <span style={{ flex: 1 }}>Stock del producto</span>
+                  <span className="muted">quedó {formatNum(ultima.producto.actual)}</span>
+                </div>
+              )}
               {ultima.componentes.map((c: any) => (
                 <div key={c.codigo} className="comp-row">
                   <span className="codigo">{c.codigo}</span>
                   <span style={{ flex: 1 }}>{c.nombre}</span>
                   <span className={c.faltante ? 'diff-neg' : 'muted'}>
-                    −{formatNum(c.cantidad)} → {formatNum(c.resultante)}
+                    {c.inexistente
+                      ? 'no está en el inventario'
+                      : `−${formatNum(c.cantidad)} → ${formatNum(c.resultante)}`}
                   </span>
                 </div>
               ))}
+              {ultima.alertas?.length > 0 && (
+                <div
+                  style={{
+                    marginTop: 10,
+                    padding: '9px 11px',
+                    background: 'var(--critico-bg)',
+                    color: 'var(--critico)',
+                    borderRadius: 10,
+                    fontSize: 12,
+                    fontWeight: 600,
+                  }}
+                >
+                  {ultima.alertas.map((a: string, i: number) => (
+                    <div key={i} className="row" style={{ gap: 6, alignItems: 'flex-start' }}>
+                      <AlertTriangle size={13} style={{ marginTop: 2, flexShrink: 0 }} />
+                      <span>{a}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -341,7 +392,22 @@ export function VenderView() {
                 <>
                   <div className="section-title">Receta — se consume automáticamente</div>
                   {preview.length === 0 && (
-                    <p className="hlp">Este producto no tiene receta cargada. Agregá componentes desde Productos.</p>
+                    <div
+                      className="row"
+                      style={{
+                        marginBottom: 12,
+                        padding: '10px 12px',
+                        background: 'var(--critico-bg)',
+                        color: 'var(--critico)',
+                        borderRadius: 10,
+                        fontSize: 12.5,
+                        fontWeight: 600,
+                      }}
+                    >
+                      <AlertTriangle size={16} />
+                      Este producto no tiene receta cargada: la producción no va a descontar
+                      ningún insumo. Cargá la receta desde Productos.
+                    </div>
                   )}
                   {preview.map((c) => {
                     const Icon = COMP_ICON[c.categoria];
@@ -361,16 +427,44 @@ export function VenderView() {
                           </div>
                         </div>
                         <div style={{ textAlign: 'right', minWidth: 150 }}>
-                          <span className="muted">{formatNum(c.actual)}</span>
-                          <ArrowRight size={13} style={{ margin: '0 6px', verticalAlign: 'middle' }} className="muted" />
-                          <span className={quedaMal ? 'diff-neg' : 'diff-pos'} style={{ fontWeight: 700 }}>
-                            {formatNum(c.resultante)}
-                          </span>
-                          <div className="hlp">−{formatNum(c.consumo)}</div>
+                          {c.existe ? (
+                            <>
+                              <span className="muted">{formatNum(c.actual)}</span>
+                              <ArrowRight size={13} style={{ margin: '0 6px', verticalAlign: 'middle' }} className="muted" />
+                              <span className={quedaMal ? 'diff-neg' : 'diff-pos'} style={{ fontWeight: 700 }}>
+                                {formatNum(c.resultante)}
+                              </span>
+                              <div className="hlp">−{formatNum(c.consumo)}</div>
+                            </>
+                          ) : (
+                            <span className="diff-neg" style={{ fontWeight: 700, fontSize: 12.5 }}>
+                              no está en el inventario
+                            </span>
+                          )}
                         </div>
                       </div>
                     );
                   })}
+
+                  {preview.some((c) => !c.existe) && (
+                    <div
+                      className="row"
+                      style={{
+                        marginTop: 12,
+                        padding: '10px 12px',
+                        background: 'var(--critico-bg)',
+                        color: 'var(--critico)',
+                        borderRadius: 10,
+                        fontSize: 12.5,
+                        fontWeight: 600,
+                      }}
+                    >
+                      <AlertTriangle size={16} />
+                      {preview.filter((c) => !c.existe).map((c) => c.codigo).join(', ')} no
+                      {preview.filter((c) => !c.existe).length === 1 ? ' está' : ' están'} en el
+                      inventario: eso no se va a descontar. Corregí la receta en Productos.
+                    </div>
+                  )}
 
                   {preview.some((c) => c.resultante < 0) && (
                     <div

@@ -6,7 +6,7 @@
 // ediciones y bajas de ficha. Si algo cambió el inventario, tiene que estar
 // en esta lista.
 // =====================================================================
-import { History, Store } from 'lucide-react';
+import { AlertTriangle, History, Store } from 'lucide-react';
 import { Fragment, useMemo, useState } from 'react';
 import { BarraFiltros, GrupoFiltro } from '../components/BarraFiltros';
 import {
@@ -231,6 +231,9 @@ export function MovimientosView() {
                 const open = abierto === m.id;
                 const delta = deltaMovimiento(m);
                 const tieneDetalle = !!m.componentes?.length;
+                const hayIncidencia =
+                  !!m.incidencia || !!m.componentes?.some((c) => c.inexistente);
+                const tieneStock = m.resultante != null;
                 return (
                   <Fragment key={m.id}>
                     <tr
@@ -256,6 +259,21 @@ export function MovimientosView() {
                             <Store size={11} /> tienda
                           </span>
                         )}
+                        {hayIncidencia && (
+                          <span
+                            className="pill"
+                            title={m.incidencia ?? 'Un componente de la receta no se pudo descontar'}
+                            style={{
+                              marginLeft: 4,
+                              gap: 3,
+                              background: 'var(--critico-bg)',
+                              color: 'var(--critico)',
+                              borderColor: 'transparent',
+                            }}
+                          >
+                            <AlertTriangle size={11} /> receta
+                          </span>
+                        )}
                       </td>
                       <td className="muted" style={{ fontSize: 12 }}>
                         {CATEGORIA_LABEL[m.categoria] ?? m.categoria}
@@ -269,34 +287,73 @@ export function MovimientosView() {
                       >
                         {delta > 0 ? '+' : ''}
                         {formatNum(delta)}
+                        {tieneStock && (
+                          <div className="muted" style={{ fontSize: 11, fontWeight: 400 }}>
+                            {m.anterior != null
+                              ? `${formatNum(m.anterior)} → ${formatNum(m.resultante!)}`
+                              : `quedó ${formatNum(m.resultante!)}`}
+                          </div>
+                        )}
                       </td>
                       <td className="muted" style={{ fontSize: 12 }}>
                         {m.usuario ?? '—'}
                       </td>
                       <td className="muted" style={{ fontSize: 12 }}>
-                        {tieneDetalle
-                          ? `${m.componentes!.length} componentes descontados · ${
-                              open ? 'ocultar' : 'ver'
-                            }`
-                          : (m.nota ?? '—')}
+                        {m.incidencia ? (
+                          <span className="diff-neg" style={{ fontWeight: 600 }}>
+                            {m.incidencia}
+                          </span>
+                        ) : tieneDetalle ? (
+                          `${
+                            m.origen === 'tienda'
+                              ? m.componentes!.length === 1
+                                ? '1 ítem'
+                                : `${m.componentes!.length} ítems`
+                              : `${m.componentes!.length} componentes`
+                          } · ${open ? 'ocultar' : 'ver'}`
+                        ) : (
+                          (m.nota ?? '—')
+                        )}
                       </td>
                     </tr>
                     {open &&
-                      m.componentes?.map((c) => (
-                        <tr key={m.id + c.categoria + c.codigo} style={{ background: 'var(--crema-2)' }}>
-                          <td />
-                          <td />
-                          <td className="muted" style={{ fontSize: 12 }}>
-                            {CATEGORIA_LABEL[c.categoria] ?? c.categoria}
-                          </td>
-                          <td colSpan={2} style={{ paddingLeft: 24 }}>
-                            <span className="codigo">{c.codigo}</span> {c.nombre}
-                          </td>
-                          <td colSpan={2} className={c.faltante ? 'diff-neg' : 'muted'}>
-                            −{formatNum(c.cantidad)} → queda {formatNum(c.resultante)}
-                          </td>
-                        </tr>
-                      ))}
+                      m.componentes?.map((c) => {
+                        // Signo real: si el componente terminó con más stock que
+                        // antes (pedido anulado / corregido a la baja) fue una
+                        // devolución (+); si no, un descuento (−).
+                        const devuelto =
+                          c.anterior != null && c.resultante > c.anterior;
+                        return (
+                          <tr
+                            key={m.id + c.categoria + c.codigo}
+                            style={{ background: 'var(--crema-2)' }}
+                          >
+                            <td />
+                            <td />
+                            <td className="muted" style={{ fontSize: 12 }}>
+                              {CATEGORIA_LABEL[c.categoria] ?? c.categoria}
+                            </td>
+                            <td colSpan={2} style={{ paddingLeft: 24 }}>
+                              <span className="codigo">{c.codigo}</span> {c.nombre}
+                            </td>
+                            <td colSpan={2} className={c.faltante ? 'diff-neg' : 'muted'}>
+                              {c.inexistente ? (
+                                'no está en el inventario · no se descontó'
+                              ) : c.anterior != null ? (
+                                <>
+                                  {formatNum(c.anterior)} → {formatNum(c.resultante)} (
+                                  {devuelto ? '+' : '−'}
+                                  {formatNum(c.cantidad)})
+                                </>
+                              ) : (
+                                <>
+                                  −{formatNum(c.cantidad)} → queda {formatNum(c.resultante)}
+                                </>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
                   </Fragment>
                 );
               })}

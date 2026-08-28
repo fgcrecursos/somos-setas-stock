@@ -1,6 +1,6 @@
 import { Plus, Trash2, Package } from 'lucide-react';
 import { useState } from 'react';
-import { CATEGORIA_LABEL, listaDe } from '../lib/helpers';
+import { buscarItem, CATEGORIA_LABEL, listaDe } from '../lib/helpers';
 import { useStore } from '../lib/store';
 import type { BomItem, CategoriaComponente, Producto } from '../lib/types';
 import { ItemPicker } from './ItemPicker';
@@ -67,10 +67,29 @@ export function ProductForm({ initial, onClose, onEliminar }: Props) {
       (x) => x.codigo === p.codigo && x.codigo !== initial?.codigo
     );
     if (dup) return setError(`Ya existe un producto con el código ${p.codigo}.`);
-    const res = await upsertProducto(
-      { ...p, bom: p.bom.filter((b) => b.codigo) },
-      initial?.codigo
-    );
+
+    // La receta no puede quedar rota: cada componente tiene que existir en el
+    // inventario y consumir una cantidad mayor a cero. Así el descuento al
+    // producir nunca se saltea en silencio.
+    const bom = p.bom.filter((b) => b.codigo);
+    const noExisten = bom.filter((b) => !buscarItem(state, b.categoria, b.codigo));
+    if (noExisten.length) {
+      return setError(
+        `Estos componentes de la receta no están en el inventario: ${noExisten
+          .map((b) => b.codigo)
+          .join(', ')}. Elegilos de la lista.`
+      );
+    }
+    const sinCantidad = bom.filter((b) => !(Number(b.cantidad) > 0));
+    if (sinCantidad.length) {
+      return setError(
+        `Poné una cantidad mayor a cero en: ${sinCantidad
+          .map((b) => b.codigo)
+          .join(', ')}.`
+      );
+    }
+
+    const res = await upsertProducto({ ...p, bom }, initial?.codigo);
     if (!res.ok) return setError(res.error ?? 'No se pudo guardar.');
     onClose();
   }

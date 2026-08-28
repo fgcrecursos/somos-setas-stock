@@ -211,6 +211,25 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       const producto = state.productos.find((p) => p.codigo === codigoProducto);
       if (!producto) return { ...vacia, mensaje: 'Producto no encontrado' };
 
+      // Avisos de receta (sólo al producir): no bloquean, pero quedan marcados.
+      const avisosReceta: string[] = [];
+      if (tipoMov === 'produccion') {
+        const faltantes = producto.bom.filter(
+          (b) => !buscarItem(state, b.categoria, b.codigo)
+        );
+        if (producto.bom.length === 0) {
+          avisosReceta.push(
+            `${producto.nombre} no tiene receta cargada: la producción no descuenta ningún insumo.`
+          );
+        } else if (faltantes.length) {
+          avisosReceta.push(
+            `No se descuentan (no están en el inventario): ${faltantes
+              .map((b) => b.codigo)
+              .join(', ')}. Corregí la receta en Productos.`
+          );
+        }
+      }
+
       const deltas: Delta[] = [
         {
           categoria: 'producto',
@@ -249,6 +268,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         nota,
         componentes,
         usuario: email,
+        incidencia: avisosReceta.length ? avisosReceta.join(' ') : undefined,
       };
 
       setGuardando(true);
@@ -259,7 +279,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         setState((prev) => ({ ...prev, movimientos: [guardado, ...prev.movimientos] }));
 
         // Las alertas se arman con el stock REAL que devolvió la base.
-        const alertas: string[] = [];
+        // Los avisos de receta (vacía / componentes inexistentes) van primero.
+        const alertas: string[] = [...avisosReceta];
         const finales = guardado.componentes ?? componentes;
         for (const c of finales) {
           const item = buscarItem(state, c.categoria, c.codigo);

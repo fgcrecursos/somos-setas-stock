@@ -81,8 +81,12 @@ export interface ComponenteMovido {
   codigo: string;
   nombre: string;
   cantidad: number;
+  /** Stock del componente antes del movimiento (lo completa la base) */
+  anterior?: number;
   resultante: number;
   faltante: boolean;
+  /** El componente no está en el inventario: no se pudo descontar */
+  inexistente?: boolean;
 }
 
 export interface Movimiento {
@@ -100,6 +104,11 @@ export interface Movimiento {
   origen?: OrigenMovimiento;
   /** Id del pedido de la tienda que lo generó, si vino de ahí */
   referencia?: string;
+  /** Stock del ítem principal antes y después de este movimiento */
+  anterior?: number;
+  resultante?: number;
+  /** Aviso cargado por la base: algo de la receta no se pudo descontar */
+  incidencia?: string;
 }
 
 /** Vínculo entre una presentación de la tienda y un ítem del inventario */

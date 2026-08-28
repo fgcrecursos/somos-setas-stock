@@ -119,7 +119,12 @@ la carga inicial y para el botón *Restablecer datos*.
 
 1. **Crear las tablas**: pegar `supabase/stock_schema.sql` en el SQL Editor de Supabase y ejecutarlo.
    Deja creadas las tablas, las políticas de seguridad y los permisos de los tres accesos totales
-   más la cuenta de invitado.
+   más la cuenta de invitado. Después correr, en orden y una sola vez cada uno:
+   `supabase/stock_tienda.sql` (puente con la tienda),
+   `supabase/fix_sku_map_2026-08-27.sql` (corrección del mapeo SKU) y
+   `supabase/stock_produccion_tienda_2026-08-28.sql` (producción a prueba de fallos:
+   avisa —sin bloquear— si la receta apunta a un ítem que no está en el inventario, y
+   guarda en cada movimiento el stock del ítem antes y después). Todos son idempotentes.
 2. **Crear las cuentas de acceso**: quien ya entra al panel de la tienda usa el mismo email y
    contraseña. Para el resto, desde la sección **Usuarios** de la app (o en Supabase →
    Authentication → Users).

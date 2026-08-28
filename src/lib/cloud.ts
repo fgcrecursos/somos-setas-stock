@@ -103,6 +103,9 @@ function movFromRow(row: any): Movimiento {
     usuario: row.usuario ?? undefined,
     origen: row.origen ?? 'plataforma',
     referencia: row.referencia ?? undefined,
+    anterior: row.anterior != null ? Number(row.anterior) : undefined,
+    resultante: row.resultante != null ? Number(row.resultante) : undefined,
+    incidencia: row.incidencia ?? undefined,
   };
 }
 
@@ -173,6 +176,9 @@ export async function subirTodo(state: DBState): Promise<void> {
     cantidad: m.cantidad,
     nota: m.nota ?? null,
     componentes: m.componentes ?? [],
+    anterior: m.anterior ?? null,
+    resultante: m.resultante ?? null,
+    incidencia: m.incidencia ?? null,
   }));
   for (let i = 0; i < movs.length; i += 200) {
     const { error } = await sb
@@ -237,10 +243,20 @@ export interface Resultante {
  * dos personas venden al mismo tiempo cada descuento se aplica sobre el stock
  * real del momento y no sobre la copia que tenía cargada cada navegador.
  */
+export interface Omitido {
+  categoria: Categoria;
+  codigo: string;
+}
+
 export async function aplicarMovimiento(
   deltas: Delta[],
   mov: Movimiento | null
-): Promise<{ resultantes: Resultante[]; movimiento: Movimiento | null }> {
+): Promise<{
+  resultantes: Resultante[];
+  movimiento: Movimiento | null;
+  omitidos: Omitido[];
+  incidencia: string | null;
+}> {
   const { data, error } = await sb.rpc('st_aplicar', {
     p_deltas: deltas,
     p_mov: mov
@@ -261,6 +277,7 @@ export async function aplicarMovimiento(
   });
   if (error) throw new Error(error.message);
   const res = (data ?? {}) as any;
+  const incidencia = res.incidencia ?? null;
   return {
     resultantes: ((res.resultantes ?? []) as any[]).map((r) => ({
       categoria: r.categoria,
@@ -268,6 +285,11 @@ export async function aplicarMovimiento(
       anterior: Number(r.anterior) || 0,
       actual: Number(r.actual) || 0,
     })),
+    omitidos: ((res.omitidos ?? []) as any[]).map((o) => ({
+      categoria: o.categoria,
+      codigo: o.codigo,
+    })),
+    incidencia,
     // El movimiento se arma con lo que devolvió la base: los componentes traen
     // el stock real que quedó y, en un ajuste, la cantidad es la diferencia
     // efectiva contra lo que había en la base.
@@ -277,6 +299,9 @@ export async function aplicarMovimiento(
           cantidad: res.cantidad != null ? Number(res.cantidad) : mov.cantidad,
           componentes: res.componentes ?? mov.componentes ?? [],
           usuario: res.usuario ?? mov.usuario,
+          anterior: res.anterior != null ? Number(res.anterior) : mov.anterior,
+          resultante: res.resultante != null ? Number(res.resultante) : mov.resultante,
+          incidencia: incidencia ?? mov.incidencia,
         }
       : null,
   };

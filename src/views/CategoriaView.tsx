@@ -1,5 +1,5 @@
 import { Eye, Pencil, Plus, Trash2 } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { BarraFiltros, GrupoFiltro } from '../components/BarraFiltros';
 import { ConfirmarBaja } from '../components/ConfirmarBaja';
 import { DataTable, type Column } from '../components/DataTable';
@@ -19,7 +19,14 @@ import {
 import { useStore } from '../lib/store';
 import type { BaseItem, Categoria, Etiqueta, MateriaPrima } from '../lib/types';
 
-export function CategoriaView({ categoria }: { categoria: Categoria }) {
+interface Props {
+  categoria: Categoria;
+  /** Código que vino del buscador general: se abre la ficha apenas se entra */
+  foco?: string;
+  onFocoAbierto?: () => void;
+}
+
+export function CategoriaView({ categoria, foco, onFocoAbierto }: Props) {
   const { state, puedeEditar } = useStore();
   const [q, setQ] = useState('');
   const [soloAlerta, setSoloAlerta] = useState(false);
@@ -31,6 +38,16 @@ export function CategoriaView({ categoria }: { categoria: Categoria }) {
   const diasAviso = diasAvisoGuardado();
 
   const all = listaDe(state, categoria);
+
+  // Llegar desde el buscador general abre directamente la ficha del ítem: si no,
+  // habría que volver a buscarlo dentro de la lista de la sección.
+  useEffect(() => {
+    if (!foco) return;
+    const it = all.find((x) => x.codigo === foco);
+    if (it) setVer(it);
+    onFocoAbierto?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [foco]);
 
   /** ¿Está vencido o por vencer, y todavía tiene stock? */
   const porVencer = (it: BaseItem) => {

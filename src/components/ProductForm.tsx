@@ -1,8 +1,10 @@
 import { Plus, Trash2, Package } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { siguienteCodigo } from '../lib/codigos';
 import { buscarItem, CATEGORIA_LABEL, listaDe } from '../lib/helpers';
 import { useStore } from '../lib/store';
 import type { BomItem, CategoriaComponente, Producto } from '../lib/types';
+import { CampoCodigo } from './CampoCodigo';
 import { ItemPicker } from './ItemPicker';
 import { Modal } from './Modal';
 
@@ -38,6 +40,19 @@ export function ProductForm({ initial, onClose, onEliminar }: Props) {
         }
   );
   const [error, setError] = useState('');
+  // El código lo pone la app salvo que se pida escribirlo a mano
+  const [codigoManual, setCodigoManual] = useState(false);
+
+  // Cada tipo tiene su serie (ACE, CAP, EXT, POL, ENT): si se cambia el tipo
+  // antes de guardar, el código propuesto se acomoda solo.
+  const sugerido = useMemo(
+    () => (editing ? '' : siguienteCodigo(state, 'producto', p.tipo)),
+    [state, p.tipo, editing]
+  );
+  useEffect(() => {
+    if (editing || codigoManual) return;
+    setP((prev) => (prev.codigo === sugerido ? prev : { ...prev, codigo: sugerido }));
+  }, [sugerido, codigoManual, editing]);
 
   function set<K extends keyof Producto>(k: K, v: Producto[K]) {
     setP((prev) => ({ ...prev, [k]: v }));
@@ -120,16 +135,17 @@ export function ProductForm({ initial, onClose, onEliminar }: Props) {
       }
     >
       <div className="form-row">
-        <div className="field">
-          <label>Código *</label>
-          <input
-            className="input"
-            placeholder="Ej. CAP-40"
-            value={p.codigo}
-            onChange={(e) => set('codigo', e.target.value.toUpperCase())}
-          />
-          <span className="hlp">Identificador único. Se usa para escanear.</span>
-        </div>
+        <CampoCodigo
+          valor={p.codigo}
+          sugerido={sugerido}
+          manual={codigoManual}
+          onManual={(m) => {
+            setCodigoManual(m);
+            if (!m) set('codigo', sugerido);
+          }}
+          onChange={(c) => set('codigo', c)}
+          editando={editing}
+        />
         <div className="field">
           <label>Nombre *</label>
           <input className="input" value={p.nombre} onChange={(e) => set('nombre', e.target.value)} />

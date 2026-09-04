@@ -1,5 +1,5 @@
 import { Eye, Link2, Package, Pencil, Plus, Trash2 } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ConfirmarBaja } from '../components/ConfirmarBaja';
 import { DataTable, type Column } from '../components/DataTable';
 import { ItemModal } from '../components/ItemModal';
@@ -10,7 +10,13 @@ import { calcEstado, camposBuscables, coincideBusqueda, formatNum } from '../lib
 import { useStore } from '../lib/store';
 import type { Producto } from '../lib/types';
 
-export function ProductosView() {
+interface Props {
+  /** Codigo que vino del buscador general: se abre la ficha apenas se entra */
+  foco?: string;
+  onFocoAbierto?: () => void;
+}
+
+export function ProductosView({ foco, onFocoAbierto }: Props) {
   const { state, puedeEditar } = useStore();
   const [q, setQ] = useState('');
   const [tipo, setTipo] = useState<string>('Todos');
@@ -19,6 +25,15 @@ export function ProductosView() {
   const [editar, setEditar] = useState<Producto | null>(null);
   const [nuevo, setNuevo] = useState(false);
   const [borrar, setBorrar] = useState<Producto | null>(null);
+
+  // Llegar desde el buscador general abre directamente la ficha del producto.
+  useEffect(() => {
+    if (!foco) return;
+    const it = state.productos.find((x) => x.codigo === foco);
+    if (it) setVer(it);
+    onFocoAbierto?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [foco]);
 
   const tipos = useMemo(
     () => ['Todos', ...Array.from(new Set(state.productos.map((p) => p.tipo)))],

@@ -144,7 +144,7 @@ export function BarcodeScanner({ onDetected }: Props) {
           <Keyboard size={16} />
           <input
             className="input"
-            placeholder="Ingresá el código a mano (ej. ACE-06)"
+            placeholder="Código o nombre (ej. ACE-06 o melena)"
             value={manual}
             onChange={(e) => setManual(e.target.value)}
           />

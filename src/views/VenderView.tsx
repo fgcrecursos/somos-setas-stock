@@ -30,6 +30,7 @@ import {
   CATEGORIA_LABEL_PLURAL,
   MOVIMIENTO_COLOR,
   MOVIMIENTO_LABEL,
+  buscarEnTodo,
   buscarItem,
   buscarPorCodigo,
   calcEstado,
@@ -75,10 +76,34 @@ export function VenderView() {
   const esConsumo = modo === 'consumo_interno';
   const producto = sel?.categoria === 'producto' ? (sel.item as Producto) : null;
 
-  function resolver(code: string) {
-    const hit = buscarPorCodigo(state, code);
+  function resolver(texto: string) {
+    const code = texto.trim();
+    if (!code) return;
+    // Se escribe el código, pero muchas veces se tiene el nombre y no el código
+    // (o el código está escrito con otro separador). Si no hay código exacto se
+    // busca por nombre: con una sola coincidencia se carga sola, con varias hay
+    // que afinar la búsqueda.
+    let hit = buscarPorCodigo(state, code);
     if (!hit) {
-      toast(`Código "${code}" no encontrado`, true);
+      // Al vender o producir sólo entran productos terminados, así que buscar
+      // "cordyceps" no tiene por qué frenarse en la etiqueta con ese nombre.
+      const candidatos = buscarEnTodo(state, code, 40).filter(
+        (c) => esConsumo || c.categoria === 'producto'
+      );
+      if (candidatos.length === 1) hit = candidatos[0];
+      else if (candidatos.length > 1) {
+        toast(
+          `"${code}" coincide con varios ítems (${candidatos
+            .slice(0, 3)
+            .map((c) => c.item.nombre)
+            .join(', ')}…). Escribí el código o algo más preciso.`,
+          true
+        );
+        return;
+      }
+    }
+    if (!hit) {
+      toast(`No se encontró "${code}" ni por código ni por nombre`, true);
       return;
     }
     // Vender y producir sólo aplican a productos terminados; el consumo interno

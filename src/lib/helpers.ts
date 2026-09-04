@@ -104,7 +104,44 @@ export function buscarPorCodigo(
     );
     if (item) return { categoria: c, item };
   }
+  // Segunda pasada ignorando espacios y separadores: en la base conviven
+  // "ETQ ACE-01", "ETQ-CAP-01" y "POL- 39", así que escribir el código prolijo
+  // (ETQ-ACE-01, POL-39) tiene que encontrarlos igual.
+  const compacto = compactar(clean);
+  if (!compacto) return undefined;
+  for (const c of cats) {
+    const item = listaDe(state, c).find((x) => compactar(x.codigo) === compacto);
+    if (item) return { categoria: c, item };
+  }
   return undefined;
+}
+
+/**
+ * Todos los ítems del inventario que coinciden con lo escrito, sin importar la
+ * categoría: es lo que alimenta el buscador general del encabezado. Primero el
+ * código exacto, después los que empiezan igual y por último el resto.
+ */
+export function buscarEnTodo(
+  state: DBState,
+  q: string,
+  limite = 12
+): { categoria: Categoria; item: BaseItem }[] {
+  const texto = normalizarBusqueda(q).trim();
+  if (!texto) return [];
+  const comp = compactar(q);
+  const hits: { categoria: Categoria; item: BaseItem; peso: number }[] = [];
+  for (const categoria of CATEGORIAS_TODAS) {
+    for (const item of listaDe(state, categoria)) {
+      if (!coincideBusqueda(q, ...camposBuscables(item))) continue;
+      const codigo = compactar(item.codigo);
+      const nombre = normalizarBusqueda(item.nombre);
+      const peso =
+        codigo === comp ? 0 : codigo.startsWith(comp) ? 1 : nombre.startsWith(texto) ? 2 : 3;
+      hits.push({ categoria, item, peso });
+    }
+  }
+  hits.sort((a, b) => a.peso - b.peso || a.item.codigo.localeCompare(b.item.codigo));
+  return hits.slice(0, limite).map(({ categoria, item }) => ({ categoria, item }));
 }
 
 /**
@@ -122,6 +159,16 @@ export function normalizarBusqueda(v: unknown): string {
 }
 
 /**
+ * La misma normalización pero además sin espacios, guiones ni puntos: es la
+ * forma de comparar códigos escritos de cualquier manera. Los del Excel
+ * original no siguen un formato único ("ETQ ACE-01", "ETQ.ENT-9", "POL- 39"),
+ * así que "etq ace 01", "ETQ-ACE-01" y "etqace01" tienen que dar lo mismo.
+ */
+export function compactar(v: unknown): string {
+  return normalizarBusqueda(v).replace(/[^a-z0-9]+/g, '');
+}
+
+/**
  * ¿Lo escrito en el buscador coincide? La consulta se parte en palabras y
  * todas tienen que aparecer, en cualquier orden y repartidas entre los campos:
  * así "capsulas melena" encuentra la Melena de León de tipo Cápsulas.
@@ -129,8 +176,18 @@ export function normalizarBusqueda(v: unknown): string {
 export function coincideBusqueda(q: string, ...campos: unknown[]): boolean {
   const partes = normalizarBusqueda(q).split(/\s+/).filter(Boolean);
   if (!partes.length) return true;
-  const texto = campos.map(normalizarBusqueda).filter(Boolean).join(' ');
-  return partes.every((p) => texto.includes(p));
+  const limpios = campos.map(normalizarBusqueda).filter(Boolean);
+  const texto = limpios.join(' ');
+  // Cada campo se compara también compactado, contra la palabra compactada, para
+  // que un código escrito con otro separador —o sin ninguno— coincida igual. Se
+  // compara campo por campo y no todo junto, así "pol39" no matchea por pegar el
+  // final de un campo con el principio del siguiente.
+  const compactos = limpios.map((t) => t.replace(/[^a-z0-9]+/g, ''));
+  return partes.every((p) => {
+    if (texto.includes(p)) return true;
+    const pc = p.replace(/[^a-z0-9]+/g, '');
+    return !!pc && compactos.some((c) => c.includes(pc));
+  });
 }
 
 /**

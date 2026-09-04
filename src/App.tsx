@@ -22,6 +22,7 @@ import {
   Wheat,
 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { BuscadorGlobal } from './components/BuscadorGlobal';
 import { useToast } from './components/Toast';
 import { useAuth } from './lib/auth';
 import { descargarBackup } from './lib/backup';
@@ -85,6 +86,16 @@ export default function App() {
   const toast = useToast();
   const [view, setView] = useState<ViewId>('dashboard');
   const [refrescando, setRefrescando] = useState(false);
+  // Ítem elegido en el buscador general: la sección lo abre apenas se muestra
+  const [foco, setFoco] = useState<{ categoria: Categoria; codigo: string } | null>(null);
+
+  function irAlItem(categoria: Categoria, codigo: string) {
+    setFoco({ categoria, codigo });
+    setView(categoria as ViewId);
+  }
+  /** El código que tiene que abrir esta sección, si el buscador apuntó acá */
+  const focoDe = (categoria: Categoria) =>
+    foco?.categoria === categoria ? foco.codigo : undefined;
 
   const alertCounts = useMemo(() => {
     const count = (cat: Categoria) =>
@@ -249,6 +260,7 @@ export default function App() {
             <div className="subtitle">{TITLES[view].s}</div>
           </div>
           <div className="topbar__spacer" />
+          <BuscadorGlobal onElegir={irAlItem} />
           {vencimientos.length > 0 && (
             <button
               className="btn btn--sm btn--venc"
@@ -293,7 +305,9 @@ export default function App() {
             <>
               {view === 'dashboard' && <Dashboard onNav={(v) => setView(v as ViewId)} />}
               {view === 'vender' && puedeEditar && <VenderView />}
-              {view === 'producto' && <ProductosView />}
+              {view === 'producto' && (
+                <ProductosView foco={focoDe('producto')} onFocoAbierto={() => setFoco(null)} />
+              )}
               {view === 'reposicion' && <ReposicionView />}
               {view === 'ventas' && <VentasView />}
               {view === 'pedidos' && esAdmin && <PedidosView />}
@@ -302,7 +316,14 @@ export default function App() {
               {(view === 'insumo' ||
                 view === 'insumo_interno' ||
                 view === 'etiqueta' ||
-                view === 'materia_prima') && <CategoriaView categoria={view} key={view} />}
+                view === 'materia_prima') && (
+                <CategoriaView
+                  categoria={view}
+                  key={view}
+                  foco={focoDe(view)}
+                  onFocoAbierto={() => setFoco(null)}
+                />
+              )}
             </>
           )}
         </div>

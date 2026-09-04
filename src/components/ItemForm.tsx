@@ -1,5 +1,6 @@
 import { Boxes, Trash2 } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { siguienteCodigo } from '../lib/codigos';
 import {
   CATEGORIA_LABEL,
   VENCIMIENTO_CLASE,
@@ -8,6 +9,7 @@ import {
 } from '../lib/helpers';
 import { useStore } from '../lib/store';
 import type { BaseItem, Categoria } from '../lib/types';
+import { CampoCodigo } from './CampoCodigo';
 import { Modal } from './Modal';
 
 interface Props {
@@ -20,6 +22,15 @@ interface Props {
 
 const usaTipoPres: Categoria[] = ['etiqueta', 'materia_prima'];
 
+/** "Nueva etiqueta", "Nuevo insumo": el título del alta concuerda en género */
+const TITULO_NUEVO: Record<Categoria, string> = {
+  producto: 'Nuevo producto',
+  insumo: 'Nuevo insumo',
+  insumo_interno: 'Nuevo insumo interno',
+  etiqueta: 'Nueva etiqueta',
+  materia_prima: 'Nueva materia prima',
+};
+
 export function ItemForm({ categoria, initial, onClose, onEliminar }: Props) {
   const { state, upsertItem, guardando } = useStore();
   const editing = !!initial;
@@ -29,8 +40,21 @@ export function ItemForm({ categoria, initial, onClose, onEliminar }: Props) {
       : { codigo: '', nombre: '', actual: 0, minimo: 0, tipo: '', presentacion: '' }
   );
   const [error, setError] = useState('');
+  // El código lo pone la app salvo que se pida escribirlo a mano
+  const [codigoManual, setCodigoManual] = useState(false);
   const diasAviso = diasAvisoGuardado();
   const venc = calcVencimiento(item.vencimiento, diasAviso);
+
+  // Las etiquetas siguen la serie del producto que etiquetan (ETQ-CAP-31), así
+  // que el código propuesto cambia con el tipo; el resto va por categoría.
+  const sugerido = useMemo(
+    () => (editing ? '' : siguienteCodigo(state, categoria, item.tipo)),
+    [state, categoria, item.tipo, editing]
+  );
+  useEffect(() => {
+    if (editing || codigoManual) return;
+    setItem((prev: any) => (prev.codigo === sugerido ? prev : { ...prev, codigo: sugerido }));
+  }, [sugerido, codigoManual, editing]);
 
   function set(k: string, v: any) {
     setItem((prev: any) => ({ ...prev, [k]: v }));
@@ -63,7 +87,7 @@ export function ItemForm({ categoria, initial, onClose, onEliminar }: Props) {
 
   return (
     <Modal
-      title={editing ? `Editar ${initial.codigo}` : `Nuevo ${CATEGORIA_LABEL[categoria].toLowerCase()}`}
+      title={editing ? `Editar ${initial.codigo}` : TITULO_NUEVO[categoria]}
       icon={<Boxes size={20} color="var(--naranja)" />}
       onClose={onClose}
       footer={
@@ -86,10 +110,17 @@ export function ItemForm({ categoria, initial, onClose, onEliminar }: Props) {
       }
     >
       <div className="form-row">
-        <div className="field">
-          <label>Código *</label>
-          <input className="input" value={item.codigo} onChange={(e) => set('codigo', e.target.value.toUpperCase())} />
-        </div>
+        <CampoCodigo
+          valor={item.codigo}
+          sugerido={sugerido}
+          manual={codigoManual}
+          onManual={(m) => {
+            setCodigoManual(m);
+            if (!m) set('codigo', sugerido);
+          }}
+          onChange={(c) => set('codigo', c)}
+          editando={editing}
+        />
         <div className="field">
           <label>Nombre *</label>
           <input className="input" value={item.nombre} onChange={(e) => set('nombre', e.target.value)} />

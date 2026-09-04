@@ -20,8 +20,9 @@ import {
   TrendingUp,
   Users,
 } from 'lucide-react';
-import { Fragment, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { BarraFiltros, GrupoFiltro } from '../components/BarraFiltros';
+import { MovimientoModal } from '../components/MovimientoModal';
 import { CalendarioDia } from '../components/CalendarioDia';
 import { useToast } from '../components/Toast';
 import { descargarInforme, type FilaActividad } from '../lib/backup';
@@ -101,8 +102,14 @@ export function VentasView() {
   const toast = useToast();
   const [periodo, setPeriodo] = useState<PeriodoId>('mes-actual');
   const [detalle, setDetalle] = useState<TipoMovimiento | 'todo'>('todo');
-  const [abierto, setAbierto] = useState<string | null>(null);
+  // Movimiento abierto en el modal de detalle (se guarda el id, no el objeto)
+  const [movAbierto, setMovAbierto] = useState<string | null>(null);
   const [q, setQ] = useState('');
+
+  const movimientoAbierto = useMemo(
+    () => (movAbierto ? (state.movimientos.find((m) => m.id === movAbierto) ?? null) : null),
+    [movAbierto, state.movimientos]
+  );
 
   const mesesConDatos = useMemo(() => {
     const set = new Set<string>();
@@ -512,50 +519,37 @@ export function VentasView() {
               </thead>
               <tbody>
                 {detalleFiltrado.slice(0, 120).map((m: Movimiento) => {
-                  const open = abierto === m.id;
                   const st = MOVIMIENTO_COLOR[m.tipo];
                   return (
-                    <Fragment key={m.id}>
-                      <tr
-                        style={{ cursor: m.componentes?.length ? 'pointer' : 'default' }}
-                        onClick={() => m.componentes?.length && setAbierto(open ? null : m.id)}
-                      >
-                        <td className="muted" style={{ fontSize: 12 }}>{formatFecha(m.fecha)}</td>
-                        <td>
-                          <span
-                            className="pill"
-                            style={{ background: st.bg, color: st.c, borderColor: 'transparent' }}
-                          >
-                            {MOVIMIENTO_LABEL[m.tipo]}
+                    <tr
+                      key={m.id}
+                      style={{ cursor: 'pointer' }}
+                      onClick={() => setMovAbierto(m.id)}
+                      title="Ver el detalle del movimiento"
+                    >
+                      <td className="muted" style={{ fontSize: 12 }}>{formatFecha(m.fecha)}</td>
+                      <td>
+                        <span
+                          className="pill"
+                          style={{ background: st.bg, color: st.c, borderColor: 'transparent' }}
+                        >
+                          {MOVIMIENTO_LABEL[m.tipo]}
+                        </span>
+                        {m.origen === 'tienda' && (
+                          <span className="pill" style={{ marginLeft: 4, gap: 3 }} title={m.referencia}>
+                            <Store size={11} /> tienda
                           </span>
-                          {m.origen === 'tienda' && (
-                            <span className="pill" style={{ marginLeft: 4, gap: 3 }} title={m.referencia}>
-                              <Store size={11} /> tienda
-                            </span>
-                          )}
-                        </td>
-                        <td className="nombre">{m.nombre} <span className="codigo">{m.codigo}</span></td>
-                        <td className="num" style={{ fontWeight: 700 }}>{formatNum(m.cantidad)}</td>
-                        <td className="muted" style={{ fontSize: 12 }}>{m.usuario ?? '—'}</td>
-                        <td className="muted">
-                          {m.componentes?.length
-                            ? `${m.componentes.length} · ${open ? 'ocultar' : 'ver'}`
-                            : (m.nota ?? '—')}
-                        </td>
-                      </tr>
-                      {open &&
-                        m.componentes?.map((c) => (
-                          <tr key={m.id + c.categoria + c.codigo} style={{ background: 'var(--crema-2)' }}>
-                            <td />
-                            <td colSpan={2} style={{ paddingLeft: 24 }}>
-                              <span className="codigo">{c.codigo}</span> {c.nombre}
-                            </td>
-                            <td colSpan={3} className={c.faltante ? 'diff-neg' : 'muted'}>
-                              −{formatNum(c.cantidad)} → queda {formatNum(c.resultante)}
-                            </td>
-                          </tr>
-                        ))}
-                    </Fragment>
+                        )}
+                      </td>
+                      <td className="nombre">{m.nombre} <span className="codigo">{m.codigo}</span></td>
+                      <td className="num" style={{ fontWeight: 700 }}>{formatNum(m.cantidad)}</td>
+                      <td className="muted" style={{ fontSize: 12 }}>{m.usuario ?? '—'}</td>
+                      <td className="muted">
+                        {m.componentes?.length
+                          ? `${m.componentes.length} · ver`
+                          : (m.nota ?? 'ver')}
+                      </td>
+                    </tr>
                   );
                 })}
                 {detalleFiltrado.length === 0 && (
@@ -580,6 +574,14 @@ export function VentasView() {
         pedidos de la tienda ya confirmados. La facturación se sigue mirando en el panel de la
         tienda: acá se cuentan unidades, no plata.
       </p>
+
+      {movimientoAbierto && (
+        <MovimientoModal
+          movimiento={movimientoAbierto}
+          onClose={() => setMovAbierto(null)}
+          onIr={setMovAbierto}
+        />
+      )}
     </div>
   );
 }

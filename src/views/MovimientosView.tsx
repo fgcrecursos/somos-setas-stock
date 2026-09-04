@@ -7,8 +7,9 @@
 // en esta lista.
 // =====================================================================
 import { AlertTriangle, History, Store } from 'lucide-react';
-import { Fragment, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { BarraFiltros, GrupoFiltro } from '../components/BarraFiltros';
+import { MovimientoModal } from '../components/MovimientoModal';
 import {
   CATEGORIA_LABEL,
   coincideBusqueda,
@@ -68,7 +69,10 @@ function desdeDe(periodo: PeriodoId): number | null {
 
 export function MovimientosView() {
   const { state } = useStore();
-  const [abierto, setAbierto] = useState<string | null>(null);
+  // Movimiento abierto en el modal de detalle. Se guarda el id y no el objeto:
+  // si mientras tanto llegan datos nuevos de la base, el modal muestra la
+  // versión fresca en vez de una copia vieja.
+  const [detalle, setDetalle] = useState<string | null>(null);
   const [busca, setBusca] = useState('');
   const [tipos, setTipos] = useState<Set<TipoMovimiento>>(new Set());
   const [categoria, setCategoria] = useState<Categoria | ''>('');
@@ -119,6 +123,11 @@ export function MovimientosView() {
     }
     return { entraron, salieron };
   }, [filtrados]);
+
+  const movimientoAbierto = useMemo(
+    () => (detalle ? (state.movimientos.find((m) => m.id === detalle) ?? null) : null),
+    [detalle, state.movimientos]
+  );
 
   return (
     <div className="stack">
@@ -228,133 +237,94 @@ export function MovimientosView() {
             <tbody>
               {filtrados.slice(0, tope).map((m) => {
                 const st = MOVIMIENTO_COLOR[m.tipo] ?? MOVIMIENTO_COLOR.ajuste;
-                const open = abierto === m.id;
                 const delta = deltaMovimiento(m);
                 const tieneDetalle = !!m.componentes?.length;
                 const hayIncidencia =
                   !!m.incidencia || !!m.componentes?.some((c) => c.inexistente);
                 const tieneStock = m.resultante != null;
                 return (
-                  <Fragment key={m.id}>
-                    <tr
-                      style={{ cursor: tieneDetalle ? 'pointer' : 'default' }}
-                      onClick={() => tieneDetalle && setAbierto(open ? null : m.id)}
-                    >
-                      <td className="muted" style={{ fontSize: 12 }}>
-                        {formatFecha(m.fecha)}
-                      </td>
-                      <td>
+                  <tr
+                    key={m.id}
+                    style={{ cursor: 'pointer' }}
+                    onClick={() => setDetalle(m.id)}
+                    title="Ver el detalle del movimiento"
+                  >
+                    <td className="muted" style={{ fontSize: 12 }}>
+                      {formatFecha(m.fecha)}
+                    </td>
+                    <td>
+                      <span
+                        className="pill"
+                        style={{ background: st.bg, color: st.c, borderColor: 'transparent' }}
+                      >
+                        {MOVIMIENTO_LABEL[m.tipo] ?? m.tipo}
+                      </span>
+                      {m.origen === 'tienda' && (
                         <span
                           className="pill"
-                          style={{ background: st.bg, color: st.c, borderColor: 'transparent' }}
+                          title={'Pedido de la tienda ' + (m.referencia ?? '')}
+                          style={{ marginLeft: 4, gap: 3 }}
                         >
-                          {MOVIMIENTO_LABEL[m.tipo] ?? m.tipo}
+                          <Store size={11} /> tienda
                         </span>
-                        {m.origen === 'tienda' && (
-                          <span
-                            className="pill"
-                            title={'Pedido de la tienda ' + (m.referencia ?? '')}
-                            style={{ marginLeft: 4, gap: 3 }}
-                          >
-                            <Store size={11} /> tienda
-                          </span>
-                        )}
-                        {hayIncidencia && (
-                          <span
-                            className="pill"
-                            title={m.incidencia ?? 'Un componente de la receta no se pudo descontar'}
-                            style={{
-                              marginLeft: 4,
-                              gap: 3,
-                              background: 'var(--critico-bg)',
-                              color: 'var(--critico)',
-                              borderColor: 'transparent',
-                            }}
-                          >
-                            <AlertTriangle size={11} /> receta
-                          </span>
-                        )}
-                      </td>
-                      <td className="muted" style={{ fontSize: 12 }}>
-                        {CATEGORIA_LABEL[m.categoria] ?? m.categoria}
-                      </td>
-                      <td className="nombre">
-                        {m.nombre} <span className="codigo">{m.codigo}</span>
-                      </td>
-                      <td
-                        className={'num ' + (delta < 0 ? 'diff-neg' : delta > 0 ? 'diff-pos' : 'muted')}
-                        style={{ fontWeight: 700 }}
-                      >
-                        {delta > 0 ? '+' : ''}
-                        {formatNum(delta)}
-                        {tieneStock && (
-                          <div className="muted" style={{ fontSize: 11, fontWeight: 400 }}>
-                            {m.anterior != null
-                              ? `${formatNum(m.anterior)} → ${formatNum(m.resultante!)}`
-                              : `quedó ${formatNum(m.resultante!)}`}
-                          </div>
-                        )}
-                      </td>
-                      <td className="muted" style={{ fontSize: 12 }}>
-                        {m.usuario ?? '—'}
-                      </td>
-                      <td className="muted" style={{ fontSize: 12 }}>
-                        {m.incidencia ? (
-                          <span className="diff-neg" style={{ fontWeight: 600 }}>
-                            {m.incidencia}
-                          </span>
-                        ) : tieneDetalle ? (
-                          `${
-                            m.origen === 'tienda'
-                              ? m.componentes!.length === 1
-                                ? '1 ítem'
-                                : `${m.componentes!.length} ítems`
-                              : `${m.componentes!.length} componentes`
-                          } · ${open ? 'ocultar' : 'ver'}`
-                        ) : (
-                          (m.nota ?? '—')
-                        )}
-                      </td>
-                    </tr>
-                    {open &&
-                      m.componentes?.map((c) => {
-                        // Signo real: si el componente terminó con más stock que
-                        // antes (pedido anulado / corregido a la baja) fue una
-                        // devolución (+); si no, un descuento (−).
-                        const devuelto =
-                          c.anterior != null && c.resultante > c.anterior;
-                        return (
-                          <tr
-                            key={m.id + c.categoria + c.codigo}
-                            style={{ background: 'var(--crema-2)' }}
-                          >
-                            <td />
-                            <td />
-                            <td className="muted" style={{ fontSize: 12 }}>
-                              {CATEGORIA_LABEL[c.categoria] ?? c.categoria}
-                            </td>
-                            <td colSpan={2} style={{ paddingLeft: 24 }}>
-                              <span className="codigo">{c.codigo}</span> {c.nombre}
-                            </td>
-                            <td colSpan={2} className={c.faltante ? 'diff-neg' : 'muted'}>
-                              {c.inexistente ? (
-                                'no está en el inventario · no se descontó'
-                              ) : c.anterior != null ? (
-                                <>
-                                  {formatNum(c.anterior)} → {formatNum(c.resultante)} (
-                                  {devuelto ? '+' : '−'}
-                                  {formatNum(c.cantidad)})
-                                </>
-                              ) : (
-                                <>
-                                  −{formatNum(c.cantidad)} → queda {formatNum(c.resultante)}
-                                </>
-                              )}
-                            </td>
-                          </tr>
-                        );
-                      })}
-                  </Fragment>
+                      )}
+                      {hayIncidencia && (
+                        <span
+                          className="pill"
+                          title={m.incidencia ?? 'Un componente de la receta no se pudo descontar'}
+                          style={{
+                            marginLeft: 4,
+                            gap: 3,
+                            background: 'var(--critico-bg)',
+                            color: 'var(--critico)',
+                            borderColor: 'transparent',
+                          }}
+                        >
+                          <AlertTriangle size={11} /> receta
+                        </span>
+                      )}
+                    </td>
+                    <td className="muted" style={{ fontSize: 12 }}>
+                      {CATEGORIA_LABEL[m.categoria] ?? m.categoria}
+                    </td>
+                    <td className="nombre">
+                      {m.nombre} <span className="codigo">{m.codigo}</span>
+                    </td>
+                    <td
+                      className={'num ' + (delta < 0 ? 'diff-neg' : delta > 0 ? 'diff-pos' : 'muted')}
+                      style={{ fontWeight: 700 }}
+                    >
+                      {delta > 0 ? '+' : ''}
+                      {formatNum(delta)}
+                      {tieneStock && (
+                        <div className="muted" style={{ fontSize: 11, fontWeight: 400 }}>
+                          {m.anterior != null
+                            ? `${formatNum(m.anterior)} → ${formatNum(m.resultante!)}`
+                            : `quedó ${formatNum(m.resultante!)}`}
+                        </div>
+                      )}
+                    </td>
+                    <td className="muted" style={{ fontSize: 12 }}>
+                      {m.usuario ?? '—'}
+                    </td>
+                    <td className="muted" style={{ fontSize: 12 }}>
+                      {m.incidencia ? (
+                        <span className="diff-neg" style={{ fontWeight: 600 }}>
+                          {m.incidencia}
+                        </span>
+                      ) : tieneDetalle ? (
+                        `${
+                          m.origen === 'tienda'
+                            ? m.componentes!.length === 1
+                              ? '1 ítem'
+                              : `${m.componentes!.length} ítems`
+                            : `${m.componentes!.length} componentes`
+                        } · ver`
+                      ) : (
+                        (m.nota ?? 'ver')
+                      )}
+                    </td>
+                  </tr>
                 );
               })}
               {filtrados.length === 0 && (
@@ -382,6 +352,23 @@ export function MovimientosView() {
           </div>
         )}
       </div>
+
+      {movimientoAbierto && (
+        <MovimientoModal
+          movimiento={movimientoAbierto}
+          onClose={() => setDetalle(null)}
+          onIr={setDetalle}
+          onVerHistorial={(codigo) => {
+            // Dejar la lista mostrando sólo ese ítem, sin más filtros que
+            // puedan esconder movimientos viejos.
+            setBusca(codigo);
+            setTipos(new Set());
+            setCategoria('');
+            setPeriodo('todo');
+            setTope(150);
+          }}
+        />
+      )}
     </div>
   );
 }

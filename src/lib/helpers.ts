@@ -214,6 +214,44 @@ export function formatFecha(iso?: string | null): string {
   });
 }
 
+/** Fecha escrita en palabras, con día de la semana: para el detalle de un movimiento */
+export function formatFechaLarga(iso?: string | null): string {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return String(iso);
+  return d.toLocaleString('es-AR', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
+/**
+ * "Hace 3 días", "hace 2 horas": ubica un movimiento en el tiempo sin tener
+ * que hacer la cuenta mentalmente contra la fecha del calendario.
+ */
+export function tiempoRelativo(iso?: string | null): string {
+  if (!iso) return '';
+  const t = new Date(iso).getTime();
+  if (isNaN(t)) return '';
+  const seg = Math.round((Date.now() - t) / 1000);
+  if (seg < 0) return 'en el futuro';
+  if (seg < 60) return 'recién';
+  const min = Math.round(seg / 60);
+  if (min < 60) return min === 1 ? 'hace un minuto' : `hace ${min} minutos`;
+  const hs = Math.round(min / 60);
+  if (hs < 24) return hs === 1 ? 'hace una hora' : `hace ${hs} horas`;
+  const dias = Math.round(hs / 24);
+  if (dias < 31) return dias === 1 ? 'ayer' : `hace ${dias} días`;
+  const meses = Math.round(dias / 30);
+  if (meses < 12) return meses === 1 ? 'hace un mes' : `hace ${meses} meses`;
+  const anios = Math.round(meses / 12);
+  return anios === 1 ? 'hace un año' : `hace ${anios} años`;
+}
+
 /** Sólo el día, sin la hora: para fechas de vencimiento (aaaa-mm-dd) */
 export function formatFechaCorta(iso?: string | null): string {
   if (!iso) return '—';

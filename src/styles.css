@@ -371,6 +371,10 @@ table.tbl--anidada { font-size: 12.5px; background: #fff; border-radius: 10px; o
 .wrap { flex-wrap: wrap; }
 .muted { color: var(--texto-3); }
 
+/* La unidad de medida al lado de una cantidad: "120 kg". Discreta, para que el
+   número siga siendo lo que se lee primero. */
+.unidad-sufijo { margin-left: 3px; font-size: 0.82em; font-weight: 500; color: var(--texto-3); }
+
 /* barcode svg container */
 .barcode-box { background: #fff; padding: 10px; border-radius: 8px; display: inline-block; border: 1px solid var(--borde); }
 

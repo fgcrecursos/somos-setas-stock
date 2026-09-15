@@ -21,7 +21,7 @@ import {
 } from 'lucide-react';
 import { Fragment, useMemo, useState } from 'react';
 import { BarraFiltros, GrupoFiltro } from '../components/BarraFiltros';
-import { StatusBadge } from '../components/StatusBadge';
+import { Cantidad, StatusBadge } from '../components/StatusBadge';
 import { COMPONENTE_LABEL, coincideBusqueda, formatNum } from '../lib/helpers';
 import { calcularReposicion } from '../lib/reposicion';
 import { useStore } from '../lib/store';
@@ -313,7 +313,7 @@ export function ReposicionView() {
                                         <td className="num muted">{formatNum(c.porUnidad)}</td>
                                         <td className="num" style={{ fontWeight: 600 }}>{formatNum(c.necesita)}</td>
                                         <td className={'num ' + (falta ? 'diff-neg' : '')}>
-                                          {formatNum(c.actual)}
+                                          <Cantidad valor={c.actual} unidad={c.unidad} />
                                         </td>
                                         <td className="num muted">
                                           {Number.isFinite(c.alcanzaPara) ? formatNum(c.alcanzaPara) : '∞'}
@@ -391,8 +391,8 @@ export function ReposicionView() {
                         </span>
                       </td>
                       <td><StatusBadge actual={c.actual} minimo={c.minimo} /></td>
-                      <td className="num">{formatNum(c.actual)}</td>
-                      <td className="num muted">{formatNum(c.minimo)}</td>
+                      <td className="num"><Cantidad valor={c.actual} unidad={c.unidad} /></td>
+                      <td className="num muted"><Cantidad valor={c.minimo} unidad={c.unidad} /></td>
                       <td className={'num ' + (c.faltaProduccion > 0 ? 'diff-neg' : 'muted')}>
                         {c.necesita > 0 ? formatNum(c.necesita) : '—'}
                       </td>

@@ -294,6 +294,7 @@ export async function descargarBackup(state: DBState, quien: string) {
       ...filaBase(m),
       Tipo: m.tipo,
       Presentación: m.presentacion,
+      'Unidad de medida': m.unidad ?? '',
       'Stock por unidad': m.stockUnidad ?? '',
       'Cantidad por pack': m.cantidadPorPack ?? '',
       Lote: m.lote ?? '',
@@ -302,7 +303,7 @@ export async function descargarBackup(state: DBState, quien: string) {
       'Estado del vencimiento': calcVencimiento(m.vencimiento)?.label ?? '',
       Ubicación: m.ubicacion ?? '',
     })),
-    [14, 40, 10, 10, 11, 11, 14, 20, 16, 16, 14, 22, 12, 22, 16]
+    [14, 40, 10, 10, 11, 11, 14, 20, 16, 16, 16, 14, 22, 12, 22, 16]
   );
 
   // --- Recetas: una fila por componente ---

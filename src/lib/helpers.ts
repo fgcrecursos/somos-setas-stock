@@ -258,6 +258,33 @@ export function formatNum(n: number): string {
   return n.toLocaleString('es-AR', { maximumFractionDigits: 2 });
 }
 
+/**
+ * Unidades de medida de la materia prima. El valor guardado es la abreviatura,
+ * así se muestra tal cual al lado del número y no hace falta traducir nada.
+ *
+ * OJO: la unidad es descriptiva. El sistema NO convierte entre unidades ni
+ * escala las recetas: una línea de BOM que pide 1 pide 1 de la unidad del ítem.
+ * Cambiar la unidad de un ítem no cambia su stock ni lo que descuenta.
+ */
+export const UNIDADES = [
+  { valor: 'u', label: 'Unidades' },
+  { valor: 'g', label: 'Gramos' },
+  { valor: 'kg', label: 'Kilogramos' },
+  { valor: 'ml', label: 'Mililitros' },
+  { valor: 'L', label: 'Litros' },
+] as const;
+
+/** La abreviatura a mostrar, o '' si el ítem no tiene unidad cargada. */
+export function abrevUnidad(unidad?: string | null): string {
+  return (unidad ?? '').trim();
+}
+
+/** "120 kg" para textos planos (exportaciones, avisos). Sin unidad, "120". */
+export function conUnidad(n: number, unidad?: string | null): string {
+  const u = abrevUnidad(unidad);
+  return u ? `${formatNum(n)} ${u}` : formatNum(n);
+}
+
 export function formatFecha(iso?: string | null): string {
   if (!iso) return '—';
   const d = new Date(iso);
@@ -457,6 +484,7 @@ const ETIQUETA_CAMPO: Record<string, string> = {
   minimo: 'mínimo',
   tipo: 'tipo',
   presentacion: 'presentación',
+  unidad: 'unidad de medida',
   lote: 'lote',
   vencimiento: 'vencimiento',
   ubicacion: 'ubicación',

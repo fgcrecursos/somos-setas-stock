@@ -23,6 +23,8 @@ export interface ComponenteResuelto {
   necesita: number;
   /** Stock del componente hoy */
   actual: number;
+  /** Unidad de medida del componente, si la tiene cargada (materia prima) */
+  unidad?: string | null;
   /** Cuántas unidades del producto alcanza a cubrir este componente */
   alcanzaPara: number;
   /** La receta apunta a un código que no existe en el inventario */
@@ -54,6 +56,8 @@ export interface ComponenteAComprar {
   nombre: string;
   actual: number;
   minimo: number;
+  /** Unidad de medida del componente, si la tiene cargada (materia prima) */
+  unidad?: string | null;
   /** Total que pide la producción pendiente de todos los productos */
   necesita: number;
   /** Lo que falta para llegar al mínimo propio del ítem */
@@ -127,6 +131,7 @@ export function calcularReposicion(state: DBState): Reposicion {
         porUnidad: linea.cantidad,
         necesita: linea.cantidad * estado.faltan,
         actual,
+        unidad: (item as any)?.unidad ?? null,
         alcanzaPara: alcanzaPara(actual, linea.cantidad),
         huerfano,
       };
@@ -184,6 +189,7 @@ export function calcularReposicion(state: DBState): Reposicion {
         nombre: item?.nombre ?? '(no existe en el inventario)',
         actual: item?.actual ?? 0,
         minimo: item?.minimo ?? 0,
+        unidad: (item as any)?.unidad ?? null,
         necesita: 0,
         faltaMinimo: 0,
         faltaProduccion: 0,

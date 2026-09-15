@@ -1,9 +1,25 @@
 import {
   VENCIMIENTO_CLASE,
+  abrevUnidad,
   calcEstado,
   calcVencimiento,
   formatFechaCorta,
+  formatNum,
 } from '../lib/helpers';
+
+/**
+ * Una cantidad con su unidad de medida al lado, en gris y más chica: "120 kg".
+ * Si el ítem no tiene unidad cargada se ve igual que antes, sólo el número.
+ */
+export function Cantidad({ valor, unidad }: { valor: number; unidad?: string | null }) {
+  const u = abrevUnidad(unidad);
+  return (
+    <>
+      {formatNum(valor)}
+      {u && <span className="unidad-sufijo">{u}</span>}
+    </>
+  );
+}
 
 export function StatusBadge({ actual, minimo }: { actual: number; minimo: number }) {
   const { estado, label } = calcEstado(actual, minimo);

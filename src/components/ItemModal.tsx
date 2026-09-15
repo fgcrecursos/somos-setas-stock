@@ -19,7 +19,7 @@ import { useStore } from '../lib/store';
 import type { BaseItem, Categoria } from '../lib/types';
 import { Barcode } from './Barcode';
 import { Modal } from './Modal';
-import { DiffCell, StatusBadge, VencimientoCell } from './StatusBadge';
+import { Cantidad, DiffCell, StatusBadge, VencimientoCell } from './StatusBadge';
 import { useToast } from './Toast';
 
 interface Props {
@@ -127,8 +127,8 @@ export function ItemModal({ categoria, item, onClose, onEdit }: Props) {
       )}
 
       <div className="grid" style={{ gridTemplateColumns: '1fr 1fr 1fr', margin: '16px 0' }}>
-        <Stat label="Actual" value={formatNum(item.actual)} />
-        <Stat label="Mínimo" value={formatNum(item.minimo)} />
+        <Stat label="Actual" value={<Cantidad valor={item.actual} unidad={d.unidad} />} />
+        <Stat label="Mínimo" value={<Cantidad valor={item.minimo} unidad={d.unidad} />} />
         <Stat label="Diferencia" value={<DiffCell actual={item.actual} minimo={item.minimo} />} />
       </div>
 

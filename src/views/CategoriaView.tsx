@@ -5,7 +5,7 @@ import { ConfirmarBaja } from '../components/ConfirmarBaja';
 import { DataTable, type Column } from '../components/DataTable';
 import { ItemForm } from '../components/ItemForm';
 import { ItemModal } from '../components/ItemModal';
-import { DiffCell, StatusBadge, StockBar, VencimientoCell } from '../components/StatusBadge';
+import { Cantidad, DiffCell, StatusBadge, StockBar, VencimientoCell } from '../components/StatusBadge';
 import {
   CATEGORIA_LABEL_PLURAL,
   calcEstado,
@@ -13,7 +13,6 @@ import {
   diasAvisoGuardado,
   camposBuscables,
   coincideBusqueda,
-  formatNum,
   listaDe,
 } from '../lib/helpers';
 import { useStore } from '../lib/store';
@@ -95,8 +94,12 @@ export function CategoriaView({ categoria, foco, onFocoAbierto }: Props) {
           render: (r: BaseItem) => <span className="muted">{(r as MateriaPrima).presentacion || '—'}</span>,
         } as Column<BaseItem>]
       : []),
-    { key: 'actual', header: 'Actual', align: 'right', sortValue: (r) => r.actual, render: (r) => formatNum(r.actual) },
-    { key: 'minimo', header: 'Mínimo', align: 'right', sortValue: (r) => r.minimo, render: (r) => formatNum(r.minimo) },
+    // En materia prima el número va con su unidad ("120 kg"): sin eso no se
+    // sabe si son kilos, litros o bolsas.
+    { key: 'actual', header: 'Actual', align: 'right', sortValue: (r) => r.actual,
+      render: (r) => <Cantidad valor={r.actual} unidad={(r as MateriaPrima).unidad} /> },
+    { key: 'minimo', header: 'Mínimo', align: 'right', sortValue: (r) => r.minimo,
+      render: (r) => <Cantidad valor={r.minimo} unidad={(r as MateriaPrima).unidad} /> },
     { key: 'nivel', header: 'Nivel', sortable: false, render: (r) => <StockBar actual={r.actual} minimo={r.minimo} /> },
     { key: 'diff', header: 'Diferencia', align: 'right', sortValue: (r) => r.actual - r.minimo, render: (r) => <DiffCell actual={r.actual} minimo={r.minimo} /> },
     { key: 'estado', header: 'Estado', sortValue: (r) => calcEstado(r.actual, r.minimo).diferencia, render: (r) => <StatusBadge actual={r.actual} minimo={r.minimo} /> },

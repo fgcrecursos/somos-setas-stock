@@ -3,7 +3,9 @@ import { useEffect, useMemo, useState } from 'react';
 import { siguienteCodigo } from '../lib/codigos';
 import {
   CATEGORIA_LABEL,
+  UNIDADES,
   VENCIMIENTO_CLASE,
+  abrevUnidad,
   calcVencimiento,
   diasAvisoGuardado,
 } from '../lib/helpers';
@@ -77,7 +79,7 @@ export function ItemForm({ categoria, initial, onClose, onEliminar }: Props) {
     // Un campo de texto vacío se guarda como null y no como "": así la ficha no
     // se llena de cadenas vacías y el historial de ediciones no las cuenta.
     const limpio = { ...item };
-    for (const campo of ['lote', 'proveedor', 'vencimiento', 'ubicacion', 'observaciones']) {
+    for (const campo of ['lote', 'proveedor', 'vencimiento', 'ubicacion', 'observaciones', 'unidad']) {
       if (typeof limpio[campo] === 'string' && !limpio[campo].trim()) limpio[campo] = null;
     }
     const res = await upsertItem(categoria, limpio, initial?.codigo);
@@ -140,7 +142,9 @@ export function ItemForm({ categoria, initial, onClose, onEliminar }: Props) {
         </div>
       )}
 
-      <div className="form-row">
+      {/* La unidad va pegada al stock porque es lo que le da sentido al número:
+          "120" no dice nada, "120 kg" sí. */}
+      <div className={categoria === 'materia_prima' ? 'form-row-3' : 'form-row'}>
         <div className="field">
           <label>Stock actual</label>
           <input className="input" type="number" value={item.actual} onChange={(e) => set('actual', Number(e.target.value))} />
@@ -149,7 +153,31 @@ export function ItemForm({ categoria, initial, onClose, onEliminar }: Props) {
           <label>Stock mínimo</label>
           <input className="input" type="number" value={item.minimo} onChange={(e) => set('minimo', Number(e.target.value))} />
         </div>
+        {categoria === 'materia_prima' && (
+          <div className="field">
+            <label>Unidad de medida</label>
+            <select
+              className="select"
+              value={item.unidad ?? ''}
+              onChange={(e) => set('unidad', e.target.value || null)}
+            >
+              <option value="">Sin especificar</option>
+              {UNIDADES.map((u) => (
+                <option key={u.valor} value={u.valor}>
+                  {u.label} ({u.valor})
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
       </div>
+
+      {categoria === 'materia_prima' && (
+        <p className="hlp" style={{ marginTop: -6 }}>
+          Es la etiqueta del número: el stock y el mínimo se leen en esta unidad. No convierte
+          nada — una receta que pide 1 de esta materia prima pide 1 {abrevUnidad(item.unidad) || 'unidad'}.
+        </p>
+      )}
 
       {(categoria === 'insumo' || categoria === 'insumo_interno') && (
         <div className="form-row">

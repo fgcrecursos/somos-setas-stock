@@ -54,6 +54,13 @@ export interface Etiqueta extends BaseItem {
 export interface MateriaPrima extends BaseItem {
   tipo: string;
   presentacion: string;
+  /**
+   * En qué se cuenta el stock: unidades, gramos, kilogramos, mililitros, litros.
+   * Es sólo la etiqueta del número — no convierte ni multiplica nada. Una receta
+   * que pide 1 de esta materia prima pide 1 de ESTA unidad.
+   * Guarda la abreviatura ('kg', 'ml', …); vacío = sin especificar.
+   */
+  unidad?: string | null;
   stockUnidad?: number | null;
   cantidadPorPack?: number | null;
   ubicacion?: string | null;

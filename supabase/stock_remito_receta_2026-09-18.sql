@@ -1,24 +1,27 @@
 -- =====================================================================
--- SOMOS SETAS · VENTAS FUERA DEL CATÁLOGO WEB → DESCUENTAN STOCK DIRECTO
+-- SOMOS SETAS · RECETA AD-HOC PARA VENTAS SUELTAS DEL REMITO
 -- ---------------------------------------------------------------------
 -- Ejecutar UNA vez en el SQL Editor de Supabase (proyecto muuqqbocpumdvhvxsigz),
 -- DESPUÉS de stock_tienda.sql. Se puede volver a ejecutar sin romper nada.
+-- Si nunca corriste stock_remito_directo_2026-09-18.sql, no hace falta:
+-- este script ya incluye todo lo que hacía y lo reemplaza.
 --
 -- Qué resuelve:
---   Producción vende a veces algo que no está en el catálogo web (ej. medio
---   kilo de Melena de León suelta). Esas líneas del remito se cargaban a
---   mano, sin producto del catálogo, así que st_sync_pedido no tenía forma
---   de saber qué descontar y la venta quedaba en "Líneas que no descontaron
---   stock" para siempre.
+--   No toda venta suelta fuera del catálogo web corresponde a UN ítem del
+--   inventario. A veces se armó con materia prima e insumos sueltos sin que
+--   el producto terminado esté registrado (ej. "cápsulas de jengibre
+--   artesanales": no existe el producto, pero sí existen la materia prima,
+--   la bolsa y la etiqueta que se gastaron). Antes esas líneas del remito
+--   quedaban en "Líneas que no descontaron stock" para siempre.
 --
---   Ahora el remito manual (admin.jsx) puede vincular esa línea directo con
---   cualquier ítem del inventario (categoria+codigo de st_items), sin pasar
---   por el catálogo web ni por st_sku_map. Ese vínculo viaja en el ítem del
---   pedido como stockCategoria/stockCodigo.
+--   Ahora el remito manual (admin.jsx) puede armarle a una línea sin
+--   catálogo una receta ad-hoc: uno o más ítems del inventario, cada uno
+--   con su cantidad POR UNIDAD vendida de esa línea. Viaja en el ítem del
+--   pedido como stockComponentes = [{categoria, codigo, cantidad}, ...].
 --
--- Reemplaza st_sync_pedido de stock_tienda.sql: agrega el atajo del vínculo
--- directo ANTES de buscar en st_sku_map; si el vínculo no viene, el
--- comportamiento es exactamente el de antes.
+-- Reemplaza st_sync_pedido de stock_tienda.sql / stock_remito_directo_2026-09-18.sql:
+-- agrega el atajo de la receta ad-hoc ANTES de buscar en st_sku_map; si no
+-- viene, el comportamiento es exactamente el de antes (catálogo web).
 -- =====================================================================
 
 create or replace function public.st_sync_pedido(p_order_id text, p_revertir boolean default false)
@@ -29,6 +32,8 @@ as $$
 declare
   fila         record;
   it           jsonb;
+  comp         jsonb;
+  comps        jsonb;
   objetivo     jsonb := '{}'::jsonb;   -- clave "categoria|codigo" → cantidad
   yatenemos    jsonb := '{}'::jsonb;
   sin_mapear   jsonb := '[]'::jsonb;
@@ -47,11 +52,10 @@ declare
   descr        text;
   cat          text;
   cod          text;
-  v_cat        text;   -- categoría resuelta de esta línea (vínculo directo o st_sku_map)
-  v_cod        text;   -- código resuelto de esta línea
-  v_uni        numeric; -- unidades de inventario por unidad vendida
-  link_cat     text;
-  link_cod     text;
+  v_cat        text;    -- categoría resuelta de un componente
+  v_cod        text;    -- código resuelto de un componente
+  v_cant_comp  numeric; -- cantidad del componente por unidad vendida
+  hubo_link    boolean; -- ¿algún componente de la receta ad-hoc se pudo aplicar?
 begin
   select * into fila from public.ss_orders where id = p_order_id;
   if not found then
@@ -89,17 +93,51 @@ begin
       descr := coalesce(nullif(it ->> 'productName', ''), it ->> 'desc', '(sin descripción)');
       if qty <= 0 then continue; end if;
 
-      link_cat := nullif(it ->> 'stockCategoria', '');
-      link_cod := nullif(it ->> 'stockCodigo', '');
+      comps := coalesce(it -> 'stockComponentes', '[]'::jsonb);
+      -- Compatibilidad con el vínculo simple anterior (un solo ítem, sin array).
+      if jsonb_array_length(comps) = 0
+         and coalesce(it ->> 'stockCategoria', '') <> ''
+         and coalesce(it ->> 'stockCodigo', '') <> '' then
+        comps := jsonb_build_array(jsonb_build_object(
+          'categoria', it ->> 'stockCategoria', 'codigo', it ->> 'stockCodigo', 'cantidad', 1
+        ));
+      end if;
 
-      if link_cat is not null and link_cod is not null then
-        -- Línea vinculada directo a un ítem del inventario (venta fuera del
-        -- catálogo web). Se salta st_sku_map: el vínculo ya dice qué descontar.
-        v_cat := link_cat;
-        v_cod := link_cod;
-        v_uni := 1;
+      if jsonb_array_length(comps) > 0 then
+        -- Línea con receta ad-hoc: uno o más ítems del inventario, cada uno
+        -- con su cantidad por unidad vendida. Se salta st_sku_map: ya dice
+        -- exactamente qué descontar.
+        hubo_link := false;
+        for comp in select value from jsonb_array_elements(comps) as t(value) loop
+          v_cat := comp ->> 'categoria';
+          v_cod := comp ->> 'codigo';
+          v_cant_comp := coalesce((comp ->> 'cantidad')::numeric, 0);
+          if coalesce(v_cat, '') = '' or coalesce(v_cod, '') = '' or v_cant_comp = 0 then continue; end if;
+
+          perform 1 from public.st_items i where i.categoria = v_cat and i.codigo = v_cod;
+          if not found then
+            sin_mapear := sin_mapear || jsonb_build_object(
+              'producto_id', it ->> 'productId',
+              'pres_id',     it ->> 'presId',
+              'descripcion', descr,
+              'cantidad',    qty,
+              'motivo',      'El ítem ' || v_cod || ' (de la receta ad-hoc) ya no está en el inventario'
+            );
+            continue;
+          end if;
+
+          hubo_link := true;
+          clave := v_cat || '|' || v_cod;
+          objetivo := jsonb_set(
+            objetivo, array[clave],
+            to_jsonb(coalesce((objetivo -> clave)::numeric, 0) + qty * v_cant_comp),
+            true
+          );
+        end loop;
+        if not hubo_link then continue; end if;
       else
-        select m.categoria, m.codigo, m.unidades into v_cat, v_cod, v_uni
+        -- Sin receta ad-hoc: catálogo web, vía st_sku_map (comportamiento de siempre).
+        select m.categoria, m.codigo, m.unidades into v_cat, v_cod, v_cant_comp
           from public.st_sku_map m
          where m.producto_id = coalesce(it ->> 'productId', '')
            and m.pres_id     = coalesce(it ->> 'presId', '')
@@ -113,33 +151,32 @@ begin
             'cantidad',    qty,
             'motivo',      case
                              when coalesce(it ->> 'productId', '') = ''
-                               then 'Línea cargada a mano, sin producto del catálogo ni vínculo con el stock'
+                               then 'Línea cargada a mano, sin producto del catálogo ni receta ad-hoc'
                              else 'El SKU no está vinculado a ningún ítem del inventario'
                            end
           );
           continue;
         end if;
-      end if;
 
-      -- ¿existe el ítem en el inventario?
-      perform 1 from public.st_items i where i.categoria = v_cat and i.codigo = v_cod;
-      if not found then
-        sin_mapear := sin_mapear || jsonb_build_object(
-          'producto_id', it ->> 'productId',
-          'pres_id',     it ->> 'presId',
-          'descripcion', descr,
-          'cantidad',    qty,
-          'motivo',      'El ítem ' || v_cod || ' ya no está en el inventario'
+        perform 1 from public.st_items i where i.categoria = v_cat and i.codigo = v_cod;
+        if not found then
+          sin_mapear := sin_mapear || jsonb_build_object(
+            'producto_id', it ->> 'productId',
+            'pres_id',     it ->> 'presId',
+            'descripcion', descr,
+            'cantidad',    qty,
+            'motivo',      'El ítem ' || v_cod || ' ya no está en el inventario'
+          );
+          continue;
+        end if;
+
+        clave := v_cat || '|' || v_cod;
+        objetivo := jsonb_set(
+          objetivo, array[clave],
+          to_jsonb(coalesce((objetivo -> clave)::numeric, 0) + qty * coalesce(v_cant_comp, 1)),
+          true
         );
-        continue;
       end if;
-
-      clave := v_cat || '|' || v_cod;
-      objetivo := jsonb_set(
-        objetivo, array[clave],
-        to_jsonb(coalesce((objetivo -> clave)::numeric, 0) + qty * coalesce(v_uni, 1)),
-        true
-      );
     end loop;
   end if;
 

@@ -22,12 +22,11 @@ import {
   Users,
   Wheat,
 } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { BarcodeScanner } from '../components/BarcodeScanner';
 import { useToast } from '../components/Toast';
 import {
   CATEGORIA_LABEL,
-  CATEGORIA_LABEL_PLURAL,
   MOVIMIENTO_COLOR,
   MOVIMIENTO_LABEL,
   buscarEnTodo,
@@ -39,7 +38,7 @@ import {
   listaDe,
 } from '../lib/helpers';
 import { useStore } from '../lib/store';
-import type { BaseItem, Categoria, Producto } from '../lib/types';
+import type { BaseItem, Categoria, DBState, Producto } from '../lib/types';
 
 const COMP_ICON: Record<Categoria, any> = {
   producto: ShoppingCart,
@@ -62,6 +61,133 @@ type Modo = 'venta' | 'produccion' | 'consumo_interno';
 interface Seleccion {
   categoria: Categoria;
   item: BaseItem;
+}
+
+// =====================================================================
+// BUSCADOR DEL PRODUCTO — combobox con tipeo, mismo criterio que el
+// escáner (resolver): en venta/producción sólo productos, en consumo
+// interno cualquier categoría. Reemplaza el <select> plano: con 100+
+// productos, tipear el nombre es mucho más rápido que desplazarse.
+// =====================================================================
+function ProductoSearchSelect({
+  state,
+  esConsumo,
+  sel,
+  onSelect,
+}: {
+  state: DBState;
+  esConsumo: boolean;
+  sel: Seleccion | null;
+  onSelect: (categoria: Categoria, codigo: string) => void;
+}) {
+  const [q, setQ] = useState('');
+  const [abierto, setAbierto] = useState(false);
+  const [activo, setActivo] = useState(0);
+  const caja = useRef<HTMLDivElement>(null);
+  const input = useRef<HTMLInputElement>(null);
+
+  const label = sel ? `${sel.item.nombre} — ${sel.item.codigo}` : '';
+
+  const resultados = useMemo(() => {
+    const texto = q.trim();
+    const candidatos = texto
+      ? buscarEnTodo(state, texto, 40)
+      : CATEGORIAS.flatMap((cat) => listaDe(state, cat).map((item) => ({ categoria: cat, item })));
+    return esConsumo ? candidatos : candidatos.filter((c) => c.categoria === 'producto');
+  }, [state, q, esConsumo]);
+
+  useEffect(() => setActivo(0), [q]);
+
+  useEffect(() => {
+    function afuera(e: MouseEvent) {
+      if (caja.current && !caja.current.contains(e.target as Node)) {
+        setAbierto(false);
+        setQ('');
+      }
+    }
+    document.addEventListener('mousedown', afuera);
+    return () => document.removeEventListener('mousedown', afuera);
+  }, []);
+
+  function elegir(i: number) {
+    const r = resultados[i];
+    if (!r) return;
+    onSelect(r.categoria, r.item.codigo);
+    setQ('');
+    setAbierto(false);
+    input.current?.blur();
+  }
+
+  function teclas(e: React.KeyboardEvent) {
+    if (e.key === 'Escape') {
+      setAbierto(false);
+      input.current?.blur();
+      return;
+    }
+    if (!resultados.length) return;
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setAbierto(true);
+      setActivo((i) => (i + 1) % resultados.length);
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setActivo((i) => (i - 1 + resultados.length) % resultados.length);
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      elegir(activo);
+    }
+  }
+
+  return (
+    <div className="producto-select" ref={caja}>
+      <input
+        ref={input}
+        className="input"
+        placeholder={esConsumo ? 'Elegí un ítem…' : 'Elegí un producto…'}
+        value={abierto ? q : label}
+        onChange={(e) => {
+          setQ(e.target.value);
+          setAbierto(true);
+        }}
+        onFocus={() => {
+          setAbierto(true);
+          setQ('');
+        }}
+        onBlur={() => setTimeout(() => setAbierto(false), 150)}
+        onKeyDown={teclas}
+      />
+      {abierto && (
+        <div className="producto-select__panel">
+          {resultados.length === 0 ? (
+            <p className="buscador-global__vacio">No hay ningún ítem que coincida.</p>
+          ) : (
+            resultados.map((r, i) => {
+              const est = calcEstado(r.item.actual, r.item.minimo);
+              return (
+                <button
+                  key={`${r.categoria}-${r.item.codigo}`}
+                  type="button"
+                  className={'buscador-global__hit' + (i === activo ? ' active' : '')}
+                  onMouseEnter={() => setActivo(i)}
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    elegir(i);
+                  }}
+                >
+                  <span className="buscador-global__cod">{r.item.codigo}</span>
+                  <span className="buscador-global__nom">{r.item.nombre}</span>
+                  <span className="pill">{CATEGORIA_LABEL[r.categoria]}</span>
+                  <span className={'buscador-global__stock st-' + est.estado}>
+                    {formatNum(r.item.actual)}
+                  </span>
+                </button>
+              );
+            })
+          )}
+        </div>
+      )}
+    </div>
+  );
 }
 
 export function VenderView() {
@@ -293,36 +419,18 @@ export function VenderView() {
             </button>
           </div>
           <div className="toolbar__spacer" />
-          <select
-            className="select"
-            style={{ maxWidth: 360 }}
-            value={sel ? `${sel.categoria}|${sel.item.codigo}` : ''}
-            onChange={(e) => {
-              const [cat, cod] = e.target.value.split('|');
-              const item = cat ? buscarItem(state, cat as Categoria, cod) : undefined;
-              setSel(item ? { categoria: cat as Categoria, item } : null);
-              setCant(1);
-            }}
-          >
-            <option value="">{esConsumo ? 'Elegí un ítem…' : 'Elegí un producto…'}</option>
-            {esConsumo ? (
-              CATEGORIAS.map((cat) => (
-                <optgroup key={cat} label={CATEGORIA_LABEL_PLURAL[cat]}>
-                  {listaDe(state, cat).map((it) => (
-                    <option key={cat + it.codigo} value={`${cat}|${it.codigo}`}>
-                      {it.codigo} — {it.nombre}
-                    </option>
-                  ))}
-                </optgroup>
-              ))
-            ) : (
-              state.productos.map((p) => (
-                <option key={p.codigo} value={`producto|${p.codigo}`}>
-                  {p.codigo} — {p.nombre} ({p.presentacion})
-                </option>
-              ))
-            )}
-          </select>
+          <div style={{ width: 360, maxWidth: '100%' }}>
+            <ProductoSearchSelect
+              state={state}
+              esConsumo={esConsumo}
+              sel={sel}
+              onSelect={(cat, cod) => {
+                const item = buscarItem(state, cat, cod);
+                setSel(item ? { categoria: cat, item } : null);
+                setCant(1);
+              }}
+            />
+          </div>
         </div>
 
         {!sel ? (

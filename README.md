@@ -46,6 +46,11 @@ Plataforma web de gestión de inventario para [Somos Setas](https://somossetas.c
 - **Un botón por fila** para abrir la ficha y corregir; la fila desaparece sola al arreglarse
 - Detalle de la auditoría que la originó en [`docs/auditoria-2026-09-30.md`](docs/auditoria-2026-09-30.md)
 
+### Conteo de materia prima
+- **Pasar de "bolsas" a gramos**: planilla Excel para el depósito y un formulario por materia prima
+  que guarda juntos la unidad, el mínimo, el conteo y los gramos de cada receta que la usa
+- Sugerencias sólo con datos reales (contenido neto, "60 cápsulas × 500 mg" de la tienda)
+
 ### Inventario por Categoría
 - **5 vistas** (Productos, Insumos, Insumos internos, Etiquetas, Materia prima)
 - **Búsqueda y filtros**: por código, nombre, solo items con faltantes

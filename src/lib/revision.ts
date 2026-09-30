@@ -181,7 +181,7 @@ export function revisarDatos(state: DBState): GrupoRevision[] {
     explicacion:
       'El stock está contado en bolsas o kilos, pero la receta pide "1" por cada frasco o bolsita producida: producir 30 cápsulas de Ashwagandha descuenta 30 bolsas de 5 kg. Por eso la materia prima vive en negativo.',
     comoSeCorrige:
-      'Definir en qué unidad se cuenta cada materia prima (conviene gramos), cargar ese conteo y poner en cada receta cuántos gramos lleva una unidad del producto.',
+      'En "Conteo materia prima": pesá lo que hay, y cargá cuántos gramos lleva una unidad de cada producto. El conteo y las recetas se guardan juntos.',
     filas: [...porBolsa.values()]
       .sort((a, b) => b.usan.length - a.usan.length)
       .map(({ mp, usan }) =>

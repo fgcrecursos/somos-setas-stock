@@ -14,6 +14,7 @@ import {
   LogOut,
   RefreshCw,
   RotateCcw,
+  Scale,
   ScanLine,
   ShoppingBag,
   Store,
@@ -37,6 +38,7 @@ import { PedidosView } from './views/PedidosView';
 import { ProductosView } from './views/ProductosView';
 import { ReposicionView } from './views/ReposicionView';
 import { RevisionView } from './views/RevisionView';
+import { ConteoMPView } from './views/ConteoMPView';
 import { revisarDatos } from './lib/revision';
 import { UsuariosView } from './views/UsuariosView';
 import { VenderView } from './views/VenderView';
@@ -52,6 +54,7 @@ type ViewId =
   | 'insumo_interno'
   | 'etiqueta'
   | 'materia_prima'
+  | 'conteo_mp'
   | 'reposicion'
   | 'revision'
   | 'ventas'
@@ -70,6 +73,10 @@ const TITLES: Record<ViewId, { t: string; s: string }> = {
   insumo_interno: { t: 'Insumos internos', s: 'Consumibles de producción y logística' },
   etiqueta: { t: 'Etiquetas', s: 'Stock de etiquetas por producto' },
   materia_prima: { t: 'Materia prima', s: 'Hongos, polvos e insumos base' },
+  conteo_mp: {
+    t: 'Conteo de materia prima',
+    s: 'Pasar cada materia prima a gramos con su conteo y sus recetas',
+  },
   reposicion: {
     t: 'Reposición',
     s: 'Qué hay que producir y qué hay que comprar para poder producirlo',
@@ -116,6 +123,12 @@ export default function App() {
       materia_prima: count('materia_prima'),
     };
   }, [state]);
+
+  // Materias primas que todavía se cuentan por envase (sin unidad)
+  const mpSinUnidad = useMemo(
+    () => state.materiaPrima.filter((m) => !String(m.unidad ?? '').trim()).length,
+    [state.materiaPrima]
+  );
 
   // Filas de la revisión que hoy desacomodan el stock (recetas, negativos…)
   const pendientesGraves = useMemo(
@@ -226,6 +239,7 @@ export default function App() {
           {nav('insumo', <Boxes size={18} />, 'Insumos productos', alertCounts.insumo)}
           {nav('etiqueta', <Tag size={18} />, 'Etiquetas', alertCounts.etiqueta)}
           {nav('materia_prima', <Wheat size={18} />, 'Materia prima', alertCounts.materia_prima)}
+          {nav('conteo_mp', <Scale size={18} />, 'Conteo materia prima', mpSinUnidad)}
           {nav('insumo_interno', <FlaskConical size={18} />, 'Insumos internos', alertCounts.insumo_interno)}
 
           <div className="nav__section">Actividad</div>
@@ -328,6 +342,7 @@ export default function App() {
               )}
               {view === 'reposicion' && <ReposicionView />}
               {view === 'revision' && <RevisionView />}
+              {view === 'conteo_mp' && <ConteoMPView />}
               {view === 'ventas' && <VentasView />}
               {view === 'pedidos' && esAdmin && <PedidosView />}
               {view === 'movimientos' && <MovimientosView />}

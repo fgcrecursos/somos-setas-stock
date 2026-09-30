@@ -51,12 +51,25 @@ encadena con el siguiente. El stock se despega del estante por cuatro motivos:
   ficha y corregir. Para las etiquetas de otro tamaño sugiere la correcta cuando hay una sola del
   tamaño del producto con ese nombre.
 
+## Segunda parte (misma fecha)
+
+- **`supabase/corregir_etiquetas_2026-09-30.sql`**: 15 recetas pasan a la etiqueta de su tamaño,
+  3 extractos suman la suya (Chaga, Tremella, Pasiflora) y la ficha de ETQ.ENT-7 pasa a 100 gr.
+  No toca stock, saltea lo que alguien ya haya cambiado a mano, aborta si una etiqueta no está
+  como se auditó y deja cada cambio en Movimientos. Probado con PGlite sobre una copia de esos
+  datos (corrida, re-corrida, receta tocada a mano, etiqueta renombrada).
+- **Conteo de materia prima** (sección nueva): planilla Excel para el depósito ("Conteo" +
+  "Gramos por producto") y un formulario por materia prima que guarda JUNTOS la unidad, el mínimo,
+  el conteo y los gramos de cada receta que la usa. Las sugerencias salen sólo de datos reales:
+  contenido neto de la presentación (polvos, setas, creatina) y "60 cápsulas × 500 mg" de la
+  tienda (30 g por bolsita). Con datos del 30/09: 88 de 148 líneas de receta tienen sugerencia;
+  extractos, aceites, geles y mezclas los tiene que dar producción, y hasta tenerlos esa materia
+  prima no se puede pasar (una receta en "1" descontaría 1 g).
+
 ## Qué falta decidir (no es de código)
 
-1. **Materia prima en gramos.** Propuesta: contar cada materia prima en gramos (o ml), cargar la
-   unidad en la ficha, hacer un conteo y poner en cada receta los gramos por unidad (por ejemplo,
-   60 cápsulas × 500 mg = 30 g). Las cantidades las tiene que dar producción: no se inventan.
-   Mientras tanto, la materia prima va a seguir quedando en negativo con cada producción.
+1. **Gramos de extractos, aceites, geles y mezclas.** Los da producción en la hoja "Gramos por
+   producto" de la planilla de conteo.
 2. **Mezclas (blends).** Existen MP-41 "Ashw + ML", MP-44 "Cordy + ML", MP-45 "Cúrcuma+PN+J+Vit C",
    MP-45-2 "Tremella plus" y MP-42 "Blend cacao + ML" que ninguna receta usa: los productos
    combinados descuentan cada hongo por separado (o sólo Melena). Hay que definir si la receta del

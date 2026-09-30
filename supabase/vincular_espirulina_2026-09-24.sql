@@ -10,6 +10,10 @@
 --
 -- Aborta si la fila no está exactamente como se auditó (no pisa trabajo ajeno).
 -- Idempotente: si ya quedó en CAP-35 no hace nada.
+--
+-- Re-verificado en vivo el 30/09/2026: la fila sigue en CAP-31 / activo=false
+-- y CAP-35 ESPIRULINA existe. Desde agosto se vendieron 25 unidades que no
+-- descontaron: conviene contar CAP-35 después de correrlo.
 
 do $$
 declare
@@ -32,7 +36,11 @@ begin
 
   update st_sku_map
      set categoria = 'producto', codigo = 'CAP-35', activo = true, revisar = false,
-         unidades = 1, updated_at = now()
+         unidades = 1,
+         -- La nota vieja decía "SIN VINCULAR — descontaba CAP-31 Zeolita…":
+         -- pasa a la descripción de la tienda, como el resto de los vínculos.
+         etiqueta = 'Espirulina — 60 cápsulas × 500 mg',
+         updated_at = now(), updated_by = 'vincular-espirulina-2026-09-24'
    where producto_id = 'caps-espirulina' and pres_id = '60';
 
   raise notice 'Espirulina vinculada a CAP-35';

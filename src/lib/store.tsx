@@ -27,7 +27,7 @@ import type {
   Movimiento,
   Producto,
 } from './types';
-import { buscarItem, describirCambios, listaDe, uid } from './helpers';
+import { abrevUnidad, buscarItem, describirCambios, formatNum, listaDe, uid } from './helpers';
 import { useAuth } from './auth';
 import {
   aplicarMovimiento,
@@ -91,6 +91,15 @@ export interface Resultado {
  * rato, se borraba cualquier venta de la tienda que entrara mientras tanto.
  */
 export type MotivoStock = 'produccion' | 'ingreso' | 'conteo' | 'consumo';
+
+export interface DatosConteoMP {
+  unidad: string;
+  /** Lo que se contó en el estante, en la unidad nueva */
+  conteo: number;
+  minimo: number;
+  /** Cuánto lleva una unidad de cada producto que la usa, en la unidad nueva */
+  recetas: { producto: string; cantidad: number }[];
+}
 
 export interface OpcionesFicha {
   /** El stock que la persona tenía a la vista cuando abrió el formulario */
@@ -161,6 +170,12 @@ interface StoreCtx {
     opciones?: OpcionesFicha
   ) => Promise<Resultado>;
   eliminarItem: (categoria: Categoria, codigo: string) => Promise<Resultado>;
+  /**
+   * Pasa una materia prima a gramos (o ml / unidades): unidad y mínimo nuevos,
+   * el conteo físico en esa unidad y la cantidad de cada receta que la usa,
+   * todo en el mismo guardado.
+   */
+  pasarMateriaPrima: (codigo: string, datos: DatosConteoMP) => Promise<Resultado>;
   restablecerDesdeExcel: () => Promise<Resultado>;
 }
 
@@ -768,6 +783,106 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           if (baja?.movimiento)
             setState((prev) => ({ ...prev, movimientos: [baja.movimiento!, ...prev.movimientos] }));
         }),
+
+      async pasarMateriaPrima(codigo, datos) {
+        if (!esAdmin) return { ok: false, error: SIN_PERMISO };
+        const mp = buscarItem(state, 'materia_prima', codigo) as MateriaPrima | undefined;
+        if (!mp) return { ok: false, error: 'No se encontró la materia prima. Actualizá la página.' };
+        const u = abrevUnidad(datos.unidad);
+        if (!u) return { ok: false, error: 'Elegí en qué unidad se cuenta.' };
+        if (!Number.isFinite(datos.conteo) || datos.conteo < 0)
+          return { ok: false, error: 'Cargá lo que se contó (cero o más).' };
+        if (!Number.isFinite(datos.minimo) || datos.minimo < 0)
+          return { ok: false, error: 'Cargá el mínimo en la unidad nueva (cero o más).' };
+
+        // Todas las recetas que la usan tienen que pasar a la unidad nueva en el
+        // mismo guardado: una que quede en "1" descontaría 1 g por frasco.
+        const usan = state.productos.filter((p) =>
+          p.bom.some((b) => b.categoria === 'materia_prima' && b.codigo === codigo)
+        );
+        const porProducto = new Map(datos.recetas.map((r) => [r.producto, r.cantidad]));
+        const faltan = usan.filter((p) => !cantidadValida(porProducto.get(p.codigo)));
+        if (faltan.length)
+          return {
+            ok: false,
+            error: `Falta cuánto lleva por unidad: ${faltan.map((p) => `${p.codigo} ${p.nombre}`).join(', ')}.`,
+          };
+
+        const unidadAntes = abrevUnidad(mp.unidad);
+        setGuardando(true);
+        try {
+          // 1) Ficha: unidad y mínimo nuevos (sin el stock)
+          const ficha = { ...mp, unidad: u, minimo: datos.minimo };
+          await guardarItem('materia_prima', ficha);
+          ponerEnEstado('materia_prima', codigo, { ...ficha, actual: mp.actual });
+          const cambios = describirCambios({ ...mp, actual: undefined }, { ...ficha, actual: undefined });
+          if (cambios.length)
+            await aplicarYAnotar([], anotar('edicion', 'materia_prima', codigo, mp.nombre, 0, cambios.join(' · ')));
+
+          // 2) El conteo, como número exacto
+          await aplicarYAnotar(
+            [{ categoria: 'materia_prima', codigo, set: datos.conteo }],
+            anotar(
+              'ajuste',
+              'materia_prima',
+              codigo,
+              mp.nombre,
+              datos.conteo - mp.actual,
+              unidadAntes === u
+                ? `Conteo físico: ${formatNum(datos.conteo)} ${u}`
+                : `Conteo en ${u}: ${formatNum(datos.conteo)} ${u} (antes se contaba ${
+                    unidadAntes ? `en ${unidadAntes}` : 'por envase'
+                  } y el sistema decía ${formatNum(mp.actual)})`
+            )
+          );
+
+          // 3) Las recetas. Si la misma materia prima estaba en dos líneas,
+          //    queda en una sola con la cantidad nueva.
+          const fallidas: string[] = [];
+          for (const p of usan) {
+            const nueva = porProducto.get(p.codigo)!;
+            const lineas = p.bom.filter((b) => b.categoria === 'materia_prima' && b.codigo === codigo);
+            const antes = lineas.reduce((a, b) => a + (Number(b.cantidad) || 0), 0);
+            if (lineas.length === 1 && antes === nueva && unidadAntes === u) continue;
+            let puesta = false;
+            const bom = p.bom.flatMap((b) => {
+              if (b.categoria !== 'materia_prima' || b.codigo !== codigo) return [b];
+              if (puesta) return [];
+              puesta = true;
+              return [{ ...b, cantidad: nueva }];
+            });
+            try {
+              const actualizado: Producto = { ...p, bom };
+              await guardarItem('producto', actualizado);
+              ponerEnEstado('producto', p.codigo, actualizado);
+              await aplicarYAnotar(
+                [],
+                anotar(
+                  'edicion',
+                  'producto',
+                  p.codigo,
+                  p.nombre,
+                  0,
+                  `receta: ${codigo} ${formatNum(antes)}${unidadAntes ? ' ' + unidadAntes : ''} → ${formatNum(nueva)} ${u} por unidad` +
+                    (unidadAntes === u ? '' : ` (${mp.nombre} pasa a contarse en ${u})`)
+                )
+              );
+            } catch {
+              fallidas.push(`${p.codigo} ${p.nombre}`);
+            }
+          }
+          if (fallidas.length)
+            return {
+              ok: false,
+              error: `El conteo se guardó, pero estas recetas no: ${fallidas.join(', ')}. Volvé a guardar para completarlas.`,
+            };
+          return { ok: true };
+        } catch (err) {
+          return { ok: false, error: mensajeError(err) };
+        } finally {
+          setGuardando(false);
+        }
+      },
 
       async restablecerDesdeExcel() {
         if (!esAdmin) return { ok: false, error: SIN_PERMISO };

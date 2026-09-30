@@ -198,6 +198,17 @@ export function ItemForm({ categoria, initial, onClose, onEliminar }: Props) {
           nada — una receta que pide 1 de esta materia prima pide 1 {abrevUnidad(item.unidad) || 'unidad'}.
         </p>
       )}
+      {categoria === 'materia_prima' &&
+        editing &&
+        abrevUnidad(item.unidad) !== abrevUnidad(initial.unidad) &&
+        state.productos.some((p) =>
+          p.bom.some((b) => b.categoria === 'materia_prima' && b.codigo === initial.codigo)
+        ) && (
+          <p className="hlp bom-line__info--ojo" style={{ marginTop: -4 }}>
+            Ojo: cambiar la unidad acá no convierte el stock ni las recetas que la usan. Para pasar
+            a gramos usá "Conteo materia prima", que guarda el conteo y las recetas juntos.
+          </p>
+        )}
 
       {editing && (
         <MotivoStockSelector

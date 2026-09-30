@@ -47,8 +47,8 @@ Plataforma web de gestión de inventario para [Somos Setas](https://somossetas.c
 - Detalle de la auditoría que la originó en [`docs/auditoria-2026-09-30.md`](docs/auditoria-2026-09-30.md)
 
 ### Conteo de materia prima
-- **Pasar de "bolsas" a gramos**: planilla Excel para el depósito y un formulario por materia prima
-  que guarda juntos la unidad, el mínimo, el conteo y los gramos de cada receta que la usa
+- **Pasar de "bolsas" a gramos**: un formulario por materia prima que guarda juntos la unidad, el
+  mínimo, el conteo y los gramos de cada receta que la usa (se carga directo, sin planilla)
 - Sugerencias sólo con datos reales (contenido neto, "60 cápsulas × 500 mg" de la tienda)
 
 ### Inventario por Categoría
@@ -75,6 +75,18 @@ Plataforma web de gestión de inventario para [Somos Setas](https://somossetas.c
 ### Backup
 - **Un botón, un Excel**: inventario completo, recetas, historial, consumos y ventas por producto,
   cada cosa en su hoja
+
+## 🧪 Banco de pruebas
+
+```bash
+npm run banco   # http://localhost:5199
+```
+
+La misma app, contra una base Postgres que corre en el navegador (PGlite) armada con los scripts de
+`supabase/` y una copia de 15 productos reales (`sandbox/datos.json`). Entra sola como admin y
+muestra un cartel violeta abajo. Sirve para probar producir, vender, contar o renombrar sin tocar
+la base real; `window.__banco.query(sql)` consulta la base desde la consola. Al recargar la
+página vuelve a los datos iniciales.
 
 ## 🚀 Quick Start
 

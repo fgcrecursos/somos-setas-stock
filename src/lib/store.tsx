@@ -830,8 +830,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
               datos.conteo - mp.actual,
               unidadAntes === u
                 ? `Conteo físico: ${formatNum(datos.conteo)} ${u}`
-                : `Conteo en ${u}: ${formatNum(datos.conteo)} ${u} (antes se contaba ${
-                    unidadAntes ? `en ${unidadAntes}` : 'por envase'
+                : `Conteo en ${u}: ${formatNum(datos.conteo)} ${u} (antes ${
+                    unidadAntes ? `se contaba en ${unidadAntes}` : 'no tenía unidad'
                   } y el sistema decía ${formatNum(mp.actual)})`
             )
           );

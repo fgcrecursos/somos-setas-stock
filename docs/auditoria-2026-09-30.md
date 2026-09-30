@@ -58,18 +58,46 @@ encadena con el siguiente. El stock se despega del estante por cuatro motivos:
   No toca stock, saltea lo que alguien ya haya cambiado a mano, aborta si una etiqueta no está
   como se auditó y deja cada cambio en Movimientos. Probado con PGlite sobre una copia de esos
   datos (corrida, re-corrida, receta tocada a mano, etiqueta renombrada).
-- **Conteo de materia prima** (sección nueva): planilla Excel para el depósito ("Conteo" +
-  "Gramos por producto") y un formulario por materia prima que guarda JUNTOS la unidad, el mínimo,
-  el conteo y los gramos de cada receta que la usa. Las sugerencias salen sólo de datos reales:
-  contenido neto de la presentación (polvos, setas, creatina) y "60 cápsulas × 500 mg" de la
-  tienda (30 g por bolsita). Con datos del 30/09: 88 de 148 líneas de receta tienen sugerencia;
-  extractos, aceites, geles y mezclas los tiene que dar producción, y hasta tenerlos esa materia
-  prima no se puede pasar (una receta en "1" descontaría 1 g).
+- **Conteo de materia prima** (sección nueva): un formulario por materia prima que guarda JUNTOS
+  la unidad, el mínimo, el conteo y los gramos de cada receta que la usa. Se carga directo en la
+  plataforma (se sacó la planilla Excel intermedia: era cargar dos veces lo mismo). Las
+  sugerencias salen sólo de datos reales: contenido neto de la presentación (polvos, setas,
+  creatina) y "60 cápsulas × 500 mg" de la tienda (30 g por bolsita). Con datos del 30/09: 88 de
+  148 líneas de receta tienen sugerencia; extractos, aceites, geles y mezclas los tiene que dar
+  producción, y hasta tenerlos esa materia prima no se puede pasar (una receta en "1" descontaría
+  1 g).
+
+## Banco de pruebas (`npm run banco`)
+
+La app real contra una base Postgres local (PGlite) armada con los mismos scripts de Supabase y
+una copia real de 15 productos con todos sus componentes. Sirve para probar escrituras sin tocar
+producción. Pruebas hechas el 30/09, todas bien:
+
+1. Producir 10 de CAP-01 → +10 al producto y −10/−10/−600/−10 a etiqueta, bolsa, cápsulas y MP.
+2. Vender 2 de CAP-01 → sólo baja el producto.
+3. Producir ACE-03 (pimienta repetida en la receta) → un solo descuento de 6, saldo bien.
+4. Ficha de CAP-06, stock 28→33, "Se produjo" → producción con receta; sin motivo no guarda.
+5. Ficha de EXT-09, 44→40, "Conteo físico" + cambio de ubicación → ajuste exacto + edición.
+6. Ingreso de +20 con el formulario abierto mientras la base bajaba 10 → 1.390 (no pisa).
+7. Cambio de nombre con la app recargada detrás → el stock real (700) queda intacto.
+8. Pedido de la tienda: Espirulina, Citrato 100 g y una línea sólo con descripción descuentan;
+   re-guardar no descuenta dos veces; anular devuelve todo; artículo de reventa queda sin vincular.
+9. Renombrar etiqueta usada en receta y producto vinculado a la tienda → receta, vínculo y pedido
+   viejo siguen al código nuevo; el stock se conserva.
+10. Alta con código con espacios o "que se lee igual" → bloqueada.
+11. Alta simultánea del mismo código → falla con aviso y no pisa la del otro. "Sumar" rápido no
+    acepta vacío, 0 ni negativos.
+12. MP-10 a gramos (4.800 g) → mínimo y 5 recetas en gramos; producir 2 de 100 g descuenta 200 g.
+13. MP-06 sin los gramos de extractos/mezclas → no deja guardar y no escribe nada.
+14. Eliminar: avisa si la tienda vende el producto; la etiqueta borrada sale de la receta.
+
+Limitación conocida: si se renombra un producto, los movimientos viejos quedan con el código
+anterior (Ventas y Movimientos lo muestran como dos filas).
 
 ## Qué falta decidir (no es de código)
 
-1. **Gramos de extractos, aceites, geles y mezclas.** Los da producción en la hoja "Gramos por
-   producto" de la planilla de conteo.
+1. **Gramos de extractos, aceites, geles y mezclas.** Los da producción; se cargan directo en
+   "Conteo materia prima".
 2. **Mezclas (blends).** Existen MP-41 "Ashw + ML", MP-44 "Cordy + ML", MP-45 "Cúrcuma+PN+J+Vit C",
    MP-45-2 "Tremella plus" y MP-42 "Blend cacao + ML" que ninguna receta usa: los productos
    combinados descuentan cada hongo por separado (o sólo Melena). Hay que definir si la receta del

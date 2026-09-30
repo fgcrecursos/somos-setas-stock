@@ -4,8 +4,24 @@
     {
       "name": "somos-setas-stock",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev", "--", "--port", "5183", "--strictPort"],
+      "runtimeArgs": [
+        "run",
+        "dev",
+        "--",
+        "--port",
+        "5183",
+        "--strictPort"
+      ],
       "port": 5183
+    },
+    {
+      "name": "banco-de-pruebas",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "run",
+        "banco"
+      ],
+      "port": 5199
     }
   ]
 }

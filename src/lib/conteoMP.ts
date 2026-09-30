@@ -11,6 +11,9 @@
 // Las sugerencias salen sólo de datos que ya existen (el contenido neto de la
 // presentación, "60 cápsulas × 500 mg" de la tienda). Extractos, aceites,
 // geles y mezclas no tienen sugerencia: los gramos los da producción.
+//
+// Todo se carga directo en la plataforma (sin planilla intermedia): pasar los
+// datos por un Excel era cargar dos veces la misma información.
 // =====================================================================
 import { abrevUnidad, formatNum, normalizarBusqueda } from './helpers';
 import { leerTamano } from './revision';
@@ -177,76 +180,4 @@ export function usosDe(
     });
   }
   return out.sort((a, b) => a.producto.codigo.localeCompare(b.producto.codigo));
-}
-
-// ---------------------------------------------------------------------
-// Planilla para el depósito (Excel): qué contar y los gramos por producto
-// ---------------------------------------------------------------------
-export async function descargarPlanillaConteo(
-  state: DBState,
-  tienda: Map<string, string[]>
-): Promise<string> {
-  const X = await import('xlsx');
-  const libro = X.utils.book_new();
-  const mps = [...state.materiaPrima].sort((a, b) => a.codigo.localeCompare(b.codigo));
-  const LARGO: Record<UnidadConteo, string> = { g: 'gramos', ml: 'mililitros', u: 'unidades' };
-
-  const instrucciones = [
-    ['Conteo de materia prima — Somos Setas'],
-    [''],
-    ['1. Pesá TODO lo que hay de cada materia prima (bolsas cerradas y abiertas) y anotalo en "Contado", en la unidad de la columna "Contar en".'],
-    ['   Una bolsa cerrada de 5 kg son 5000 g: no hace falta abrirla.'],
-    ['2. En la hoja "Gramos por producto", producción completa cuánto lleva UNA unidad de cada producto.'],
-    ['   La columna "Sugerido" sale de la presentación o de la tienda: confirmala o corregila.'],
-    ['   Mezclas, extractos, aceites y geles no tienen sugerencia: ese dato lo tiene producción.'],
-    ['3. Con las dos hojas completas, cargá cada materia prima en la app: Conteo de materia prima → Contar.'],
-    ['   El conteo y las recetas se guardan juntos, así ninguna producción descuenta con la unidad vieja.'],
-  ];
-  const wsI = X.utils.aoa_to_sheet(instrucciones);
-  wsI['!cols'] = [{ wch: 120 }];
-  X.utils.book_append_sheet(libro, wsI, 'Cómo contar');
-
-  const conteo = mps.map((m) => {
-    const u = unidadSugerida(m);
-    return {
-      Código: m.codigo,
-      'Materia prima': m.nombre,
-      'Se compra como': m.presentacion ?? '',
-      Ubicación: m.ubicacion ?? '',
-      Lote: m.lote ?? '',
-      'Hoy en el sistema': `${formatNum(m.actual)}${abrevUnidad(m.unidad) ? ' ' + abrevUnidad(m.unidad) : ' (sin unidad)'}`,
-      'Contar en': LARGO[u],
-      Contado: '',
-      Observaciones: '',
-    };
-  });
-  const wsC = X.utils.json_to_sheet(conteo);
-  wsC['!cols'] = [10, 30, 18, 12, 12, 18, 12, 12, 30].map((w) => ({ wch: w }));
-  X.utils.book_append_sheet(libro, wsC, 'Conteo');
-
-  const gramos: any[] = [];
-  for (const m of mps) {
-    const u = unidadSugerida(m);
-    for (const uso of usosDe(state, m, u, tienda)) {
-      gramos.push({
-        Producto: uso.producto.codigo,
-        Nombre: uso.producto.nombre,
-        Tipo: uso.producto.tipo,
-        Presentación: uso.producto.presentacion,
-        'Materia prima': m.codigo,
-        'Nombre MP': m.nombre,
-        'Hoy descuenta': uso.cantidadHoy,
-        Sugerido: uso.sugerido ? `${formatNum(uso.sugerido.cantidad)} ${u}` : '',
-        'De dónde sale': uso.sugerido?.porque ?? '',
-        [`Por unidad (${u})`]: '',
-      });
-    }
-  }
-  const wsG = X.utils.json_to_sheet(gramos);
-  wsG['!cols'] = [10, 34, 11, 14, 12, 26, 13, 12, 34, 15].map((w) => ({ wch: w }));
-  X.utils.book_append_sheet(libro, wsG, 'Gramos por producto');
-
-  const nombre = `conteo-materia-prima-${new Date().toISOString().slice(0, 10)}.xlsx`;
-  X.writeFile(libro, nombre);
-  return nombre;
 }

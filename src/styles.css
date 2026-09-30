@@ -576,3 +576,10 @@ table.tbl--anidada { font-size: 12.5px; background: #fff; border-radius: 10px; o
 .conteo-buscar { display: flex; align-items: center; gap: 6px; color: var(--texto-3); }
 .conteo-buscar .input { width: 280px; max-width: 100%; }
 .conteo-recetas .qty { width: 110px; text-align: right; }
+
+/* Formularios en pantalla angosta (tablet vertical, celular): un campo por
+   renglón, así el conteo en el depósito no queda cortado a la derecha. */
+@media (max-width: 620px) {
+  .form-row, .form-row-3 { grid-template-columns: 1fr; }
+  .conteo-recetas .qty { width: 90px; }
+}

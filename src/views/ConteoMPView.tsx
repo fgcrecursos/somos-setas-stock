@@ -3,10 +3,10 @@
 //
 // Una materia prima por vez: se pesa lo que hay, se elige la unidad y se
 // carga cuánto lleva una unidad de cada producto que la usa. Las tres cosas
-// se guardan juntas (ver pasarMateriaPrima en store.tsx). La planilla Excel
-// es para llevar al depósito y para que producción complete los gramos.
+// se guardan juntas (ver pasarMateriaPrima en store.tsx). Se carga directo
+// acá, en el depósito: sin planilla intermedia.
 // =====================================================================
-import { CheckCircle2, Download, Scale, Search, Wand2 } from 'lucide-react';
+import { CheckCircle2, Scale, Search, Wand2 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { Modal } from '../components/Modal';
 import { Cantidad } from '../components/StatusBadge';
@@ -14,7 +14,6 @@ import { useToast } from '../components/Toast';
 import { traerSkuMap } from '../lib/cloud';
 import {
   UNIDADES_CONTEO,
-  descargarPlanillaConteo,
   descripcionesPorProducto,
   minimoSugerido,
   tieneUnidad,
@@ -30,7 +29,6 @@ type Filtro = 'pendientes' | 'contadas' | 'todas';
 
 export function ConteoMPView() {
   const { state, puedeEditar } = useStore();
-  const toast = useToast();
   const [filtro, setFiltro] = useState<Filtro>('pendientes');
   const [q, setQ] = useState('');
   const [contar, setContar] = useState<string | null>(null);
@@ -65,15 +63,6 @@ export function ConteoMPView() {
     .filter((m) => coincideBusqueda(q, m.codigo, m.nombre, m.presentacion, m.ubicacion, m.lote))
     .sort((a, b) => (usos.get(b.codigo) ?? 0) - (usos.get(a.codigo) ?? 0) || a.codigo.localeCompare(b.codigo));
 
-  async function planilla() {
-    try {
-      const nombre = await descargarPlanillaConteo(state, tienda);
-      toast(`Planilla descargada: ${nombre}`);
-    } catch (err) {
-      toast('No se pudo armar la planilla: ' + (err as Error).message, true);
-    }
-  }
-
   const elegida = contar ? mps.find((m) => m.codigo === contar) ?? null : null;
 
   return (
@@ -88,26 +77,19 @@ export function ConteoMPView() {
           </p>
           <ol className="conteo-pasos">
             <li>
-              Descargá la planilla y llevala al depósito: pesá todo lo que hay de cada materia prima
-              (una bolsa cerrada de 5 kg son 5.000 g).
+              En el depósito, tocá <strong>Contar</strong> en cada materia prima y cargá todo lo que
+              hay, pesado (una bolsa cerrada de 5 kg son 5.000 g).
             </li>
             <li>
-              Producción completa la hoja "Gramos por producto". Las sugerencias salen de la
-              presentación o de la tienda; mezclas, extractos, aceites y geles los tiene que dar
-              producción.
+              En el mismo formulario, cargá cuánto lleva una unidad de cada producto que la usa. Las
+              sugerencias salen de la presentación o de la tienda; los de extractos, aceites, geles
+              y mezclas los tiene que pasar producción.
             </li>
-            <li>
-              Cargá cada materia prima acá con "Contar". Se guardan juntos el conteo y las recetas.
-            </li>
+            <li>Al guardar, el conteo y las recetas quedan juntos.</li>
           </ol>
-          <div className="row" style={{ gap: 12, flexWrap: 'wrap' }}>
-            <button className="btn btn--primary" onClick={planilla}>
-              <Download size={15} /> Descargar planilla de conteo (Excel)
-            </button>
-            <span className="muted" style={{ fontSize: 13 }}>
-              <strong>{contadas}</strong> de {mps.length} materias primas ya se cuentan en su unidad.
-            </span>
-          </div>
+          <span className="muted" style={{ fontSize: 13 }}>
+            <strong>{contadas}</strong> de {mps.length} materias primas ya se cuentan en su unidad.
+          </span>
         </div>
       </div>
 

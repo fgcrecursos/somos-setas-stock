@@ -145,16 +145,16 @@ function Grupo({
             <strong>Cómo se corrige:</strong> {g.comoSeCorrige}
           </p>
           <div className="table-wrap">
-            <table className="tbl">
+            <table className="tbl tbl--revision">
               <tbody>
                 {filas.map((f, i) => (
                   <tr key={`${f.categoria}-${f.codigo}-${i}`}>
                     <td className="codigo" style={{ whiteSpace: 'nowrap' }}>{f.codigo}</td>
-                    <td className="nombre">
+                    <td className="revision__nombre">
                       {f.nombre}
                       <div className="hlp">{f.detalle}</div>
                     </td>
-                    <td><span className="pill">{CATEGORIA_LABEL[f.categoria]}</span></td>
+                    <td style={{ width: 1 }}><span className="pill">{CATEGORIA_LABEL[f.categoria]}</span></td>
                     <td className="actions" style={{ textAlign: 'right' }}>
                       {puedeEditar && (
                         <button

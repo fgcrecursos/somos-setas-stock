@@ -257,7 +257,7 @@ export function ProductForm({ initial, onClose, onEliminar }: Props) {
         const comp = b.codigo ? (buscarItem(state, b.categoria, b.codigo) as any) : null;
         // Qué es "1" de este componente: la unidad cargada o, si no hay, la presentación
         const unidad = abrevUnidad(comp?.unidad);
-        const enQue = unidad || comp?.presentacion || '';
+        const enQue = String(comp?.presentacion ?? '');
         // Materia prima contada por bolsa/kilo (stock chico, sin unidad) y una
         // receta que pide 1 o más: cada unidad producida se lleva el envase entero.
         const pideMucho =
@@ -265,7 +265,7 @@ export function ProductForm({ initial, onClose, onEliminar }: Props) {
           !unidad &&
           Number(b.cantidad) >= 1 &&
           Math.abs(Number(comp?.actual) || 0) < 1000 &&
-          /kg|kilo|bolsa|bid[oó]n|L/i.test(enQue);
+          /kg|kilo|bolsa|bid[oó]n|\bL\b/i.test(enQue);
         return (
           <div className="bom-line" key={i}>
             <select
@@ -293,10 +293,12 @@ export function ProductForm({ initial, onClose, onEliminar }: Props) {
             </button>
             {comp && (
               <div className={'bom-line__info' + (pideMucho ? ' bom-line__info--ojo' : '')}>
-                {formatNum(Number(b.cantidad) || 0)} × {enQue || 'unidad'} por cada unidad producida ·
-                hay {formatNum(comp.actual)}
+                Pide {formatNum(Number(b.cantidad) || 0)}
+                {unidad ? ` ${unidad}` : ''} por unidad producida · hay {formatNum(comp.actual)}
                 {unidad ? ` ${unidad}` : ''} en stock
-                {pideMucho && ` · ¿de verdad cada unidad gasta ${formatNum(Number(b.cantidad))} ${enQue} entera?`}
+                {!unidad && comp.presentacion ? ` (se compra como: ${comp.presentacion})` : ''}
+                {pideMucho &&
+                  ` · ¿de verdad cada unidad gasta ${formatNum(Number(b.cantidad))} ${comp.presentacion} entera?`}
               </div>
             )}
           </div>

@@ -7,6 +7,7 @@ import {
   Database,
   Download,
   Eye,
+  FileSearch,
   FlaskConical,
   History,
   LayoutDashboard,
@@ -35,6 +36,8 @@ import { MovimientosView } from './views/MovimientosView';
 import { PedidosView } from './views/PedidosView';
 import { ProductosView } from './views/ProductosView';
 import { ReposicionView } from './views/ReposicionView';
+import { RevisionView } from './views/RevisionView';
+import { revisarDatos } from './lib/revision';
 import { UsuariosView } from './views/UsuariosView';
 import { VenderView } from './views/VenderView';
 import { VentasView } from './views/VentasView';
@@ -50,6 +53,7 @@ type ViewId =
   | 'etiqueta'
   | 'materia_prima'
   | 'reposicion'
+  | 'revision'
   | 'ventas'
   | 'pedidos'
   | 'movimientos'
@@ -69,6 +73,10 @@ const TITLES: Record<ViewId, { t: string; s: string }> = {
   reposicion: {
     t: 'Reposición',
     s: 'Qué hay que producir y qué hay que comprar para poder producirlo',
+  },
+  revision: {
+    t: 'Revisión de datos',
+    s: 'Recetas, etiquetas y materia prima que hacen que el stock no coincida con el estante',
   },
   ventas: { t: 'Ventas y producción', s: 'Qué se vendió, qué se produjo y qué se consumió' },
   pedidos: { t: 'Pedidos de la tienda', s: 'Los pedidos confirmados descuentan el stock solos' },
@@ -108,6 +116,15 @@ export default function App() {
       materia_prima: count('materia_prima'),
     };
   }, [state]);
+
+  // Filas de la revisión que hoy desacomodan el stock (recetas, negativos…)
+  const pendientesGraves = useMemo(
+    () =>
+      revisarDatos(state)
+        .filter((g) => g.gravedad === 'grave')
+        .reduce((n, g) => n + g.filas.length, 0),
+    [state]
+  );
 
   // Vencimientos: se recalculan con cada cambio del stock, así el aviso del
   // encabezado desaparece solo cuando se da de baja o se repone lo vencido.
@@ -202,6 +219,7 @@ export default function App() {
           {nav('dashboard', <LayoutDashboard size={18} />, 'Dashboard')}
           {puedeEditar && nav('vender', <ScanLine size={18} />, 'Vender / Escanear')}
           {nav('reposicion', <ClipboardList size={18} />, 'Reposición', alertCounts.producto)}
+          {nav('revision', <FileSearch size={18} />, 'Revisión de datos', pendientesGraves)}
 
           <div className="nav__section">Inventario</div>
           {nav('producto', <ShoppingBag size={18} />, 'Productos', alertCounts.producto)}
@@ -309,6 +327,7 @@ export default function App() {
                 <ProductosView foco={focoDe('producto')} onFocoAbierto={() => setFoco(null)} />
               )}
               {view === 'reposicion' && <ReposicionView />}
+              {view === 'revision' && <RevisionView />}
               {view === 'ventas' && <VentasView />}
               {view === 'pedidos' && esAdmin && <PedidosView />}
               {view === 'movimientos' && <MovimientosView />}

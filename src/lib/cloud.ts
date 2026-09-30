@@ -188,28 +188,94 @@ export async function subirTodo(state: DBState): Promise<void> {
   }
 }
 
-export async function guardarItem(
-  categoria: Categoria,
-  item: any,
-  codigoOriginal?: string,
-  /**
-   * En una edición el stock NO viaja en el upsert: si alguien vendió mientras
-   * el formulario estaba abierto, guardar la ficha pisaría esa venta. El cambio
-   * de stock (si lo hubo) va aparte por st_aplicar, que bloquea la fila.
-   */
-  conservarActual = false
-): Promise<void> {
-  // Si le cambiaron el código, la fila vieja ya no corresponde a nadie.
-  if (codigoOriginal && codigoOriginal !== item.codigo) {
-    await borrarItem(categoria, codigoOriginal);
-    conservarActual = false; // es una fila nueva: hay que escribir el stock
-  }
+/**
+ * Guarda la ficha de un ítem que YA existe. El stock NO viaja: si alguien
+ * vendió mientras el formulario estaba abierto, guardar la ficha pisaría esa
+ * venta. El cambio de stock (si lo hubo) va aparte por st_aplicar, que
+ * bloquea la fila.
+ */
+export async function guardarItem(categoria: Categoria, item: any): Promise<void> {
   const fila: any = toRow(categoria, item);
-  if (conservarActual) delete fila.actual;
+  delete fila.actual;
   const { error } = await sb
     .from('st_items')
     .upsert(fila, { onConflict: 'categoria,codigo' });
   if (error) throw new Error(error.message);
+}
+
+/**
+ * Da de alta una fila nueva. Es un INSERT y no un upsert a propósito: si otra
+ * persona cargó el mismo código mientras tanto, falla en vez de pisarle la
+ * ficha y el stock (así se perdió la creatina que cargó Matías el 15/09).
+ */
+export async function insertarItem(categoria: Categoria, item: any): Promise<void> {
+  const { error } = await sb.from('st_items').insert(toRow(categoria, item));
+  if (error) {
+    if (error.code === '23505' || /duplicate key/i.test(error.message))
+      throw new Error(
+        `Ya existe un ítem con el código ${item.codigo}. Actualizá la página: alguien lo cargó recién.`
+      );
+    throw new Error(error.message);
+  }
+}
+
+/** El stock real de un ítem en la base, en este momento */
+export async function leerActual(categoria: Categoria, codigo: string): Promise<number | null> {
+  const { data, error } = await sb
+    .from('st_items')
+    .select('actual')
+    .eq('categoria', categoria)
+    .eq('codigo', codigo)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  return data ? Number(data.actual) || 0 : null;
+}
+
+/**
+ * Un ítem cambió de código: los vínculos con la tienda y los pedidos ya
+ * descontados tienen que seguir apuntando a él. Si no, las ventas de la web
+ * dejan de descontar y editar un pedido viejo descontaría todo de nuevo.
+ */
+export async function renombrarEnTienda(
+  categoria: Categoria,
+  viejo: string,
+  nuevo: string
+): Promise<{ vinculos: number; pedidos: number }> {
+  const vinc = await sb
+    .from('st_sku_map')
+    .update({ codigo: nuevo, updated_at: new Date().toISOString() })
+    .eq('categoria', categoria)
+    .eq('codigo', viejo)
+    .select('producto_id');
+  if (vinc.error) throw new Error(vinc.error.message);
+
+  const peds = await sb
+    .from('st_pedidos')
+    .select('order_id, lineas')
+    .contains('lineas', [{ categoria, codigo: viejo }]);
+  if (peds.error) throw new Error(peds.error.message);
+  for (const p of peds.data ?? []) {
+    const lineas = ((p.lineas ?? []) as any[]).map((l) =>
+      l.categoria === categoria && l.codigo === viejo ? { ...l, codigo: nuevo } : l
+    );
+    const { error } = await sb.from('st_pedidos').update({ lineas }).eq('order_id', p.order_id);
+    if (error) throw new Error(error.message);
+  }
+  return { vinculos: vinc.data?.length ?? 0, pedidos: peds.data?.length ?? 0 };
+}
+
+/** Presentaciones de la tienda que descuentan de este ítem (activas) */
+export async function vinculosDeItem(
+  categoria: Categoria,
+  codigo: string
+): Promise<{ producto_id: string; pres_id: string }[]> {
+  const { data, error } = await sb
+    .from('st_sku_map')
+    .select('producto_id, pres_id, activo')
+    .eq('categoria', categoria)
+    .eq('codigo', codigo);
+  if (error) throw new Error(error.message);
+  return (data ?? []).filter((r: any) => r.activo !== false);
 }
 
 export async function borrarItem(categoria: Categoria, codigo: string): Promise<void> {

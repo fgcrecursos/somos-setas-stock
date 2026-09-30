@@ -17,6 +17,7 @@ import {
   type ReactNode,
 } from 'react';
 import type {
+  BomItem,
   Categoria,
   ComponenteMovido,
   DBState,
@@ -34,6 +35,9 @@ import {
   contarItems,
   estadoVacio,
   guardarItem,
+  insertarItem,
+  leerActual,
+  renombrarEnTienda,
   subirTodo,
   traerTodo,
   vaciarItems,
@@ -76,6 +80,43 @@ function estadoGuardadoEnEsteNavegador(): DBState | null {
 export interface Resultado {
   ok: boolean;
   error?: string;
+  /** Salió bien, pero hay algo para avisar (stock en negativo, receta incompleta…) */
+  aviso?: string;
+}
+
+/**
+ * Por qué cambió el stock al editar una ficha. Antes, cambiar el número en
+ * "Editar" lo pisaba sin más: una producción cargada así no descontaba la
+ * receta, una compra quedaba como "edición" y, con el formulario abierto un
+ * rato, se borraba cualquier venta de la tienda que entrara mientras tanto.
+ */
+export type MotivoStock = 'produccion' | 'ingreso' | 'conteo' | 'consumo';
+
+export interface OpcionesFicha {
+  /** El stock que la persona tenía a la vista cuando abrió el formulario */
+  actualVisto?: number;
+  motivoStock?: MotivoStock;
+}
+
+/** Una cantidad que se suma o se descuenta: número real y mayor a cero */
+function cantidadValida(n: unknown): n is number {
+  return typeof n === 'number' && Number.isFinite(n) && n > 0;
+}
+
+/**
+ * La receta con cada componente una sola vez. Si el mismo ítem aparece en dos
+ * líneas (ACE-03 tenía la pimienta repetida), se suman: así la base recibe un
+ * solo descuento por ítem y el historial muestra bien cuánto quedó.
+ */
+function recetaAgrupada(bom: BomItem[]): BomItem[] {
+  const porClave = new Map<string, BomItem>();
+  for (const l of bom ?? []) {
+    const k = `${l.categoria}|${l.codigo}`;
+    const cant = Number(l.cantidad) || 0;
+    const prev = porClave.get(k);
+    porClave.set(k, prev ? { ...prev, cantidad: prev.cantidad + cant } : { ...l, cantidad: cant });
+  }
+  return [...porClave.values()];
 }
 
 export interface VentaResultado extends Resultado {
@@ -108,8 +149,17 @@ interface StoreCtx {
   ) => Promise<Resultado>;
   ingreso: (categoria: Categoria, codigo: string, cantidad: number) => Promise<Resultado>;
   ajustar: (categoria: Categoria, codigo: string, nuevoActual: number) => Promise<Resultado>;
-  upsertProducto: (p: Producto, codigoOriginal?: string) => Promise<Resultado>;
-  upsertItem: (categoria: Categoria, item: any, codigoOriginal?: string) => Promise<Resultado>;
+  upsertProducto: (
+    p: Producto,
+    codigoOriginal?: string,
+    opciones?: OpcionesFicha
+  ) => Promise<Resultado>;
+  upsertItem: (
+    categoria: Categoria,
+    item: any,
+    codigoOriginal?: string,
+    opciones?: OpcionesFicha
+  ) => Promise<Resultado>;
   eliminarItem: (categoria: Categoria, codigo: string) => Promise<Resultado>;
   restablecerDesdeExcel: () => Promise<Resultado>;
 }
@@ -205,11 +255,37 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       tipoMov: 'venta' | 'produccion',
       nota?: string
     ): Promise<VentaResultado> {
+      setGuardando(true);
+      try {
+        return await aplicarRegistro(codigoProducto, cantidad, tipoMov, nota);
+      } finally {
+        setGuardando(false);
+      }
+    }
+
+    /**
+     * El registro en sí, sin tocar el indicador de "guardando" (lo usa también
+     * la edición de una ficha). `productoFicha` es la ficha recién guardada:
+     * si en el mismo guardado se cambió la receta, se produce con la nueva.
+     */
+    async function aplicarRegistro(
+      codigoProducto: string,
+      cantidad: number,
+      tipoMov: 'venta' | 'produccion',
+      nota?: string,
+      productoFicha?: Producto
+    ): Promise<VentaResultado> {
       const vacia: VentaResultado = { ok: false, mensaje: '', componentes: [], alertas: [] };
       if (!esAdmin) return { ...vacia, mensaje: SIN_PERMISO, error: SIN_PERMISO };
+      if (!cantidadValida(cantidad)) {
+        const error = 'La cantidad tiene que ser un número mayor a cero.';
+        return { ...vacia, mensaje: error, error };
+      }
 
-      const producto = state.productos.find((p) => p.codigo === codigoProducto);
-      if (!producto) return { ...vacia, mensaje: 'Producto no encontrado' };
+      const encontrado =
+        productoFicha ?? state.productos.find((p) => p.codigo === codigoProducto);
+      if (!encontrado) return { ...vacia, mensaje: 'Producto no encontrado' };
+      const producto: Producto = { ...encontrado, bom: recetaAgrupada(encontrado.bom) };
 
       // Avisos de receta (sólo al producir): no bloquean, pero quedan marcados.
       const avisosReceta: string[] = [];
@@ -271,7 +347,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         incidencia: avisosReceta.length ? avisosReceta.join(' ') : undefined,
       };
 
-      setGuardando(true);
       try {
         const { resultantes, movimiento } = await aplicarMovimiento(deltas, mov);
         aplicarResultantes(resultantes);
@@ -315,9 +390,15 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       } catch (err) {
         const error = mensajeError(err);
         return { ...vacia, mensaje: error, error };
-      } finally {
-        setGuardando(false);
       }
+    }
+
+    /** Manda un movimiento a la base y deja el estado local igual a lo que quedó allá */
+    async function aplicarYAnotar(deltas: Delta[], mov: Movimiento): Promise<void> {
+      const { resultantes, movimiento } = await aplicarMovimiento(deltas, mov);
+      aplicarResultantes(resultantes);
+      if (movimiento)
+        setState((prev) => ({ ...prev, movimientos: [movimiento, ...prev.movimientos] }));
     }
 
     /**
@@ -329,10 +410,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       if (!esAdmin) return { ok: false, error: SIN_PERMISO };
       setGuardando(true);
       try {
-        const { resultantes, movimiento } = await aplicarMovimiento(deltas, mov);
-        aplicarResultantes(resultantes);
-        if (movimiento)
-          setState((prev) => ({ ...prev, movimientos: [movimiento, ...prev.movimientos] }));
+        await aplicarYAnotar(deltas, mov);
         return { ok: true };
       } catch (err) {
         return { ok: false, error: mensajeError(err) };
@@ -364,82 +442,194 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       };
     }
 
+    /** Reemplaza (o agrega) un ítem en el estado local */
+    function ponerEnEstado(categoria: Categoria, codigoViejo: string, item: any) {
+      setState((prev) => {
+        const next = structuredClone(prev);
+        const lista = listaDe(next, categoria) as any[];
+        const idx = lista.findIndex((x) => x.codigo === codigoViejo);
+        if (idx >= 0) lista[idx] = item;
+        else lista.unshift(item);
+        return next;
+      });
+    }
+
     /**
      * Alta o edición de una ficha (cualquier categoría).
      *
-     * Deja anotado en el historial qué se creó o qué campos cambiaron. Si en una
-     * edición cambió el stock, ese cambio va por st_aplicar —con la fila
-     * bloqueada— en vez de viajar en el upsert de la ficha: así editar el
-     * nombre de un producto no pisa una venta que alguien registró mientras el
-     * formulario estaba abierto.
+     * El stock nunca viaja en el guardado de la ficha: si cambió, va aparte por
+     * st_aplicar —con la fila bloqueada— y según el motivo que eligió la
+     * persona: una producción descuenta la receta, un ingreso suma sobre el
+     * stock real (no pisa las ventas que entraron mientras el formulario estaba
+     * abierto) y sólo el conteo físico fija un número exacto.
+     *
+     * El cambio de stock se mide contra lo que la persona VIO al abrir el
+     * formulario, no contra el estado actual: si mientras tanto se recargaron
+     * los datos, no editar el campo ya no puede pisar una venta.
      */
     async function guardarFicha(
       categoria: Categoria,
       item: any,
-      codigoOriginal?: string
+      codigoOriginal?: string,
+      opciones: OpcionesFicha = {}
     ): Promise<Resultado> {
       if (!esAdmin) return { ok: false, error: SIN_PERMISO };
-      const anterior = codigoOriginal
-        ? buscarItem(state, categoria, codigoOriginal)
-        : buscarItem(state, categoria, item.codigo);
-      const esAlta = !anterior;
-      const actualNuevo = Number(item.actual) || 0;
-      const cambioStock = !esAlta && actualNuevo !== (anterior?.actual ?? 0);
+      const esAlta = !codigoOriginal;
+      const codigoViejo = codigoOriginal ?? item.codigo;
+      const anterior = buscarItem(state, categoria, codigoViejo);
+      const actualNuevo = Number(item.actual);
+
+      if (!Number.isFinite(actualNuevo)) return { ok: false, error: 'El stock tiene que ser un número.' };
+      if (esAlta && anterior)
+        return { ok: false, error: `Ya existe ${item.codigo}. Buscalo en la lista y editalo.` };
+      if (!esAlta && !anterior)
+        return {
+          ok: false,
+          error: 'Este ítem ya no está en el inventario (lo pudo haber eliminado otra persona). Actualizá la página.',
+        };
+
+      const renombra = !esAlta && codigoViejo !== item.codigo;
+      const visto = opciones.actualVisto;
+      const deltaStock = !esAlta && visto != null ? actualNuevo - visto : 0;
+      const motivo = opciones.motivoStock;
+      if (deltaStock !== 0) {
+        if (!motivo) return { ok: false, error: 'Elegí por qué cambia el stock.' };
+        if (motivo === 'produccion' && (categoria !== 'producto' || deltaStock < 0))
+          return { ok: false, error: 'Sólo se puede producir para sumar stock de un producto.' };
+        if (motivo === 'ingreso' && deltaStock < 0)
+          return { ok: false, error: 'Un ingreso sólo puede sumar stock.' };
+        if (motivo === 'consumo' && deltaStock > 0)
+          return { ok: false, error: 'Un consumo sólo puede restar stock.' };
+        if (motivo === 'conteo' && actualNuevo < 0)
+          return { ok: false, error: 'Un conteo físico no puede dar negativo.' };
+      }
 
       setGuardando(true);
       try {
-        await guardarItem(categoria, item, codigoOriginal, !esAlta);
-
-        const guardado = esAlta || cambioStock ? item : { ...item, actual: anterior!.actual };
-        setState((prev) => {
-          const next = structuredClone(prev);
-          const lista = listaDe(next, categoria) as any[];
-          const key = codigoOriginal ?? item.codigo;
-          const idx = lista.findIndex((x) => x.codigo === key);
-          if (idx >= 0) lista[idx] = guardado;
-          else lista.unshift(guardado);
-          return next;
-        });
-
+        // ---------- ALTA ----------
         if (esAlta) {
-          const mov = await aplicarMovimiento(
+          await insertarItem(categoria, item);
+          ponerEnEstado(categoria, item.codigo, item);
+          await aplicarYAnotar(
             [],
             anotar(
               'alta',
               categoria,
               item.codigo,
               item.nombre,
-              actualNuevo,
+              actualNuevo || 0,
               actualNuevo
                 ? `Ítem creado con ${actualNuevo} en stock`
                 : 'Ítem creado (sin stock inicial)'
             )
           );
-          if (mov.movimiento)
-            setState((prev) => ({
-              ...prev,
-              movimientos: [mov.movimiento!, ...prev.movimientos],
-            }));
+          return { ok: true };
+        }
+
+        // ---------- FICHA (sin el stock) ----------
+        let stockBase = anterior!.actual;
+        if (renombra) {
+          // La fila nueva nace con el stock REAL de la vieja, leído recién.
+          // Primero se crea la nueva y recién después se borra la vieja: si
+          // algo falla en el medio, el ítem no desaparece.
+          const real = await leerActual(categoria, codigoViejo);
+          if (real == null) throw new Error('El ítem ya no está en la base. Actualizá la página.');
+          stockBase = real;
+          await insertarItem(categoria, { ...item, actual: real });
+          await borrarItem(categoria, codigoViejo);
         } else {
-          const cambios = describirCambios(anterior, item);
-          if (cambios.length) {
-            const { resultantes, movimiento } = await aplicarMovimiento(
-              cambioStock ? [{ categoria, codigo: item.codigo, set: actualNuevo }] : [],
+          await guardarItem(categoria, item);
+        }
+        const guardado = { ...item, actual: stockBase };
+        ponerEnEstado(categoria, codigoViejo, guardado);
+
+        const sinStock = (x: any) => ({ ...x, actual: undefined });
+        const cambios = describirCambios(sinStock(anterior), sinStock(item));
+        if (cambios.length)
+          await aplicarYAnotar(
+            [],
+            anotar('edicion', categoria, item.codigo, item.nombre, 0, cambios.join(' · '))
+          );
+
+        // ---------- CAMBIO DE CÓDIGO: recetas y tienda lo siguen ----------
+        const avisos: string[] = [];
+        if (renombra) {
+          if (categoria !== 'producto') {
+            const usan = state.productos.filter((p) =>
+              p.bom.some((b) => b.categoria === categoria && b.codigo === codigoViejo)
+            );
+            for (const p of usan) {
+              const actualizado: Producto = {
+                ...p,
+                bom: p.bom.map((b) =>
+                  b.categoria === categoria && b.codigo === codigoViejo
+                    ? { ...b, codigo: item.codigo }
+                    : b
+                ),
+              };
+              await guardarItem('producto', actualizado);
+              ponerEnEstado('producto', p.codigo, actualizado);
+              await aplicarYAnotar(
+                [],
+                anotar(
+                  'edicion',
+                  'producto',
+                  p.codigo,
+                  p.nombre,
+                  0,
+                  `receta: ${codigoViejo} → ${item.codigo} (cambió el código del componente)`
+                )
+              );
+            }
+            if (usan.length) avisos.push(`Se actualizaron ${usan.length} receta(s).`);
+          }
+          const tienda = await renombrarEnTienda(categoria, codigoViejo, item.codigo);
+          if (tienda.vinculos)
+            avisos.push(`Se actualizaron ${tienda.vinculos} vínculo(s) con la tienda.`);
+        }
+
+        // ---------- CAMBIO DE STOCK, según el motivo ----------
+        if (deltaStock !== 0) {
+          const codigo = item.codigo;
+          if (motivo === 'produccion') {
+            const r = await aplicarRegistro(
+              codigo,
+              deltaStock,
+              'produccion',
+              'Cargada desde la ficha del producto',
+              guardado as Producto
+            );
+            if (!r.ok)
+              return {
+                ok: false,
+                error: `La ficha se guardó, pero la producción no: ${r.error ?? r.mensaje}`,
+              };
+            if (r.alertas.length) avisos.push(...r.alertas);
+          } else if (motivo === 'ingreso') {
+            await aplicarYAnotar(
+              [{ categoria, codigo, delta: deltaStock }],
+              anotar('ingreso', categoria, codigo, item.nombre, deltaStock, `Ingreso de ${deltaStock}`)
+            );
+          } else if (motivo === 'consumo') {
+            await aplicarYAnotar(
+              [{ categoria, codigo, delta: deltaStock }],
+              anotar('consumo_interno', categoria, codigo, item.nombre, -deltaStock, 'Consumo interno')
+            );
+          } else {
+            await aplicarYAnotar(
+              [{ categoria, codigo, set: actualNuevo }],
               anotar(
-                'edicion',
+                'ajuste',
                 categoria,
-                item.codigo,
+                codigo,
                 item.nombre,
-                cambioStock ? actualNuevo - (anterior?.actual ?? 0) : 0,
-                cambios.join(' · ')
+                actualNuevo - stockBase,
+                `Conteo físico: quedó en ${actualNuevo}`
               )
             );
-            aplicarResultantes(resultantes);
-            if (movimiento)
-              setState((prev) => ({ ...prev, movimientos: [movimiento, ...prev.movimientos] }));
           }
         }
-        return { ok: true };
+        return { ok: true, aviso: avisos.length ? avisos.join(' ') : undefined };
       } catch (err) {
         return { ok: false, error: mensajeError(err) };
       } finally {
@@ -493,6 +683,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       async ingreso(categoria, codigo, cantidad) {
         const item = buscarItem(state, categoria, codigo);
         if (!item) return { ok: false, error: 'No se encontró el ítem.' };
+        if (!cantidadValida(cantidad))
+          return { ok: false, error: 'La cantidad tiene que ser un número mayor a cero.' };
         return movimientoSimple(
           [{ categoria, codigo, delta: cantidad }],
           anotar('ingreso', categoria, codigo, item.nombre, cantidad, `Ingreso de ${cantidad}`)
@@ -502,7 +694,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       async consumoInterno(categoria, codigo, cantidad, nota) {
         const item = buscarItem(state, categoria, codigo);
         if (!item) return { ok: false, error: 'No se encontró el ítem.' };
-        if (cantidad <= 0) return { ok: false, error: 'La cantidad tiene que ser mayor a cero.' };
+        if (!cantidadValida(cantidad))
+          return { ok: false, error: 'La cantidad tiene que ser un número mayor a cero.' };
         // Sale del stock igual que una venta, pero sin plata de por medio: no
         // suma a ventas ni a facturación. Como una venta, tampoco toca la receta:
         // lo que se consume es el producto ya terminado.
@@ -522,6 +715,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       async ajustar(categoria, codigo, nuevoActual) {
         const item = buscarItem(state, categoria, codigo);
         if (!item) return { ok: false, error: 'No se encontró el ítem.' };
+        if (!Number.isFinite(nuevoActual) || nuevoActual < 0)
+          return { ok: false, error: 'El conteo tiene que ser un número de cero para arriba.' };
         // `set` en vez de delta: es un conteo físico, vale el número exacto.
         return movimientoSimple(
           [{ categoria, codigo, set: nuevoActual }],
@@ -536,9 +731,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         );
       },
 
-      upsertProducto: (p, codigoOriginal) => guardarFicha('producto', p, codigoOriginal),
-      upsertItem: (categoria, item, codigoOriginal) =>
-        guardarFicha(categoria, item, codigoOriginal),
+      upsertProducto: (p, codigoOriginal, opciones) =>
+        guardarFicha('producto', p, codigoOriginal, opciones),
+      upsertItem: (categoria, item, codigoOriginal, opciones) =>
+        guardarFicha(categoria, item, codigoOriginal, opciones),
 
       eliminarItem: (categoria, codigo) =>
         escribir(async () => {

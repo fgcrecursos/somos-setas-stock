@@ -1,12 +1,14 @@
 import { Plus, Trash2, Package } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
-import { siguienteCodigo } from '../lib/codigos';
-import { buscarItem, CATEGORIA_LABEL, listaDe } from '../lib/helpers';
-import { useStore } from '../lib/store';
+import { problemaConCodigo, siguienteCodigo } from '../lib/codigos';
+import { abrevUnidad, buscarItem, CATEGORIA_LABEL, formatNum, listaDe } from '../lib/helpers';
+import { useStore, type MotivoStock } from '../lib/store';
 import type { BomItem, CategoriaComponente, Producto } from '../lib/types';
 import { CampoCodigo } from './CampoCodigo';
 import { ItemPicker } from './ItemPicker';
 import { Modal } from './Modal';
+import { MotivoStockSelector, opcionesMotivo } from './MotivoStock';
+import { useToast } from './Toast';
 
 const TIPOS = ['Aceite', 'Cápsulas', 'Extracto', 'Polvo', 'Setas'];
 const CATS_COMP: CategoriaComponente[] = [
@@ -25,7 +27,11 @@ interface Props {
 
 export function ProductForm({ initial, onClose, onEliminar }: Props) {
   const { state, upsertProducto, guardando } = useStore();
+  const toast = useToast();
   const editing = !!initial;
+  // El stock que se vio al abrir: contra eso se mide si la persona lo cambió
+  const [actualVisto] = useState<number>(() => Number(initial?.actual) || 0);
+  const [motivo, setMotivo] = useState<MotivoStock | null>(null);
   const [p, setP] = useState<Producto>(
     initial
       ? structuredClone(initial)
@@ -75,18 +81,45 @@ export function ProductForm({ initial, onClose, onEliminar }: Props) {
     setP((prev) => ({ ...prev, bom: prev.bom.filter((_, idx) => idx !== i) }));
   }
 
+  const cambiaStock = editing && Number(p.actual) !== actualVisto;
+  const deltaStock = Number(p.actual) - actualVisto;
+  // Si el número cambia de sentido, el motivo elegido puede dejar de valer
+  useEffect(() => {
+    if (motivo && !opcionesMotivo('producto', deltaStock).some((o) => o.id === motivo))
+      setMotivo(null);
+  }, [deltaStock, motivo]);
+
   async function guardar() {
-    if (!p.codigo.trim()) return setError('El código es obligatorio (identifica al producto).');
+    const codigo = p.codigo.trim();
     if (!p.nombre.trim()) return setError('El nombre es obligatorio.');
-    const dup = state.productos.find(
-      (x) => x.codigo === p.codigo && x.codigo !== initial?.codigo
-    );
-    if (dup) return setError(`Ya existe un producto con el código ${p.codigo}.`);
+    // El código se valida sólo si es nuevo o si se cambió (ver ItemForm)
+    if (!editing || codigo !== initial!.codigo) {
+      const problema = problemaConCodigo(
+        state,
+        codigo,
+        editing ? { categoria: 'producto', codigo: initial!.codigo } : undefined
+      );
+      if (problema) return setError(problema);
+    }
+    if (!Number.isFinite(Number(p.actual))) return setError('El stock tiene que ser un número.');
+    if (cambiaStock && !motivo) return setError('Elegí por qué cambia el stock.');
 
     // La receta no puede quedar rota: cada componente tiene que existir en el
     // inventario y consumir una cantidad mayor a cero. Así el descuento al
     // producir nunca se saltea en silencio.
     const bom = p.bom.filter((b) => b.codigo);
+    const vistos = new Set<string>();
+    const repetidos = bom.filter((b) => {
+      const k = `${b.categoria}|${b.codigo}`;
+      if (vistos.has(k)) return true;
+      vistos.add(k);
+      return false;
+    });
+    if (repetidos.length) {
+      return setError(
+        `${repetidos.map((b) => b.codigo).join(', ')} está dos veces en la receta: dejalo en una sola línea con la cantidad total.`
+      );
+    }
     const noExisten = bom.filter((b) => !buscarItem(state, b.categoria, b.codigo));
     if (noExisten.length) {
       return setError(
@@ -104,8 +137,16 @@ export function ProductForm({ initial, onClose, onEliminar }: Props) {
       );
     }
 
-    const res = await upsertProducto({ ...p, bom }, initial?.codigo);
+    const res = await upsertProducto(
+      { ...p, codigo, actual: Number(p.actual) || 0, bom },
+      initial?.codigo,
+      {
+        actualVisto: editing ? actualVisto : undefined,
+        motivoStock: cambiaStock ? motivo ?? undefined : undefined,
+      }
+    );
     if (!res.ok) return setError(res.error ?? 'No se pudo guardar.');
+    if (res.aviso) toast(res.aviso, true);
     onClose();
   }
 
@@ -184,16 +225,47 @@ export function ProductForm({ initial, onClose, onEliminar }: Props) {
         </div>
       </div>
 
+      {editing && (
+        <MotivoStockSelector
+          categoria="producto"
+          visto={actualVisto}
+          nuevo={Number(p.actual)}
+          motivo={motivo}
+          onChange={setMotivo}
+        />
+      )}
+      {editing && p.codigo.trim() !== initial!.codigo && (
+        <p className="hlp" style={{ marginTop: -4 }}>
+          Cambia el código de {initial!.codigo} a {p.codigo.trim() || '…'}: los vínculos con la
+          tienda y los pedidos ya descontados se actualizan solos.
+        </p>
+      )}
+
       {/* ---- RECETA (BOM) ---- */}
       <div className="section-title" style={{ marginTop: 14 }}>
         Receta · qué necesita este producto de las otras categorías
       </div>
       <p className="hlp" style={{ marginTop: -4, marginBottom: 12 }}>
-        Al vender o producir, cada componente se descuenta automáticamente (cantidad × unidades).
+        Al <strong>producir</strong>, cada componente se descuenta automáticamente (cantidad ×
+        unidades producidas). Vender sólo descuenta el producto terminado. La cantidad se cuenta en
+        la misma unidad que el stock del componente: si la materia prima se cuenta por bolsa, 1 es
+        una bolsa entera.
       </p>
 
       {p.bom.map((b, i) => {
         const opciones = listaDe(state, b.categoria);
+        const comp = b.codigo ? (buscarItem(state, b.categoria, b.codigo) as any) : null;
+        // Qué es "1" de este componente: la unidad cargada o, si no hay, la presentación
+        const unidad = abrevUnidad(comp?.unidad);
+        const enQue = unidad || comp?.presentacion || '';
+        // Materia prima contada por bolsa/kilo (stock chico, sin unidad) y una
+        // receta que pide 1 o más: cada unidad producida se lleva el envase entero.
+        const pideMucho =
+          b.categoria === 'materia_prima' &&
+          !unidad &&
+          Number(b.cantidad) >= 1 &&
+          Math.abs(Number(comp?.actual) || 0) < 1000 &&
+          /kg|kilo|bolsa|bid[oó]n|L/i.test(enQue);
         return (
           <div className="bom-line" key={i}>
             <select
@@ -219,6 +291,14 @@ export function ProductForm({ initial, onClose, onEliminar }: Props) {
             <button className="btn btn--sm btn--ghost" onClick={() => delBom(i)} title="Quitar">
               <Trash2 size={15} />
             </button>
+            {comp && (
+              <div className={'bom-line__info' + (pideMucho ? ' bom-line__info--ojo' : '')}>
+                {formatNum(Number(b.cantidad) || 0)} × {enQue || 'unidad'} por cada unidad producida ·
+                hay {formatNum(comp.actual)}
+                {unidad ? ` ${unidad}` : ''} en stock
+                {pideMucho && ` · ¿de verdad cada unidad gasta ${formatNum(Number(b.cantidad))} ${enQue} entera?`}
+              </div>
+            )}
           </div>
         );
       })}

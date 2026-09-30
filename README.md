@@ -31,7 +31,7 @@ Plataforma web de gestión de inventario para [Somos Setas](https://somossetas.c
 
 ### Gestión de Stock Vinculado (BOM)
 - **Recetas automáticas**: cada producto vincula su etiqueta + envases + materia prima
-- **Descuento en cascada**: al vender/producir, se descuentan automáticamente todos los componentes
+- **Descuento en cascada**: al producir se descuentan automáticamente todos los componentes; vender sólo descuenta el producto terminado
 - **Editor de receta**: formulario integrado para definir qué necesita cada producto
 
 ### Vender / Producir
@@ -40,11 +40,19 @@ Plataforma web de gestión de inventario para [Somos Setas](https://somossetas.c
 - **Dos modos**: Venta (descuenta producto) o Producción (suma producto, consume insumos)
 - **Generación de códigos**: imprime Code128 de cada ítem
 
+### Revisión de datos
+- **Lo que hace que el stock no cierre, en vivo**: etiquetas de otro tamaño en la receta, materia
+  prima descontada de a bolsa entera, recetas incompletas, negativos, códigos que se confunden
+- **Un botón por fila** para abrir la ficha y corregir; la fila desaparece sola al arreglarse
+- Detalle de la auditoría que la originó en [`docs/auditoria-2026-09-30.md`](docs/auditoria-2026-09-30.md)
+
 ### Inventario por Categoría
 - **5 vistas** (Productos, Insumos, Insumos internos, Etiquetas, Materia prima)
 - **Búsqueda y filtros**: por código, nombre, solo items con faltantes
 - **Tabla ordenable**: click en encabezados para ordenar por cualquier columna
 - **Acciones rápidas**: ver código de barras, ingresar stock, ajustar cantidad
+- **Editar el stock desde la ficha pregunta por qué cambia** (se produjo, entró mercadería, conteo
+  físico o consumo interno) y registra ese movimiento: nunca pisa ventas que entraron mientras tanto
 - **Eliminar ítems**: botón de baja en cada fila (y en el formulario de edición), con aviso del
   stock que se pierde y de las recetas que lo usan; queda anotado como `baja` en el historial
 

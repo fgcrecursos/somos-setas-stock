@@ -32,8 +32,14 @@ interface Props {
 export function ItemModal({ categoria, item, onClose, onEdit }: Props) {
   const { ingreso, ajustar, producir, puedeEditar, guardando } = useStore();
   const toast = useToast();
-  const [addQty, setAddQty] = useState(10);
-  const [setQty, setSetQty] = useState(item.actual);
+  // Sin cantidad precargada: con un 10 de entrada, un click de más sumaba 10
+  // unidades que nadie había producido ni comprado.
+  const [addTxt, setAddTxt] = useState('');
+  const [setTxt, setSetTxt] = useState(String(item.actual));
+  const addQty = Number(addTxt);
+  const setQty = Number(setTxt);
+  const addOk = addTxt.trim() !== '' && Number.isFinite(addQty) && addQty > 0;
+  const setOk = setTxt.trim() !== '' && Number.isFinite(setQty) && setQty >= 0;
   const e = calcEstado(item.actual, item.minimo);
   const esProducto = categoria === 'producto';
 
@@ -177,10 +183,18 @@ export function ItemModal({ categoria, item, onClose, onEdit }: Props) {
                 {esProducto ? 'Producir (sumar)' : 'Ingresar (sumar)'}
               </label>
               <div className="row">
-                <input className="input" type="number" value={addQty} onChange={(ev) => setAddQty(Number(ev.target.value))} />
+                <input
+                  className="input"
+                  type="number"
+                  min={0}
+                  step="any"
+                  placeholder="Cantidad"
+                  value={addTxt}
+                  onChange={(ev) => setAddTxt(ev.target.value)}
+                />
                 <button
                   className="btn btn--primary"
-                  disabled={guardando}
+                  disabled={guardando || !addOk}
                   onClick={() =>
                     esProducto
                       ? sumarProducto()
@@ -202,10 +216,17 @@ export function ItemModal({ categoria, item, onClose, onEdit }: Props) {
             <div className="field" style={{ margin: 0 }}>
               <label><SlidersHorizontal size={13} style={{ verticalAlign: 'middle' }} /> Fijar actual</label>
               <div className="row">
-                <input className="input" type="number" value={setQty} onChange={(ev) => setSetQty(Number(ev.target.value))} />
+                <input
+                  className="input"
+                  type="number"
+                  min={0}
+                  step="any"
+                  value={setTxt}
+                  onChange={(ev) => setSetTxt(ev.target.value)}
+                />
                 <button
                   className="btn btn--dark"
-                  disabled={guardando}
+                  disabled={guardando || !setOk || setQty === item.actual}
                   onClick={() =>
                     correr(
                       () => ajustar(categoria, item.codigo, setQty),
@@ -216,11 +237,10 @@ export function ItemModal({ categoria, item, onClose, onEdit }: Props) {
                   Fijar
                 </button>
               </div>
-              {esProducto && (
-                <p className="hlp" style={{ marginTop: 4 }}>
-                  Corrección de conteo físico: no toca la receta.
-                </p>
-              )}
+              <p className="hlp" style={{ marginTop: 4 }}>
+                Corrección de conteo físico: deja el número exacto
+                {esProducto ? ' y no toca la receta' : ''}.
+              </p>
             </div>
           </div>
         </>

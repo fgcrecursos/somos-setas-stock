@@ -1,18 +1,19 @@
 import { Boxes, Trash2 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
-import { siguienteCodigo } from '../lib/codigos';
+import { problemaConCodigo, siguienteCodigo } from '../lib/codigos';
 import {
-  CATEGORIA_LABEL,
   UNIDADES,
   VENCIMIENTO_CLASE,
   abrevUnidad,
   calcVencimiento,
   diasAvisoGuardado,
 } from '../lib/helpers';
-import { useStore } from '../lib/store';
-import type { BaseItem, Categoria } from '../lib/types';
+import { useStore, type MotivoStock } from '../lib/store';
+import type { Categoria } from '../lib/types';
 import { CampoCodigo } from './CampoCodigo';
 import { Modal } from './Modal';
+import { MotivoStockSelector, opcionesMotivo } from './MotivoStock';
+import { useToast } from './Toast';
 
 interface Props {
   categoria: Categoria;
@@ -35,7 +36,11 @@ const TITULO_NUEVO: Record<Categoria, string> = {
 
 export function ItemForm({ categoria, initial, onClose, onEliminar }: Props) {
   const { state, upsertItem, guardando } = useStore();
+  const toast = useToast();
   const editing = !!initial;
+  // El stock que se vio al abrir: contra eso se mide si la persona lo cambió
+  const [actualVisto] = useState<number>(() => Number(initial?.actual) || 0);
+  const [motivo, setMotivo] = useState<MotivoStock | null>(null);
   const [item, setItem] = useState<any>(
     initial
       ? structuredClone(initial)
@@ -62,28 +67,43 @@ export function ItemForm({ categoria, initial, onClose, onEliminar }: Props) {
     setItem((prev: any) => ({ ...prev, [k]: v }));
   }
 
+  const cambiaStock = editing && Number(item.actual) !== actualVisto;
+
+  // Si el número cambia de sentido (sumaba y ahora resta), el motivo elegido
+  // puede dejar de valer: "entró mercadería" no explica una baja.
+  const deltaStock = Number(item.actual) - actualVisto;
+  useEffect(() => {
+    if (motivo && !opcionesMotivo(categoria, deltaStock).some((o) => o.id === motivo))
+      setMotivo(null);
+  }, [categoria, deltaStock, motivo]);
+
   async function guardar() {
-    if (!item.codigo?.trim()) return setError('El código es obligatorio.');
+    const codigo = String(item.codigo ?? '').trim();
     if (!item.nombre?.trim()) return setError('El nombre es obligatorio.');
-    const lista = state[
-      categoria === 'insumo'
-        ? 'insumos'
-        : categoria === 'insumo_interno'
-        ? 'insumosInternos'
-        : categoria === 'etiqueta'
-        ? 'etiquetas'
-        : 'materiaPrima'
-    ] as BaseItem[];
-    const dup = lista.find((x) => x.codigo === item.codigo && x.codigo !== initial?.codigo);
-    if (dup) return setError(`Ya existe ${item.codigo} en ${CATEGORIA_LABEL[categoria]}.`);
+    // El código se valida sólo si es nuevo o si se cambió: los códigos viejos
+    // con espacios ("POL- 39") siguen pudiendo editarse sin tocarlos.
+    if (!editing || codigo !== initial.codigo) {
+      const problema = problemaConCodigo(
+        state,
+        codigo,
+        editing ? { categoria, codigo: initial.codigo } : undefined
+      );
+      if (problema) return setError(problema);
+    }
+    if (!Number.isFinite(Number(item.actual))) return setError('El stock tiene que ser un número.');
+    if (cambiaStock && !motivo) return setError('Elegí por qué cambia el stock.');
     // Un campo de texto vacío se guarda como null y no como "": así la ficha no
     // se llena de cadenas vacías y el historial de ediciones no las cuenta.
-    const limpio = { ...item };
+    const limpio = { ...item, codigo, actual: Number(item.actual) || 0 };
     for (const campo of ['lote', 'proveedor', 'vencimiento', 'ubicacion', 'observaciones', 'unidad']) {
       if (typeof limpio[campo] === 'string' && !limpio[campo].trim()) limpio[campo] = null;
     }
-    const res = await upsertItem(categoria, limpio, initial?.codigo);
+    const res = await upsertItem(categoria, limpio, initial?.codigo, {
+      actualVisto: editing ? actualVisto : undefined,
+      motivoStock: cambiaStock ? motivo ?? undefined : undefined,
+    });
     if (!res.ok) return setError(res.error ?? 'No se pudo guardar.');
+    if (res.aviso) toast(res.aviso, true);
     onClose();
   }
 
@@ -176,6 +196,22 @@ export function ItemForm({ categoria, initial, onClose, onEliminar }: Props) {
         <p className="hlp" style={{ marginTop: -6 }}>
           Es la etiqueta del número: el stock y el mínimo se leen en esta unidad. No convierte
           nada — una receta que pide 1 de esta materia prima pide 1 {abrevUnidad(item.unidad) || 'unidad'}.
+        </p>
+      )}
+
+      {editing && (
+        <MotivoStockSelector
+          categoria={categoria}
+          visto={actualVisto}
+          nuevo={Number(item.actual)}
+          motivo={motivo}
+          onChange={setMotivo}
+        />
+      )}
+      {editing && String(item.codigo ?? '').trim() !== initial.codigo && (
+        <p className="hlp" style={{ marginTop: -4 }}>
+          Cambia el código de {initial.codigo} a {String(item.codigo ?? '').trim() || '…'}: las
+          recetas que lo usan y los vínculos con la tienda se actualizan solos.
         </p>
       )}
 

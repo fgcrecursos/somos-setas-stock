@@ -16,8 +16,47 @@
 // escaneo resuelve un código sin saber de qué categoría es y dos ítems con el
 // mismo código serían ambiguos.
 // =====================================================================
-import { CATEGORIAS_TODAS, buscarPorCodigo, listaDe, normalizarBusqueda } from './helpers';
+import {
+  CATEGORIAS_TODAS,
+  CATEGORIA_LABEL,
+  buscarPorCodigo,
+  compactar,
+  listaDe,
+  normalizarBusqueda,
+} from './helpers';
 import type { Categoria, DBState } from './types';
+
+/**
+ * ¿Se puede usar este código para un ítem nuevo (o para renombrar uno)?
+ * Devuelve el motivo si no, o null si está bien.
+ *
+ * Dos códigos que sólo difieren en espacios, guiones, puntos o mayúsculas se
+ * consideran el mismo: el buscador y el escáner los tratan igual, y así fue
+ * como convivieron "MP-30" (Reishi) y "MP- 30" (Bisglicinato). La comparación
+ * cruza todas las categorías porque el escaneo no sabe de qué categoría es un
+ * código. `excepto` es el propio ítem, cuando se está editando.
+ */
+export function problemaConCodigo(
+  state: DBState,
+  codigo: string,
+  excepto?: { categoria: Categoria; codigo: string }
+): string | null {
+  const limpio = String(codigo ?? '').trim();
+  if (!limpio) return 'El código es obligatorio.';
+  if (/\s/.test(limpio))
+    return 'El código no puede tener espacios: usá guiones (por ejemplo MP-30, no "MP- 30").';
+  const comp = compactar(limpio);
+  for (const categoria of CATEGORIAS_TODAS) {
+    for (const it of listaDe(state, categoria)) {
+      if (excepto && categoria === excepto.categoria && it.codigo === excepto.codigo) continue;
+      if (compactar(it.codigo) !== comp) continue;
+      return it.codigo === limpio
+        ? `Ya existe ${it.codigo} en ${CATEGORIA_LABEL[categoria]} (${it.nombre}).`
+        : `Ya existe ${it.codigo} en ${CATEGORIA_LABEL[categoria]} (${it.nombre}): se lee igual que ${limpio}.`;
+    }
+  }
+  return null;
+}
 
 /** Serie que le corresponde a cada tipo (el tipo se escribe libre: se compara sin tildes) */
 const SERIE_POR_TIPO: Record<string, string> = {

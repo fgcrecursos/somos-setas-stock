@@ -98,7 +98,8 @@ const clave = (categoria: string, codigo: string) => `${categoria}::${codigo}`;
  */
 function alcanzaPara(actual: number, porUnidad: number): number {
   if (!(porUnidad > 0)) return Infinity;
-  return Math.floor(actual / porUnidad);
+  // Con el componente en negativo no alcanza para ninguna (antes decía "−43")
+  return Math.max(0, Math.floor(actual / porUnidad));
 }
 
 export function calcularReposicion(state: DBState): Reposicion {

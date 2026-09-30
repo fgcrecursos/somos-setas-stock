@@ -5,8 +5,9 @@
 // borrar se muestra qué se está por perder: el stock que todavía tenía y
 // las recetas de productos que lo usan como componente.
 // =====================================================================
-import { AlertTriangle, Trash2 } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { AlertTriangle, Store, Trash2 } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { vinculosDeItem } from '../lib/cloud';
 import { CATEGORIA_LABEL, formatNum } from '../lib/helpers';
 import { useStore } from '../lib/store';
 import type { BaseItem, Categoria } from '../lib/types';
@@ -26,6 +27,20 @@ export function ConfirmarBaja({ categoria, item, onClose, onEliminado }: Props) 
   const toast = useToast();
   const [error, setError] = useState('');
   const [limpiarRecetas, setLimpiarRecetas] = useState(true);
+  // Presentaciones de la tienda que descuentan de este ítem. Si se borra el
+  // ítem, esas ventas dejan de descontar stock (pasó con Palo Negro, CAP-22).
+  const [enTienda, setEnTienda] = useState<{ producto_id: string; pres_id: string }[]>([]);
+  useEffect(() => {
+    let vivo = true;
+    vinculosDeItem(categoria, item.codigo)
+      .then((v) => vivo && setEnTienda(v))
+      .catch(() => {
+        /* sin permiso o sin conexión: no se muestra el aviso, la baja sigue igual */
+      });
+    return () => {
+      vivo = false;
+    };
+  }, [categoria, item.codigo]);
 
   // Un componente que sigue en la receta de un producto no se puede borrar en
   // silencio: al producir, esa línea quedaría apuntando a un ítem que no existe.
@@ -106,6 +121,18 @@ export function ConfirmarBaja({ categoria, item, onClose, onEliminado }: Props) 
           <AlertTriangle size={17} />
           <span>
             Todavía tiene {formatNum(item.actual)} en stock: esas unidades salen del sistema.
+          </span>
+        </div>
+      )}
+
+      {enTienda.length > 0 && (
+        <div className="row aviso-venc st-critico" style={{ marginTop: 10 }}>
+          <Store size={17} />
+          <span>
+            La tienda lo vende en {enTienda.length === 1 ? '1 presentación' : `${enTienda.length} presentaciones`}{' '}
+            ({enTienda.map((v) => `${v.producto_id} / ${v.pres_id}`).join(' · ')}). Si lo eliminás,
+            esas ventas dejan de descontar stock: primero vinculalas a otro ítem en Pedidos de la
+            tienda → Vínculo con la tienda.
           </span>
         </div>
       )}

@@ -660,7 +660,7 @@ export function VenderView() {
             <h3>Movimientos recientes</h3>
           </div>
           <div className="table-wrap">
-            <table className="tbl">
+            <table className="tbl tbl--m-recientes">
               <thead>
                 <tr>
                   <th className="no-sort">Fecha</th>

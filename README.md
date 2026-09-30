@@ -95,7 +95,13 @@ npm run banco   # http://localhost:5199
 La misma app, contra una base Postgres que corre en el navegador (PGlite) armada con los scripts de
 `supabase/` y una copia de 15 productos reales (`sandbox/datos.json`). Entra sola como admin y
 muestra un cartel violeta abajo. Sirve para probar producir, vender, contar o renombrar sin tocar
-la base real; `window.__banco.query(sql)` consulta la base desde la consola. Al recargar la
+la base real; `window.__banco.query(sql)` consulta la base desde la consola.
+
+**Antes de publicar un cambio que escriba stock**, recargar el banco y correr en la consola
+`await __banco.pruebas()` (16 pruebas de punta a punta: producir, vender, consumo, fichas con
+motivo, concurrencia, pedidos de la tienda, renombres, altas, conteo en gramos, bajas) y
+`await __banco.pantallas()` en celular, tablet y computadora (nada se tiene que salir de la
+pantalla). Al recargar la
 página vuelve a los datos iniciales.
 
 ## 🚀 Quick Start

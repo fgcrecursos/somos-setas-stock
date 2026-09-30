@@ -15,6 +15,7 @@
 import { PGlite } from '@electric-sql/pglite';
 import { EMAIL_PRUEBA, PRELUDIO, SCRIPTS, USUARIO_PRUEBA } from './esquema';
 import datos from './datos.json';
+import { correrPruebas, revisarPantallas } from './pruebas';
 
 type Fila = Record<string, any>;
 interface Resultado {
@@ -332,6 +333,13 @@ export function clienteAislado(): any {
     await lista;
     return db.exec(sql);
   },
+  /** Todas las pruebas de punta a punta (recargar la página antes) */
+  async pruebas() {
+    await lista;
+    return correrPruebas(async (sql, params = []) => (await db.query<Fila>(sql, params)).rows);
+  },
+  /** ¿Algo se sale de la pantalla en el ancho actual? */
+  pantallas: revisarPantallas,
 };
 
 // Cartel fijo: que nadie confunda esta pestaña con la plataforma real

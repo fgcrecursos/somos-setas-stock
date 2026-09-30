@@ -628,14 +628,8 @@ table.tbl--anidada { font-size: 12.5px; background: #fff; border-radius: 10px; o
 }
 
 /* Celular */
-@media (max-width: 620px) {
-  .topbar__txt { display: none; }
-  .topbar .btn--primary { padding: 7px 11px; }
-  /* Título, menú y botones en un solo renglón: el título se corta con "…" */
-  .topbar__titulo { flex: 1; }
-  .topbar h1 { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 17px; }
-  .topbar__spacer { display: none; }
-
+/* Tablas en tablet y celular: columnas secundarias afuera y celdas apretadas */
+@media (max-width: 860px) {
   /* Columnas secundarias afuera: la fila entra entera con su botón */
   .col-opcional { display: none; }
   /* Tablas más apretadas: encabezados en dos renglones si hace falta, el
@@ -693,6 +687,18 @@ table.tbl--anidada { font-size: 12.5px; background: #fff; border-radius: 10px; o
 
   /* Filas vacías y desplegables: una sola celda que ocupa todo el ancho */
   .tbl tr > td[colspan] { display: table-cell !important; }
+  /* Vender · movimientos recientes: componentes */
+  .tbl--m-recientes :is(th, td):nth-child(5) { display: none; }
+}
+
+@media (max-width: 620px) {
+  .topbar__txt { display: none; }
+  .topbar .btn--primary { padding: 7px 11px; }
+  /* Título, menú y botones en un solo renglón: el título se corta con "…" */
+  .topbar__titulo { flex: 1; }
+  .topbar h1 { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 17px; }
+  .topbar__spacer { display: none; }
+
 
   /* Formularios: un campo por renglón */
   .form-row, .form-row-3, .grid--2col { grid-template-columns: 1fr; }

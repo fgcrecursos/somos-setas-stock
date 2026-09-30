@@ -224,7 +224,7 @@ export function ReposicionView() {
             </span>
           </div>
           <div className="table-wrap">
-            <table className="tbl">
+            <table className="tbl tbl--m-producir">
               <thead>
                 <tr>
                   <th className="no-sort" style={{ width: 28 }} />
@@ -362,7 +362,7 @@ export function ReposicionView() {
             </span>
           </div>
           <div className="table-wrap">
-            <table className="tbl">
+            <table className="tbl tbl--m-comprar">
               <thead>
                 <tr>
                   <th className="no-sort">Componente</th>

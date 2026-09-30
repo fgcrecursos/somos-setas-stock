@@ -49,20 +49,24 @@ export function ProductosView({ foco, onFocoAbierto }: Props) {
   }, [state.productos, q, tipo, soloAlerta]);
 
   const columns: Column<Producto>[] = [
-    { key: 'codigo', header: 'Código', sortValue: (r) => r.codigo, className: 'codigo', render: (r) => r.codigo },
+    { key: 'codigo', header: 'Código', movil: false, sortValue: (r) => r.codigo, className: 'codigo', render: (r) => r.codigo },
     { key: 'nombre', header: 'Producto', sortValue: (r) => r.nombre, className: 'nombre',
       render: (r) => (
-        <button className="btn btn--ghost btn--sm" style={{ padding: 0, border: 'none', fontWeight: 600 }} onClick={() => setVer(r)}>
-          {r.nombre}
-        </button>
+        <>
+          <button className="btn btn--ghost btn--sm" style={{ padding: 0, border: 'none', fontWeight: 600 }} onClick={() => setVer(r)}>
+            {r.nombre}
+          </button>
+          {/* En el celular la columna de código se esconde: va acá abajo */}
+          <span className="codigo solo-movil">{r.codigo}</span>
+        </>
       ) },
-    { key: 'tipo', header: 'Tipo', sortValue: (r) => r.tipo, render: (r) => <span className="pill">{r.tipo}</span> },
-    { key: 'pres', header: 'Presentación', sortValue: (r) => r.presentacion, render: (r) => <span className="muted">{r.presentacion}</span> },
+    { key: 'tipo', movil: false, header: 'Tipo', sortValue: (r) => r.tipo, render: (r) => <span className="pill">{r.tipo}</span> },
+    { key: 'pres', movil: false, header: 'Presentación', sortValue: (r) => r.presentacion, render: (r) => <span className="muted">{r.presentacion}</span> },
     { key: 'actual', header: 'Actual', align: 'right', sortValue: (r) => r.actual, render: (r) => formatNum(r.actual) },
-    { key: 'minimo', header: 'Mínimo', align: 'right', sortValue: (r) => r.minimo, render: (r) => formatNum(r.minimo) },
-    { key: 'nivel', header: 'Nivel', sortable: false, render: (r) => <StockBar actual={r.actual} minimo={r.minimo} /> },
-    { key: 'diff', header: 'Diferencia', align: 'right', sortValue: (r) => r.actual - r.minimo, render: (r) => <DiffCell actual={r.actual} minimo={r.minimo} /> },
-    { key: 'bom', header: 'Receta', align: 'center', sortValue: (r) => r.bom.length,
+    { key: 'minimo', movil: false, header: 'Mínimo', align: 'right', sortValue: (r) => r.minimo, render: (r) => formatNum(r.minimo) },
+    { key: 'nivel', movil: false, header: 'Nivel', sortable: false, render: (r) => <StockBar actual={r.actual} minimo={r.minimo} /> },
+    { key: 'diff', movil: false, header: 'Diferencia', align: 'right', sortValue: (r) => r.actual - r.minimo, render: (r) => <DiffCell actual={r.actual} minimo={r.minimo} /> },
+    { key: 'bom', movil: false, header: 'Receta', align: 'center', sortValue: (r) => r.bom.length,
       render: (r) => (
         <span className="pill" title={`${r.bom.length} componentes`}>
           <Link2 size={12} /> {r.bom.length}

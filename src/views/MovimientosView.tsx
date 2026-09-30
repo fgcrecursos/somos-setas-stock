@@ -222,7 +222,7 @@ export function MovimientosView() {
           </span>
         </div>
         <div className="table-wrap">
-          <table className="tbl">
+          <table className="tbl tbl--m-mov">
             <thead>
               <tr>
                 <th className="no-sort">Fecha</th>

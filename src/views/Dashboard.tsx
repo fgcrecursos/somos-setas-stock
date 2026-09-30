@@ -213,7 +213,7 @@ export function Dashboard({ onNav }: { onNav: (v: string) => void }) {
           </div>
         </div>
         <div className="table-wrap">
-          <table className="tbl">
+          <table className="tbl tbl--m-venc">
             <thead>
               <tr>
                 <th>Código</th>
@@ -275,7 +275,7 @@ export function Dashboard({ onNav }: { onNav: (v: string) => void }) {
           <span className="pill" style={{ marginLeft: 'auto' }}>{stats.alertas.length} ítems</span>
         </div>
         <div className="table-wrap">
-          <table className="tbl">
+          <table className="tbl tbl--m-alertas">
             <thead>
               <tr>
                 <th>Código</th>

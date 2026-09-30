@@ -126,10 +126,10 @@ export function ConteoMPView() {
               <tr>
                 <th className="no-sort">Código</th>
                 <th className="no-sort">Materia prima</th>
-                <th className="no-sort">Se compra como</th>
-                <th className="no-sort">Ubicación</th>
+                <th className="no-sort col-opcional">Se compra como</th>
+                <th className="no-sort col-opcional">Ubicación</th>
                 <th className="num">Hoy en el sistema</th>
-                <th className="num">Recetas</th>
+                <th className="num col-opcional">Recetas</th>
                 <th className="no-sort">Estado</th>
                 <th className="no-sort" />
               </tr>
@@ -139,13 +139,13 @@ export function ConteoMPView() {
                 <tr key={m.codigo}>
                   <td className="codigo">{m.codigo}</td>
                   <td className="nombre">{m.nombre}</td>
-                  <td className="muted">{m.presentacion || '—'}</td>
-                  <td className="muted">{m.ubicacion || '—'}</td>
+                  <td className="muted col-opcional">{m.presentacion || '—'}</td>
+                  <td className="muted col-opcional">{m.ubicacion || '—'}</td>
                   <td className={'num' + (m.actual < 0 ? ' diff-neg' : '')}>
                     <Cantidad valor={m.actual} unidad={m.unidad} />
                     {!tieneUnidad(m) && <div className="hlp">sin unidad</div>}
                   </td>
-                  <td className="num">{usos.get(m.codigo) ?? 0}</td>
+                  <td className="num col-opcional">{usos.get(m.codigo) ?? 0}</td>
                   <td>
                     {tieneUnidad(m) ? (
                       <span className="badge-estado st-ok">En {abrevUnidad(m.unidad)}</span>

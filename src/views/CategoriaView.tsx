@@ -71,25 +71,29 @@ export function CategoriaView({ categoria, foco, onFocoAbierto }: Props) {
     categoria === 'materia_prima' || all.some((it) => !!(it as any).vencimiento);
 
   const columns: Column<BaseItem>[] = [
-    { key: 'codigo', header: 'Código', sortValue: (r) => r.codigo, className: 'codigo', render: (r) => r.codigo },
+    { key: 'codigo', header: 'Código', movil: false, sortValue: (r) => r.codigo, className: 'codigo', render: (r) => r.codigo },
     {
       key: 'nombre', header: 'Nombre', sortValue: (r) => r.nombre, className: 'nombre',
       render: (r) => (
-        <button className="btn btn--ghost btn--sm" style={{ padding: 0, border: 'none', fontWeight: 600 }} onClick={() => setVer(r)}>
-          {r.nombre}
-        </button>
+        <>
+          <button className="btn btn--ghost btn--sm" style={{ padding: 0, border: 'none', fontWeight: 600 }} onClick={() => setVer(r)}>
+            {r.nombre}
+          </button>
+          {/* En el celular la columna de código se esconde: va acá abajo */}
+          <span className="codigo solo-movil">{r.codigo}</span>
+        </>
       ),
     },
     ...(hasTipo
       ? [{
-          key: 'tipo', header: 'Tipo',
+          key: 'tipo', movil: false, header: 'Tipo',
           sortValue: (r: BaseItem) => (r as Etiqueta).tipo ?? '',
           render: (r: BaseItem) => <span className="pill">{(r as Etiqueta).tipo || '—'}</span>,
         } as Column<BaseItem>]
       : []),
     ...(categoria === 'etiqueta' || categoria === 'materia_prima'
       ? [{
-          key: 'pres', header: 'Presentación',
+          key: 'pres', movil: false, header: 'Presentación',
           sortValue: (r: BaseItem) => (r as MateriaPrima).presentacion ?? '',
           render: (r: BaseItem) => <span className="muted">{(r as MateriaPrima).presentacion || '—'}</span>,
         } as Column<BaseItem>]
@@ -98,14 +102,14 @@ export function CategoriaView({ categoria, foco, onFocoAbierto }: Props) {
     // sabe si son kilos, litros o bolsas.
     { key: 'actual', header: 'Actual', align: 'right', sortValue: (r) => r.actual,
       render: (r) => <Cantidad valor={r.actual} unidad={(r as MateriaPrima).unidad} /> },
-    { key: 'minimo', header: 'Mínimo', align: 'right', sortValue: (r) => r.minimo,
+    { key: 'minimo', movil: false, header: 'Mínimo', align: 'right', sortValue: (r) => r.minimo,
       render: (r) => <Cantidad valor={r.minimo} unidad={(r as MateriaPrima).unidad} /> },
-    { key: 'nivel', header: 'Nivel', sortable: false, render: (r) => <StockBar actual={r.actual} minimo={r.minimo} /> },
-    { key: 'diff', header: 'Diferencia', align: 'right', sortValue: (r) => r.actual - r.minimo, render: (r) => <DiffCell actual={r.actual} minimo={r.minimo} /> },
+    { key: 'nivel', movil: false, header: 'Nivel', sortable: false, render: (r) => <StockBar actual={r.actual} minimo={r.minimo} /> },
+    { key: 'diff', movil: false, header: 'Diferencia', align: 'right', sortValue: (r) => r.actual - r.minimo, render: (r) => <DiffCell actual={r.actual} minimo={r.minimo} /> },
     { key: 'estado', header: 'Estado', sortValue: (r) => calcEstado(r.actual, r.minimo).diferencia, render: (r) => <StatusBadge actual={r.actual} minimo={r.minimo} /> },
     ...(hasVencimiento
       ? [{
-          key: 'venc', header: 'Vencimiento',
+          key: 'venc', movil: false, header: 'Vencimiento',
           // Sin fecha van al final: `zzzz` ordena después de cualquier aaaa-mm-dd
           sortValue: (r: BaseItem) => String((r as any).vencimiento ?? 'zzzz'),
           render: (r: BaseItem) => (

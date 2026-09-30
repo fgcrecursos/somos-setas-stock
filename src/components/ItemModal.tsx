@@ -161,7 +161,7 @@ export function ItemModal({ categoria, item, onClose, onEdit }: Props) {
 
       {/* Barcode */}
       <div className="section-title">Código de barras</div>
-      <div className="row" style={{ justifyContent: 'space-between' }}>
+      <div className="row wrap" style={{ justifyContent: 'space-between' }}>
         <div className="barcode-box">
           <div id="modal-barcode">
             <Barcode value={item.codigo} />

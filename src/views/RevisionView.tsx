@@ -154,7 +154,7 @@ function Grupo({
                       {f.nombre}
                       <div className="hlp">{f.detalle}</div>
                     </td>
-                    <td style={{ width: 1 }}><span className="pill">{CATEGORIA_LABEL[f.categoria]}</span></td>
+                    <td className="col-opcional" style={{ width: 1 }}><span className="pill">{CATEGORIA_LABEL[f.categoria]}</span></td>
                     <td className="actions" style={{ textAlign: 'right' }}>
                       {puedeEditar && (
                         <button

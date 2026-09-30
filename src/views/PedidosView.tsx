@@ -212,7 +212,7 @@ export function PedidosView() {
               <span className="pill" style={{ marginLeft: 'auto' }}>{pedidos.length}</span>
             </div>
             <div className="table-wrap">
-              <table className="tbl">
+              <table className="tbl tbl--m-pedidos">
                 <thead>
                   <tr>
                     <th className="no-sort">Fecha</th>

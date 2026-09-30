@@ -76,7 +76,7 @@ export function UsuariosView() {
           <h3>Usuarios de la plataforma</h3>
         </div>
         <div className="table-wrap">
-          <table className="tbl">
+          <table className="tbl tbl--m-usuarios">
             <thead>
               <tr>
                 <th className="no-sort">Nombre</th>

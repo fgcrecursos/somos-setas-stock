@@ -9,6 +9,8 @@ export interface Column<T> {
   align?: 'left' | 'right' | 'center';
   className?: string;
   sortable?: boolean;
+  /** false = columna secundaria: en el celular se esconde para que la fila entre */
+  movil?: boolean;
 }
 
 interface Props<T> {
@@ -63,7 +65,8 @@ export function DataTable<T>({
                 key={c.key}
                 className={
                   (c.align === 'right' ? 'num ' : '') +
-                  (c.sortable === false || !c.sortValue ? 'no-sort' : '')
+                  (c.sortable === false || !c.sortValue ? 'no-sort' : '') +
+                  (c.movil === false ? ' col-opcional' : '')
                 }
                 style={{ textAlign: c.align }}
                 onClick={() => c.sortValue && toggle(c.key, c.sortable)}
@@ -83,7 +86,11 @@ export function DataTable<T>({
               {columns.map((c) => (
                 <td
                   key={c.key}
-                  className={(c.align === 'right' ? 'num ' : '') + (c.className ?? '')}
+                  className={
+                    (c.align === 'right' ? 'num ' : '') +
+                    (c.className ?? '') +
+                    (c.movil === false ? ' col-opcional' : '')
+                  }
                   style={{ textAlign: c.align }}
                 >
                   {c.render(row)}

@@ -12,6 +12,7 @@ import {
   History,
   LayoutDashboard,
   LogOut,
+  Menu,
   RefreshCw,
   RotateCcw,
   Scale,
@@ -22,6 +23,7 @@ import {
   TrendingUp,
   Users,
   Wheat,
+  X,
 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { BuscadorGlobal } from './components/BuscadorGlobal';
@@ -99,8 +101,21 @@ export default function App() {
     useStore();
   const { perfil, email, salir, esAdmin } = useAuth();
   const toast = useToast();
-  const [view, setView] = useState<ViewId>('dashboard');
+  const [view, setViewBase] = useState<ViewId>('dashboard');
   const [refrescando, setRefrescando] = useState(false);
+  // En el celular el menú lateral no entra: se esconde y se abre con el botón
+  // del encabezado. Elegir una sección lo vuelve a cerrar.
+  const [menuAbierto, setMenuAbierto] = useState(false);
+  const setView = (v: ViewId) => {
+    setViewBase(v);
+    setMenuAbierto(false);
+  };
+  useEffect(() => {
+    if (!menuAbierto) return;
+    const alTeclear = (e: KeyboardEvent) => e.key === 'Escape' && setMenuAbierto(false);
+    window.addEventListener('keydown', alTeclear);
+    return () => window.removeEventListener('keydown', alTeclear);
+  }, [menuAbierto]);
   // Ítem elegido en el buscador general: la sección lo abre apenas se muestra
   const [foco, setFoco] = useState<{ categoria: Categoria; codigo: string } | null>(null);
 
@@ -219,13 +234,17 @@ export default function App() {
 
   return (
     <div className="app">
-      <aside className="sidebar">
+      {menuAbierto && <div className="sidebar-fondo" onClick={() => setMenuAbierto(false)} />}
+      <aside className={'sidebar' + (menuAbierto ? ' sidebar--abierta' : '')}>
         <div className="sidebar__brand">
           <img src={logo} alt="Somos Setas" />
           <div>
             <div className="name">Somos Setas</div>
             <div className="sub">Control de Stock</div>
           </div>
+          <button className="sidebar__cerrar" onClick={() => setMenuAbierto(false)} aria-label="Cerrar menú">
+            <X size={20} />
+          </button>
         </div>
 
         <nav className="nav">
@@ -287,7 +306,10 @@ export default function App() {
 
       <div className="main">
         <div className="topbar">
-          <div>
+          <button className="btn btn--sm topbar__menu" onClick={() => setMenuAbierto(true)} aria-label="Abrir menú">
+            <Menu size={19} />
+          </button>
+          <div className="topbar__titulo">
             <h1>{TITLES[view].t}</h1>
             <div className="subtitle">{TITLES[view].s}</div>
           </div>
@@ -303,20 +325,22 @@ export default function App() {
                 .join('\n')}
             >
               <CalendarClock size={14} />
-              {vencimientos.length} por vencer
+              {vencimientos.length}
+              <span className="topbar__txt"> por vencer</span>
             </button>
           )}
           {!puedeEditar && (
             <span className="pill" title="Tu usuario puede mirar todo pero no modificar nada">
-              <Eye size={12} /> Modo lectura
+              <Eye size={12} /> <span className="topbar__txt">Modo lectura</span>
             </span>
           )}
           <button className="btn btn--sm" onClick={actualizar} disabled={refrescando}>
-            <RefreshCw size={14} className={refrescando ? 'spin' : ''} /> Actualizar
+            <RefreshCw size={14} className={refrescando ? 'spin' : ''} />
+            <span className="topbar__txt">Actualizar</span>
           </button>
           {puedeEditar && (
-            <button className="btn btn--primary" onClick={() => setView('vender')}>
-              <ScanLine size={16} /> Escanear
+            <button className="btn btn--primary" onClick={() => setView('vender')} aria-label="Escanear">
+              <ScanLine size={16} /> <span className="topbar__txt">Escanear</span>
             </button>
           )}
         </div>
@@ -420,7 +444,7 @@ function CargaInicial() {
             Tu usuario es de solo lectura. Pedile a un administrador que haga la carga inicial.
           </p>
         ) : (
-          <div className="grid" style={{ gridTemplateColumns: '1fr 1fr', marginTop: 18 }}>
+          <div className="grid grid--2col" style={{ marginTop: 18 }}>
             <div className="card" style={{ padding: 18 }}>
               <h4 style={{ fontSize: 15, marginBottom: 6 }}>Subir lo de este navegador</h4>
               <p className="hlp" style={{ minHeight: 54 }}>

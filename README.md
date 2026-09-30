@@ -76,6 +76,16 @@ Plataforma web de gestión de inventario para [Somos Setas](https://somossetas.c
 - **Un botón, un Excel**: inventario completo, recetas, historial, consumos y ventas por producto,
   cada cosa en su hoja
 
+## 📱 Celular y tablet
+
+- Hasta 860 px el menú lateral se esconde y se abre con el botón ☰ del encabezado (se cierra
+  al elegir una sección, con Escape o tocando afuera)
+- Las tablas esconden las columnas secundarias y el código va abajo del nombre: cada fila entra
+  entera con sus botones, sin desplazar de costado
+- Los formularios van a pantalla completa, un campo por renglón, con el título y los botones
+  siempre a la vista; Usuarios pasa a tarjetas
+- En Vender, al cargar un producto la pantalla baja sola hasta él
+
 ## 🧪 Banco de pruebas
 
 ```bash

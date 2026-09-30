@@ -198,6 +198,16 @@ export function VenderView() {
   const [cant, setCant] = useState(1);
   const [nota, setNota] = useState('');
   const [ultima, setUltima] = useState<any>(null);
+  // En el celular la cámara queda arriba y el producto cargado abajo, fuera de
+  // la vista: al cargar uno (escaneado o elegido) la pantalla baja hasta él.
+  const panelProducto = useRef<HTMLDivElement>(null);
+  const codigoSel = sel ? `${sel.categoria}|${sel.item.codigo}` : '';
+  useEffect(() => {
+    if (!codigoSel || !window.matchMedia('(max-width: 980px)').matches) return;
+    // Con la pestaña oculta el desplazamiento suave no avanza: ahí va directo
+    const suave = document.visibilityState === 'visible';
+    panelProducto.current?.scrollIntoView({ behavior: suave ? 'smooth' : 'auto', block: 'start' });
+  }, [codigoSel]);
 
   const esConsumo = modo === 'consumo_interno';
   const producto = sel?.categoria === 'producto' ? (sel.item as Producto) : null;
@@ -329,7 +339,7 @@ export function VenderView() {
   const restante = sel ? sel.item.actual - cant : 0;
 
   return (
-    <div className="grid" style={{ gridTemplateColumns: '380px 1fr', gap: 20, alignItems: 'start' }}>
+    <div className="grid vender-grid">
       {/* Escáner */}
       <div className="stack">
         <div className="card">
@@ -447,7 +457,7 @@ export function VenderView() {
             </div>
           </div>
         ) : (
-          <div className="card">
+          <div className="card vender-panel" ref={panelProducto}>
             <div className="card__head">
               <div>
                 <div className="row" style={{ gap: 8 }}>

@@ -359,7 +359,7 @@ export function VentasView() {
           <span className="pill">{etiquetaPeriodo(periodo)}</span>
         </div>
         <div className="table-wrap">
-          <table className="tbl">
+          <table className="tbl tbl--m-ventas">
             <thead>
               <tr>
                 <th className="no-sort" style={{ width: 40 }}>#</th>
@@ -443,7 +443,7 @@ export function VentasView() {
         </div>
       </div>
 
-      <div className="grid" style={{ gridTemplateColumns: '1fr 2fr', alignItems: 'start' }}>
+      <div className="grid ventas-grid">
         {/* Por tipo de producto */}
         <div className="card">
           <div className="card__head"><h3>Por tipo de producto</h3></div>
@@ -506,7 +506,7 @@ export function VentasView() {
             <span className="pill" style={{ marginLeft: 'auto' }}>{detalleFiltrado.length}</span>
           </div>
           <div className="table-wrap">
-            <table className="tbl">
+            <table className="tbl tbl--m-ultimos">
               <thead>
                 <tr>
                   <th className="no-sort">Fecha</th>

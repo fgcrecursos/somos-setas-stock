@@ -127,16 +127,27 @@ export async function traerTodo(): Promise<DBState> {
     if (filas.length < PAGINA) break;
   }
 
-  // Historial, del más nuevo al más viejo
+  // Historial, del más nuevo al más viejo. El orden lleva el id como
+  // desempate: ordenando sólo por fecha, dos movimientos del mismo instante
+  // (un pedido de la tienda descuenta varios a la vez) podían caer en
+  // páginas distintas en cada consulta y uno quedaba afuera de la lista.
+  // Si entra un movimiento nuevo mientras se pagina, corre todo un lugar y
+  // el último de una página se repite en la siguiente: se descarta por id.
+  const vistos = new Set<string>();
   for (let desde = 0; ; desde += PAGINA) {
     const { data, error } = await sb
       .from('st_movimientos')
       .select('*')
       .order('fecha', { ascending: false })
+      .order('id', { ascending: false })
       .range(desde, desde + PAGINA - 1);
     if (error) throw new Error(error.message);
     const filas = data ?? [];
-    for (const fila of filas) state.movimientos.push(movFromRow(fila));
+    for (const fila of filas) {
+      if (vistos.has(fila.id)) continue;
+      vistos.add(fila.id);
+      state.movimientos.push(movFromRow(fila));
+    }
     if (filas.length < PAGINA) break;
   }
 
@@ -152,7 +163,11 @@ export async function contarItems(): Promise<number> {
   return count ?? 0;
 }
 
-/** Sube el estado completo: la carga inicial de la base. */
+/**
+ * Sube el estado completo: la carga inicial de la base. Sólo agrega lo que
+ * falta: si un ítem o un movimiento ya existe, queda como está (nunca se
+ * pisa una ficha ni un stock cargado por el equipo).
+ */
 export async function subirTodo(state: DBState): Promise<void> {
   const filas: ItemRow[] = [];
   for (const categoria of CATEGORIAS) {
@@ -162,7 +177,7 @@ export async function subirTodo(state: DBState): Promise<void> {
   for (let i = 0; i < filas.length; i += 200) {
     const { error } = await sb
       .from('st_items')
-      .upsert(filas.slice(i, i + 200), { onConflict: 'categoria,codigo' });
+      .upsert(filas.slice(i, i + 200), { onConflict: 'categoria,codigo', ignoreDuplicates: true });
     if (error) throw new Error(error.message);
   }
 
@@ -183,24 +198,100 @@ export async function subirTodo(state: DBState): Promise<void> {
   for (let i = 0; i < movs.length; i += 200) {
     const { error } = await sb
       .from('st_movimientos')
-      .upsert(movs.slice(i, i + 200), { onConflict: 'id' });
+      .upsert(movs.slice(i, i + 200), { onConflict: 'id', ignoreDuplicates: true });
     if (error) throw new Error(error.message);
   }
 }
 
-/**
- * Guarda la ficha de un ítem que YA existe. El stock NO viaja: si alguien
- * vendió mientras el formulario estaba abierto, guardar la ficha pisaría esa
- * venta. El cambio de stock (si lo hubo) va aparte por st_aplicar, que
- * bloquea la fila.
- */
-export async function guardarItem(categoria: Categoria, item: any): Promise<void> {
-  const fila: any = toRow(categoria, item);
-  delete fila.actual;
-  const { error } = await sb
+/** Campos de la ficha que se comparan al fusionar (todo menos el stock) */
+function camposFicha(item: any): Record<string, unknown> {
+  const { codigo: _c, actual: _a, ...resto } = item ?? {};
+  return resto;
+}
+
+const igual = (a: unknown, b: unknown) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
+
+/** Lo que la base tiene hoy de una ficha, con la marca de su última escritura */
+async function leerFicha(
+  categoria: Categoria,
+  codigo: string
+): Promise<{ item: any; updatedAt: string | null } | null> {
+  const { data, error } = await sb
     .from('st_items')
-    .upsert(fila, { onConflict: 'categoria,codigo' });
+    .select('*')
+    .eq('categoria', categoria)
+    .eq('codigo', codigo)
+    .maybeSingle();
   if (error) throw new Error(error.message);
+  if (!data) return null;
+  return { item: fromRow(data as ItemRow), updatedAt: (data as any).updated_at ?? null };
+}
+
+export class ConflictoFicha extends Error {}
+
+/**
+ * Guarda la ficha de un ítem que YA existe y devuelve cómo quedó.
+ *
+ * El stock NO viaja: si alguien vendió mientras el formulario estaba abierto,
+ * guardar la ficha pisaría esa venta. El cambio de stock (si lo hubo) va
+ * aparte por st_aplicar, que bloquea la fila.
+ *
+ * Tampoco se pisa lo que cambió otra persona: `base` es la ficha tal como se
+ * vio al abrir el formulario. Sólo viajan los campos que esta persona tocó
+ * (contra `base`), aplicados sobre lo que la base tiene HOY. Antes se mandaba
+ * la ficha entera y, si dos personas editaban el mismo ítem (o la receta
+ * cambiaba por un conteo de materia prima), el último en guardar borraba lo
+ * del otro sin aviso. Si los dos tocaron el mismo campo con valores
+ * distintos, no se elige por nadie: se avisa.
+ *
+ * La escritura sólo prende si la fila sigue con la marca `updated_at` que se
+ * leyó: si alguien escribió en el medio, se vuelve a leer y a fusionar.
+ */
+export async function guardarItem(categoria: Categoria, item: any, base?: any): Promise<any> {
+  const tocados = camposFicha(item);
+  if (base) {
+    const antes = camposFicha(base);
+    for (const k of Object.keys(tocados)) if (igual(tocados[k], antes[k])) delete tocados[k];
+    // Un campo que estaba y se vació en el formulario también es un cambio
+    for (const k of Object.keys(antes)) if (!(k in camposFicha(item))) tocados[k] = null;
+  }
+
+  for (let intento = 0; intento < 4; intento++) {
+    const hoy = await leerFicha(categoria, item.codigo);
+    if (!hoy)
+      throw new Error(
+        'Este ítem ya no está en el inventario (lo pudo haber eliminado otra persona). No se guardó nada.'
+      );
+
+    if (base) {
+      const enBase = camposFicha(hoy.item);
+      const antes = camposFicha(base);
+      const choques = Object.keys(tocados).filter(
+        (k) => !igual(enBase[k], antes[k]) && !igual(enBase[k], tocados[k])
+      );
+      if (choques.length)
+        throw new ConflictoFicha(
+          `Mientras editabas, otra persona cambió ${choques.join(', ')} de ${item.codigo}. ` +
+            'No se guardó nada para no borrar su cambio: cerrá, volvé a abrir la ficha y cargalo de nuevo.'
+        );
+    }
+
+    const final = { ...hoy.item, ...(base ? tocados : camposFicha(item)), codigo: item.codigo };
+    const fila: any = toRow(categoria, final);
+    delete fila.actual;
+    fila.updated_at = new Date().toISOString();
+
+    // La última vuelta escribe sin la condición de la marca: la fusión ya se
+    // hizo sobre lo que había hace instantes, y la marca puede no compararse
+    // bien si la base la guarda con más decimales de los que devuelve.
+    let q = sb.from('st_items').update(fila).eq('categoria', categoria).eq('codigo', item.codigo);
+    if (hoy.updatedAt && intento < 3) q = q.eq('updated_at', hoy.updatedAt);
+    const { data, error } = await q.select('codigo');
+    if (error) throw new Error(error.message);
+    if ((data ?? []).length) return { ...final, actual: hoy.item.actual };
+    // Alguien escribió en el medio (una venta mueve updated_at): otra vuelta
+  }
+  throw new Error('El ítem está cambiando mucho en este momento. Esperá unos segundos y volvé a guardar.');
 }
 
 /**
@@ -373,10 +464,66 @@ export async function aplicarMovimiento(
   };
 }
 
-/** Borra TODO el inventario (no el historial). Solo para restablecer. */
-export async function vaciarItems(): Promise<void> {
-  const { error } = await sb.from('st_items').delete().in('categoria', CATEGORIAS);
-  if (error) throw new Error(error.message);
+
+// =====================================================================
+// CAMBIOS EN VIVO
+// Lo que guarda otra persona (o un pedido de la tienda) aparece solo, sin
+// recargar la página. Dos caminos: el aviso instantáneo de Supabase Realtime
+// y, por si ese canal no está habilitado o se corta, una consulta liviana
+// cada tantos segundos que sólo mira si algo cambió.
+// =====================================================================
+
+export type CambioItem =
+  | { tipo: 'guardado'; categoria: Categoria; item: any }
+  | { tipo: 'borrado'; categoria: Categoria; codigo: string };
+
+/** Escucha st_items y st_movimientos. Devuelve la función para dejar de escuchar. */
+export function escucharCambios(h: {
+  onItem: (c: CambioItem) => void;
+  onMovimiento: (m: Movimiento) => void;
+  onEstado: (conectado: boolean) => void;
+}): () => void {
+  const cliente = sb as any;
+  if (typeof cliente.channel !== 'function') {
+    h.onEstado(false);
+    return () => {};
+  }
+  const canal = cliente
+    .channel('stock-en-vivo')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'st_items' }, (p: any) => {
+      if (p.eventType === 'DELETE') {
+        const o = p.old ?? {};
+        if (o.categoria && o.codigo) h.onItem({ tipo: 'borrado', categoria: o.categoria, codigo: o.codigo });
+        return;
+      }
+      if (p.new?.categoria) h.onItem({ tipo: 'guardado', categoria: p.new.categoria, item: fromRow(p.new) });
+    })
+    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'st_movimientos' }, (p: any) => {
+      if (p.new?.id) h.onMovimiento(movFromRow(p.new));
+    })
+    .subscribe((estado: string) => h.onEstado(estado === 'SUBSCRIBED'));
+  return () => {
+    try {
+      cliente.removeChannel(canal);
+    } catch {
+      /* ya estaba cerrado */
+    }
+  };
+}
+
+/**
+ * Una "huella" chica de la base: el último ítem tocado, el último movimiento
+ * y cuántos ítems hay. Si cambia, hay algo nuevo para traer.
+ */
+export async function huellaBase(): Promise<string> {
+  const [it, mov, cant] = await Promise.all([
+    sb.from('st_items').select('updated_at').order('updated_at', { ascending: false }).limit(1),
+    sb.from('st_movimientos').select('id').order('fecha', { ascending: false }).order('id', { ascending: false }).limit(1),
+    sb.from('st_items').select('codigo', { count: 'exact', head: true }),
+  ]);
+  if (it.error) throw new Error(it.error.message);
+  if (mov.error) throw new Error(mov.error.message);
+  return [it.data?.[0]?.updated_at ?? '', mov.data?.[0]?.id ?? '', cant.count ?? 0].join('|');
 }
 
 // =====================================================================

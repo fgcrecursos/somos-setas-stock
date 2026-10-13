@@ -1,16 +1,18 @@
 :root {
-  /* Paleta auténtica Somos Setas */
-  --verde-900: #1b1f1a;
-  --verde-800: #20261e;
-  --verde-700: #2d3b2c;
-  --verde-600: #3a4036;
-  --verde-500: #4a5443;
-  --crema: #f5f0e6;
-  --crema-2: #faf6ef;
-  --crema-3: #efe8d8;
-  --naranja: #ef7911;
-  --naranja-600: #d96c0c;
-  --naranja-100: #fdecd9;
+  /* Paleta del catálogo 2026 de Somos Setas: crema, tinta y naranja.
+     Los nombres "verde-*" quedan por compatibilidad: hoy son la tinta. */
+  --verde-900: #1d1d1b;
+  --verde-800: #262523;
+  --verde-700: #34322e;
+  --verde-600: #4a473f;
+  --verde-500: #6a665c;
+  --crema: #f7f5e7;
+  --crema-2: #fbfaf2;
+  --crema-3: #eeead6;
+  --naranja: #e76e09;
+  /* Naranja para texto chico y botones con texto blanco (contraste AA) */
+  --naranja-600: #b5530a;
+  --naranja-100: #fce9d6;
 
   --ok: #3f8f4e;
   --ok-bg: #e6f2e8;
@@ -21,11 +23,11 @@
   --agotado: #b23b32;
   --agotado-bg: #f6e0dd;
 
-  --texto: #1b1f1a;
-  --texto-2: #5b6157;
-  --texto-3: #8a8f83;
-  --borde: #e5ddcd;
-  --borde-2: #ece5d6;
+  --texto: #1d1d1b;
+  --texto-2: #4a473f;
+  --texto-3: #6a665c;
+  --borde: #e4dfcb;
+  --borde-2: #ece8d6;
   --panel: #ffffff;
 
   --shadow-sm: 0 1px 2px rgba(27, 31, 26, 0.06);
@@ -35,9 +37,15 @@
   --radius-sm: 9px;
   --sidebar-w: 254px;
 
-  --font-body: 'Montserrat', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  --font-head: 'Oswald', 'Bebas Neue', Impact, sans-serif;
+  --font-body: 'Filson Pro', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-head: 'Filson Pro', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 }
+
+/* Filson Pro, la tipografía del catálogo */
+@font-face { font-family: 'Filson Pro'; src: url('/fonts/FilsonProRegular.otf') format('opentype'); font-weight: 400; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Filson Pro'; src: url('/fonts/FilsonProMedium.otf') format('opentype'); font-weight: 500 600; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Filson Pro'; src: url('/fonts/FilsonProBold.otf') format('opentype'); font-weight: 700 800; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Filson Pro'; src: url('/fonts/FilsonProRegularItalic.otf') format('opentype'); font-weight: 400; font-style: italic; font-display: swap; }
 
 * { box-sizing: border-box; }
 
@@ -48,13 +56,23 @@ body {
   color: var(--texto);
   background: var(--crema);
   -webkit-font-smoothing: antialiased;
-  font-size: 14px;
+  font-size: 16px;
 }
 
-h1, h2, h3, h4 { font-family: var(--font-head); font-weight: 600; margin: 0; letter-spacing: 0.02em; }
+h1, h2, h3, h4 { font-family: var(--font-head); font-weight: 700; margin: 0; letter-spacing: 0; text-transform: none !important; }
+
+/* El título con la barra naranja detrás, como en el catálogo */
+.titulo-marca {
+  display: inline;
+  background: linear-gradient(transparent 0 10%, var(--naranja) 10% 54%, transparent 54%);
+  padding: 0 6px 0 2px;
+  -webkit-box-decoration-break: clone; box-decoration-break: clone;
+}
+.subtitulo-marca { font-style: italic; color: var(--naranja-600); font-weight: 400; }
+.num { font-variant-numeric: tabular-nums; }
 
 button { font-family: var(--font-body); cursor: pointer; }
-input, select, textarea { font-family: var(--font-body); font-size: 14px; }
+input, select, textarea { font-family: var(--font-body); font-size: 16px; }
 a { color: inherit; text-decoration: none; }
 
 /* ===================== LAYOUT ===================== */
@@ -77,8 +95,8 @@ a { color: inherit; text-decoration: none; }
 }
 .sidebar__brand img { width: 38px; height: auto; }
 .sidebar__brand .name {
-  font-family: var(--font-head); text-transform: uppercase; letter-spacing: 0.16em;
-  font-size: 16px; color: #fff; line-height: 1;
+  font-family: var(--font-head); font-weight: 700; letter-spacing: 0.02em;
+  font-size: 19px; color: #fff; line-height: 1;
 }
 .sidebar__brand .sub { font-size: 9.5px; letter-spacing: 0.22em; color: var(--naranja); text-transform: uppercase; margin-top: 3px; }
 
@@ -86,8 +104,8 @@ a { color: inherit; text-decoration: none; }
 .nav__section { font-size: 10px; letter-spacing: 0.16em; text-transform: uppercase; color: #6d7367; padding: 14px 12px 6px; }
 .nav__item {
   display: flex; align-items: center; gap: 11px;
-  padding: 10px 12px; border-radius: 10px; color: #c2c8ba;
-  font-weight: 500; font-size: 13.5px; border: none; background: none; width: 100%; text-align: left;
+  padding: 12px 14px; border-radius: 10px; color: #d9d5c4;
+  font-weight: 500; font-size: 16px; border: none; background: none; width: 100%; text-align: left;
   position: relative; transition: background .15s, color .15s;
 }
 .nav__item:hover { background: rgba(255, 255, 255, 0.05); color: #fff; }
@@ -110,13 +128,14 @@ a { color: inherit; text-decoration: none; }
 
 .topbar {
   position: sticky; top: 0; z-index: 20;
-  background: rgba(245, 240, 230, 0.86); backdrop-filter: blur(10px);
+  background: rgba(247, 245, 231, 0.9); backdrop-filter: blur(10px);
   border-bottom: 1px solid var(--borde);
   display: flex; align-items: center; gap: 16px;
   padding: 15px 30px;
 }
-.topbar h1 { font-size: 24px; text-transform: uppercase; letter-spacing: 0.03em; }
-.topbar .subtitle { color: var(--texto-2); font-size: 12.5px; margin-top: 2px; font-family: var(--font-body); letter-spacing: 0; }
+.topbar h1 { font-size: 28px; font-weight: 700; }
+.topbar h1 .titulo-marca { padding-left: 0; }
+.topbar .subtitle { color: var(--naranja-600); font-style: italic; font-size: 17px; margin-top: 2px; font-family: var(--font-body); letter-spacing: 0; }
 .topbar__spacer { flex: 1; }
 
 .content { padding: 26px 30px 60px; }
@@ -125,18 +144,18 @@ a { color: inherit; text-decoration: none; }
 .btn {
   display: inline-flex; align-items: center; gap: 8px; justify-content: center;
   border: 1px solid var(--borde); background: #fff; color: var(--texto);
-  padding: 9px 15px; border-radius: 10px; font-weight: 600; font-size: 13px; transition: .15s;
+  padding: 11px 18px; min-height: 46px; border-radius: 10px; font-weight: 500; font-size: 16px; transition: .15s;
 }
 .btn:hover { border-color: var(--verde-600); }
-.btn--primary { background: var(--naranja); border-color: var(--naranja); color: #fff; }
-.btn--primary:hover { background: var(--naranja-600); border-color: var(--naranja-600); }
+.btn--primary { background: var(--verde-900); border-color: var(--verde-900); color: var(--crema); }
+.btn--primary:hover { background: var(--verde-700); border-color: var(--verde-700); }
 .btn--dark { background: var(--verde-800); border-color: var(--verde-800); color: #fff; }
 .btn--dark:hover { background: var(--verde-700); }
 .btn--ghost { background: transparent; }
 /* Aviso de vencimientos en la barra superior */
 .btn--venc { background: var(--critico-bg); border-color: var(--critico); color: var(--critico); }
 .btn--venc:hover { background: var(--critico); border-color: var(--critico); color: #fff; }
-.btn--sm { padding: 6px 10px; font-size: 12px; border-radius: 8px; }
+.btn--sm { padding: 8px 12px; min-height: 38px; font-size: 14px; border-radius: 8px; }
 /* Acciones que no se deshacen (eliminar): rojas, pero sin gritar hasta el hover */
 .btn--peligro { background: var(--agotado-bg); border-color: var(--agotado-bg); color: var(--agotado); }
 .btn--peligro:hover { background: var(--agotado); border-color: var(--agotado); color: #fff; }
@@ -191,6 +210,9 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: 13px; }
 .tbl tbody td { padding: 11px 8px; border-bottom: 1px solid var(--borde-2); vertical-align: middle; }
 .tbl tbody tr:hover { background: var(--crema-2); }
 .tbl tbody tr:last-child td { border-bottom: none; }
+/* En las tablas los botones de fila quedan compactos para que todo entre a lo ancho */
+.tbl .btn, .tbl .btn--sm { padding: 6px 9px; min-height: 34px; font-size: 13px; }
+.tbl td .row { flex-wrap: wrap; row-gap: 2px; }
 .tbl .num { text-align: right; font-variant-numeric: tabular-nums; }
 .tbl .codigo { font-family: 'SFMono-Regular', ui-monospace, monospace; font-size: 12px; color: var(--verde-700); font-weight: 600; }
 /* El nombre es lo que se lee: pide 240px para no partirse en dos renglones en
@@ -737,4 +759,10 @@ table.tbl--anidada { font-size: 12.5px; background: #fff; border-radius: 10px; o
   .toast { max-width: none; }
   .card__head { padding: 13px 14px; flex-wrap: wrap; }
   .card__body { padding: 14px; }
+}
+
+/* Celular: con Filson Pro los números ocupan un poco más; se gana el ancho en el relleno de las celdas */
+@media (max-width: 620px) {
+  .tbl thead th, .tbl tbody td { padding-left: 5px; padding-right: 5px; }
+  .tbl tbody td, .tbl tbody td * { white-space: normal; overflow-wrap: anywhere; }
 }

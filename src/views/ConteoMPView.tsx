@@ -256,6 +256,7 @@ function ContarMP({
       icon={<Scale size={20} color="var(--naranja)" />}
       wide
       onClose={onClose}
+      sinGuardar={!guardando && conteo.trim() !== ''}
       footer={
         <>
           <button className="btn" onClick={onClose}>Cancelar</button>

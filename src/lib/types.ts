@@ -78,7 +78,8 @@ export type TipoMovimiento =
   | 'consumo_interno'  // lo usó el equipo, no se vendió
   | 'alta'             // se creó el ítem
   | 'edicion'          // se modificó la ficha del ítem
-  | 'baja';            // se eliminó el ítem del sistema
+  | 'baja'             // se eliminó el ítem del sistema
+  | 'restablecer';     // conteo del estante que abre un punto de partida
 
 /** De dónde salió el movimiento: cargado a mano acá, o un pedido de la tienda */
 export type OrigenMovimiento = 'plataforma' | 'tienda';

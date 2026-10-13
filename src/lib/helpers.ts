@@ -220,6 +220,7 @@ export const MOVIMIENTO_LABEL: Record<TipoMovimiento, string> = {
   alta: 'Alta',
   edicion: 'Edición',
   baja: 'Baja',
+  restablecer: 'Conteo del estante',
 };
 
 /** Colores del cartelito de cada tipo de movimiento */
@@ -232,6 +233,7 @@ export const MOVIMIENTO_COLOR: Record<TipoMovimiento, { bg: string; c: string }>
   alta: { bg: '#e6f2ea', c: '#2f6b47' },
   edicion: { bg: 'var(--crema-3)', c: '#7a6a3f' },
   baja: { bg: 'var(--critico-bg)', c: 'var(--critico)' },
+  restablecer: { bg: 'var(--naranja-100)', c: 'var(--texto)' },
 };
 
 /**

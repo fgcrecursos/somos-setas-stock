@@ -22,3 +22,14 @@ export function clienteAislado() {
     auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
   });
 }
+
+// ---------------------------------------------------------------------
+// Solo existen de verdad en la versión de prueba (sandbox/cliente.ts, que
+// reemplaza a este archivo): con la base real no hay ingreso por nombre ni
+// copia local que reiniciar.
+// ---------------------------------------------------------------------
+export const personasDePrueba: { email: string; nombre: string }[] = [];
+export async function volverADatosIniciales(): Promise<void> {}
+export async function fechaDeLaCopia(): Promise<string | null> {
+  return null;
+}

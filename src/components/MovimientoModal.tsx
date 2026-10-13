@@ -8,6 +8,7 @@
 // pantalla para entender un movimiento raro.
 // =====================================================================
 import {
+  ClipboardCheck,
   AlertTriangle,
   ArrowRight,
   Factory,
@@ -48,6 +49,7 @@ const ICONO: Record<TipoMovimiento, React.ReactNode> = {
   alta: <PlusCircle size={20} />,
   edicion: <Pencil size={20} />,
   baja: <Trash2 size={20} />,
+  restablecer: <ClipboardCheck size={20} />,
 };
 
 /** Cómo se lee cada tipo de movimiento, en una línea */
@@ -61,6 +63,8 @@ const EXPLICACION: Record<TipoMovimiento, string> = {
   alta: 'Se creó la ficha del ítem en el sistema.',
   edicion: 'Se modificó la ficha del ítem.',
   baja: 'Se eliminó el ítem del sistema.',
+  restablecer:
+    'Se contó el estante y se fijó el número real. Es un punto de partida: no toca la receta.',
 };
 
 /** Cuántos movimientos vecinos del mismo ítem se listan */

@@ -36,7 +36,9 @@ async function armar(): Promise<void> {
     parsers: {
       1700: (v: string) => Number(v), // numeric → número, como PostgREST
       20: (v: string) => Number(v), // bigint
-      1184: (v: string) => new Date(v).toISOString(), // timestamptz → texto ISO
+      // timestamptz → texto ISO con todos los decimales, como PostgREST (así
+      // una marca leída se puede volver a comparar por igualdad)
+      1184: (v: string) => v.replace(' ', 'T').replace(/([+-]\d\d)$/, '$1:00'),
     },
   });
   await db.exec(PRELUDIO);
@@ -128,6 +130,7 @@ class Consulta implements PromiseLike<Resultado> {
   private unica: 'maybe' | 'single' | null = null;
   private filas: Fila[] = [];
   private conflicto?: string;
+  private ignorarDuplicados = false;
   private valores?: Fila;
 
   constructor(private tabla: string) {}
@@ -153,8 +156,9 @@ class Consulta implements PromiseLike<Resultado> {
   maybeSingle() { this.unica = 'maybe'; return this; }
   single() { this.unica = 'single'; return this; }
   insert(f: Fila | Fila[]) { this.accion = 'insert'; this.filas = Array.isArray(f) ? f : [f]; return this; }
-  upsert(f: Fila | Fila[], o?: { onConflict?: string }) {
+  upsert(f: Fila | Fila[], o?: { onConflict?: string; ignoreDuplicates?: boolean }) {
     this.accion = 'upsert';
+    this.ignorarDuplicados = !!o?.ignoreDuplicates;
     this.filas = Array.isArray(f) ? f : [f];
     this.conflicto = o?.onConflict;
     return this;
@@ -232,7 +236,7 @@ class Consulta implements PromiseLike<Resultado> {
           const pk = this.conflicto ? this.conflicto.split(',').map((c) => c.trim()) : claves.get(this.tabla) ?? [];
           const resto = cols.filter((c) => !pk.includes(c));
           sql += ` on conflict (${pk.map(nombre).join(', ')}) ` +
-            (resto.length ? `do update set ${resto.map((c) => `${nombre(c)} = excluded.${nombre(c)}`).join(', ')}` : 'do nothing');
+            (resto.length && !this.ignorarDuplicados ? `do update set ${resto.map((c) => `${nombre(c)} = excluded.${nombre(c)}`).join(', ')}` : 'do nothing');
         }
         sql += ' returning *';
       } else if (this.accion === 'update') {
@@ -349,3 +353,13 @@ cartel.style.cssText =
   'position:fixed;left:0;right:0;bottom:0;z-index:9999;background:#6a4f7a;color:#fff;font:600 12px/1.2 Montserrat,sans-serif;text-align:center;padding:6px 10px;pointer-events:none';
 document.addEventListener('DOMContentLoaded', () => document.body.appendChild(cartel));
 if (document.readyState !== 'loading') document.body.appendChild(cartel);
+
+// Lo mismo que exporta src/lib/supabase.ts para la versión de prueba (v2):
+// acá el banco entra solo, así que no hay personas para elegir.
+export const personasDePrueba: { email: string; nombre: string }[] = [];
+export async function volverADatosIniciales(): Promise<void> {
+  location.reload();
+}
+export async function fechaDeLaCopia(): Promise<string | null> {
+  return null;
+}

@@ -1,6 +1,7 @@
 import { AlertTriangle, Eye, EyeOff, KeyRound, LogIn, RefreshCw, ShieldAlert } from 'lucide-react';
 import { useState } from 'react';
 import { useAuth } from '../lib/auth';
+import { personasDePrueba } from '../lib/supabase';
 
 const EMAIL_INVITADO = 'invitado@somossetas.com.ar';
 // Cuenta compartida de solo lectura: cualquiera que toque el botón entra sin
@@ -8,7 +9,57 @@ const EMAIL_INVITADO = 'invitado@somossetas.com.ar';
 // para este rol), así que no hay problema en que viaje en el bundle.
 const PASSWORD_INVITADO = 'SomosSetas-Invitado-2026';
 
+/**
+ * Versión de prueba: se entra tocando el nombre (no hay contraseñas). Lo que
+ * cada persona registra queda a su nombre en el historial.
+ * Con la base real, se vuelve al ingreso con email y contraseña (LoginEmail).
+ */
 export function LoginView() {
+  if (personasDePrueba.length === 0) return <LoginEmail />;
+  return <IngresoPorNombre />;
+}
+
+function IngresoPorNombre() {
+  const { entrar } = useAuth();
+  const [error, setError] = useState('');
+  const [entrando, setEntrando] = useState('');
+
+  async function elegir(email: string) {
+    setError('');
+    setEntrando(email);
+    const res = await entrar(email, 'version-de-prueba');
+    setEntrando('');
+    if (res.error) setError(res.error);
+  }
+
+  return (
+    <div className="ingreso">
+      <div className="ingreso__caja">
+        <img className="ingreso__logo" src="/brand/hongo.png" alt="Somos Setas" />
+        <div className="tarea__titulo">
+          <h1 style={{ fontSize: 'clamp(34px, 6vw, 48px)' }}>
+            <span className="titulo-marca">¿Quién</span> sos?
+          </h1>
+          <p className="subtitulo-marca" style={{ margin: 0, fontSize: 22 }}>Tocá tu nombre para entrar</p>
+        </div>
+        <div className="ingreso__personas">
+          {personasDePrueba.map((p) => (
+            <button key={p.email} className="ingreso__persona" disabled={!!entrando} onClick={() => elegir(p.email)}>
+              {entrando === p.email ? 'Entrando…' : p.nombre}
+            </button>
+          ))}
+        </div>
+        {error && <p className="aviso-fuerte" role="alert">{error}</p>}
+        <p className="nota-chica">
+          Versión de prueba del nuevo sistema de stock. Los datos se guardan en este navegador: lo que cargues acá no
+          cambia el stock real.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function LoginEmail() {
   const { entrar, enviarLinkPassword } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');

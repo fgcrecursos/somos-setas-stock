@@ -12,6 +12,7 @@ import {
   VENCIMIENTO_CLASE,
   calcEstado,
   calcVencimiento,
+  buscarItem,
   diasAvisoGuardado,
   formatNum,
 } from '../lib/helpers';
@@ -29,8 +30,12 @@ interface Props {
   onEdit?: () => void;
 }
 
-export function ItemModal({ categoria, item, onClose, onEdit }: Props) {
-  const { ingreso, ajustar, producir, puedeEditar, guardando } = useStore();
+export function ItemModal({ categoria, item: abierto, onClose, onEdit }: Props) {
+  const { state, ingreso, ajustar, producir, puedeEditar, guardando } = useStore();
+  // Se muestra el ítem como está AHORA en el inventario: si mientras la ficha
+  // está abierta alguien vende o carga algo, el número se actualiza solo.
+  const item = (buscarItem(state, categoria, abierto.codigo) as BaseItem | undefined) ?? abierto;
+  const [setInicial] = useState(String(abierto.actual));
   const toast = useToast();
   // Sin cantidad precargada: con un 10 de entrada, un click de más sumaba 10
   // unidades que nadie había producido ni comprado.
@@ -100,6 +105,7 @@ export function ItemModal({ categoria, item, onClose, onEdit }: Props) {
       title={item.codigo}
       icon={<BarcodeIcon size={20} color="var(--verde-700)" />}
       onClose={onClose}
+      sinGuardar={!guardando && (addTxt.trim() !== '' || setTxt !== setInicial)}
       footer={
         <>
           {onEdit && puedeEditar && (

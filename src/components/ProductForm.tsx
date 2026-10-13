@@ -60,17 +60,22 @@ export function ProductForm({ initial, onClose, onEliminar }: Props) {
     setP((prev) => (prev.codigo === sugerido ? prev : { ...prev, codigo: sugerido }));
   }, [sugerido, codigoManual, editing]);
 
+  // Si se tocó algo, cerrar sin guardar pregunta antes
+  const [tocado, setTocado] = useState(false);
   function set<K extends keyof Producto>(k: K, v: Producto[K]) {
+    setTocado(true);
     setP((prev) => ({ ...prev, [k]: v }));
   }
 
   function addBom() {
+    setTocado(true);
     setP((prev) => ({
       ...prev,
       bom: [...prev.bom, { categoria: 'etiqueta', codigo: '', cantidad: 1 }],
     }));
   }
   function updBom(i: number, patch: Partial<BomItem>) {
+    setTocado(true);
     setP((prev) => {
       const bom = [...prev.bom];
       bom[i] = { ...bom[i], ...patch };
@@ -78,6 +83,7 @@ export function ProductForm({ initial, onClose, onEliminar }: Props) {
     });
   }
   function delBom(i: number) {
+    setTocado(true);
     setP((prev) => ({ ...prev, bom: prev.bom.filter((_, idx) => idx !== i) }));
   }
 
@@ -143,6 +149,7 @@ export function ProductForm({ initial, onClose, onEliminar }: Props) {
       {
         actualVisto: editing ? actualVisto : undefined,
         motivoStock: cambiaStock ? motivo ?? undefined : undefined,
+        base: initial,
       }
     );
     if (!res.ok) return setError(res.error ?? 'No se pudo guardar.');
@@ -156,6 +163,7 @@ export function ProductForm({ initial, onClose, onEliminar }: Props) {
       icon={<Package size={20} color="var(--naranja)" />}
       wide
       onClose={onClose}
+      sinGuardar={tocado && !guardando}
       footer={
         <>
           {editing && onEliminar && (

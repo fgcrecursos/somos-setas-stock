@@ -69,7 +69,7 @@ export async function correrPruebas(q: Q) {
   };
 
   async function vender(modo: string, codigo: string, cant: number) {
-    await ir('Vender');
+    await ir('Escanear');
     click(modo, document.querySelector('.toolbar .chips')!);
     await esperar(150);
     const inp = document.querySelector('.producto-select input') as HTMLInputElement;
@@ -343,6 +343,135 @@ export async function correrPruebas(q: Q) {
     const bom = (await q(`select data->'bom' b from st_items where codigo='POL-37'`))[0].b;
     if (bom.some((b: any) => b.codigo === 'ETQ-POL-38')) throw new Error('quedó en la receta de POL-37');
     return 'borrada y quitada de POL-37';
+  });
+
+  // ---------- Que nada de lo guardado se pierda (2026-10-13) ----------
+  const nombreDe = async (codigo: string) =>
+    (await q(`select nombre, data from st_items where codigo = $1`, [codigo]))[0];
+
+  await prueba('17. Dos personas editan la misma ficha: se respetan los dos cambios', async () => {
+    await ir('Insumos productos');
+    clickTitulo('Editar INS-28');
+    await esperar(400);
+    // Mientras el formulario está abierto, "otra persona" carga el proveedor
+    await q(`update st_items set data = data || '{"proveedor":"Proveedor de Mayra"}'::jsonb where codigo = 'INS-28'`);
+    escribir('Nombre', 'INS-28 renombrado (prueba)');
+    await esperar(150);
+    click('Guardar');
+    await esperar(1500);
+    const f = await nombreDe('INS-28');
+    igual(f.nombre, 'INS-28 renombrado (prueba)', 'nombre nuevo');
+    igual(f.data.proveedor, 'Proveedor de Mayra', 'el proveedor que cargó la otra persona');
+    return 'quedaron el nombre nuevo y el proveedor de la otra persona';
+  });
+
+  await prueba('18. Si los dos cambian el mismo dato, no se pisa: avisa', async () => {
+    await ir('Insumos productos');
+    clickTitulo('Editar INS-32');
+    await esperar(400);
+    await q(`update st_items set nombre = 'Lo cargó otra persona' where codigo = 'INS-32'`);
+    escribir('Nombre', 'Lo cargué yo');
+    await esperar(150);
+    click('Guardar');
+    await esperar(1500);
+    if (!errorModal()?.includes('otra persona')) throw new Error(`no avisó (${errorModal()})`);
+    igual((await nombreDe('INS-32')).nombre, 'Lo cargó otra persona', 'nombre en la base');
+    document.querySelector<HTMLButtonElement>('.modal__foot .btn:not(.btn--primary):not(.btn--peligro)')?.click();
+    await esperar(300);
+    return 'avisó y dejó lo de la otra persona';
+  });
+
+  await prueba('19. Editar un ítem que otra persona borró no lo vuelve a crear', async () => {
+    await ir('Insumos productos');
+    clickTitulo('Editar INS-05');
+    await esperar(400);
+    const antes = await q(`select * from st_items where codigo = 'INS-05'`);
+    await q(`delete from st_items where codigo = 'INS-05'`);
+    escribir('Nombre', 'INS-05 editado');
+    await esperar(150);
+    click('Guardar');
+    await esperar(1500);
+    if (!errorModal()) throw new Error('guardó sin avisar');
+    igual((await q(`select count(*)::int n from st_items where codigo = 'INS-05'`))[0].n, 0, 'filas de INS-05');
+    // Lo borrado quedó en el historial y se puede restaurar tal cual
+    const h = (await q(`select id from st_historial where clave = 'insumo|INS-05' and operacion = 'DELETE' order by id desc limit 1`))[0];
+    if (!h) throw new Error('el borrado no quedó en st_historial');
+    await q(`select public.st_restaurar($1)`, [h.id]);
+    const despues = (await q(`select actual, nombre from st_items where codigo = 'INS-05'`))[0];
+    igual([despues?.nombre, despues?.actual], [antes[0].nombre, antes[0].actual], 'INS-05 restaurado');
+    document.querySelector<HTMLButtonElement>('.modal__foot .btn:not(.btn--primary):not(.btn--peligro)')?.click();
+    await esperar(300);
+    return 'avisó, no lo recreó, y st_restaurar lo devolvió con su stock';
+  });
+
+  await prueba('20. Lo eliminado desde la app queda guardado en el historial', async () => {
+    const h = await q(`select antes from st_historial where clave = 'etiqueta|ETQ-POL-38' and operacion = 'DELETE'`);
+    if (!h.length) throw new Error('la baja de ETQ-POL-38 (prueba 16) no quedó en st_historial');
+    const ed = await q(`select count(*)::int n from st_historial where clave = 'insumo|INS-28' and operacion = 'UPDATE'`);
+    if (!(ed[0].n >= 1)) throw new Error('la edición de INS-28 no quedó en st_historial');
+    const borrar = await q(`select count(*)::int n from pg_policies where tablename = 'st_movimientos' and cmd = 'DELETE'`);
+    igual(borrar[0].n, 0, 'políticas para borrar movimientos');
+    return `ETQ-POL-38 recuperable (${h[0].antes.nombre}); ediciones copiadas; movimientos no se borran`;
+  });
+
+  await prueba('21. Tocar afuera de un formulario con datos no lo cierra sin preguntar', async () => {
+    const confirmar = window.confirm;
+    try {
+      await ir('Insumos productos');
+      clickTitulo('Editar INS-37');
+      await esperar(400);
+      escribir('Nombre', 'Algo que todavía no guardé');
+      await esperar(150);
+      let pregunto = false;
+      window.confirm = () => ((pregunto = true), false);
+      const fondo = document.querySelector('.overlay')!;
+      fondo.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+      await esperar(200);
+      if (!pregunto) throw new Error('cerró sin preguntar');
+      if (!document.querySelector('.modal')) throw new Error('se cerró igual');
+      window.confirm = () => true;
+      fondo.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+      await esperar(300);
+      if (document.querySelector('.modal')) throw new Error('no cerró al confirmar');
+      return 'preguntó, y sólo cerró al confirmar';
+    } finally {
+      window.confirm = confirmar;
+    }
+  });
+
+  await prueba('22. Lo que carga otra persona aparece sin recargar la página', async () => {
+    // La app sólo consulta con la pestaña a la vista (al volver a ella recarga).
+    // Si el banco corre en una pestaña oculta, se simula que está a la vista.
+    const oculta = document.visibilityState !== 'visible';
+    if (oculta) Object.defineProperty(document, 'visibilityState', { get: () => 'visible', configurable: true });
+    await q(`update st_items set actual = 777, updated_at = now() where codigo = 'INS-44'`);
+    await esperar(21000);
+    if (oculta) delete (document as any).visibilityState;
+    await ir('Insumos productos');
+    clickTitulo('Editar INS-44');
+    await esperar(400);
+    const visto = (campo('Stock actual') as HTMLInputElement).value;
+    document.querySelector<HTMLButtonElement>('.modal__foot .btn:not(.btn--primary):not(.btn--peligro)')?.click();
+    await esperar(300);
+    igual(visto, '777', 'stock que muestra la pantalla');
+    return 'el 777 apareció solo, sin recargar';
+  });
+
+  await prueba('23. Contá el estante deja el número contado como ajuste', async () => {
+    await ir('Contar el estante');
+    const tarjeta = document.querySelector('.tarjeta-conteo')!;
+    const nombre = tarjeta.querySelector('strong')!.textContent!;
+    const cod = (await q(`select codigo from st_items where categoria = 'producto' and nombre = $1`, [nombre]))[0].codigo;
+    escribir(tarjeta.querySelector('input')!, 12);
+    await esperar(200);
+    click('Guardar el conteo', document);
+    await esperar(200);
+    click('Sí, guardar', document);
+    await esperar(1500);
+    igual((await stock([cod]))[cod], 12, cod);
+    const m = await ultimo();
+    igual([m.tipo, m.codigo], ['ajuste', cod], 'movimiento');
+    return `${cod} quedó en 12, anotado como ajuste`;
   });
 
   const ok = resultados.filter((r) => r.ok).length;

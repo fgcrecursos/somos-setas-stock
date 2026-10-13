@@ -13,6 +13,7 @@ import parcheVentas from '../supabase/stock_tienda_parche_ventas.sql?raw';
 import produccion from '../supabase/stock_produccion_tienda_2026-08-28.sql?raw';
 import remitoReceta from '../supabase/stock_remito_receta_2026-09-18.sql?raw';
 import vinculoRemito from '../supabase/stock_vinculo_remito_2026-09-23.sql?raw';
+import proteccion from '../supabase/proteccion_datos_y_en_vivo_2026-10-13.sql?raw';
 
 /** El usuario con el que "entra" el banco de pruebas: admin del stock */
 export const EMAIL_PRUEBA = 'prueba@banco.local';
@@ -52,6 +53,7 @@ export const SCRIPTS: [string, string][] = [
   ['stock_produccion_tienda_2026-08-28.sql', produccion],
   ['stock_remito_receta_2026-09-18.sql', remitoReceta],
   ['stock_vinculo_remito_2026-09-23.sql', vinculoRemito],
+  ['proteccion_datos_y_en_vivo_2026-10-13.sql', proteccion],
 ];
 
 export const USUARIO_PRUEBA = `

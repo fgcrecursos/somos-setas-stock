@@ -1,4 +1,6 @@
 import {
+  ClipboardCheck,
+  Home,
   AlertTriangle,
   Boxes,
   CalendarClock,
@@ -34,6 +36,13 @@ import { alertasVencimiento, calcEstado, diasAvisoGuardado, listaDe } from './li
 import { useStore } from './lib/store';
 import type { Categoria } from './lib/types';
 import { CategoriaView } from './views/CategoriaView';
+import { CompraView } from './views/CompraView';
+import { ContarView } from './views/ContarView';
+import { HistoriaView } from './views/HistoriaView';
+import { InicioView } from './views/InicioView';
+import { ProducirView } from './views/ProducirView';
+import { SalidaView } from './views/SalidaView';
+import { personasDePrueba, volverADatosIniciales } from './lib/supabase';
 import { Dashboard } from './views/Dashboard';
 import { MovimientosView } from './views/MovimientosView';
 import { PedidosView } from './views/PedidosView';
@@ -49,6 +58,12 @@ import { VentasView } from './views/VentasView';
 const logo = '/brand/logo-blanco.png';
 
 type ViewId =
+  | 'inicio'
+  | 'producir'
+  | 'salida'
+  | 'compra'
+  | 'contar'
+  | 'historia'
   | 'dashboard'
   | 'vender'
   | 'producto'
@@ -65,10 +80,17 @@ type ViewId =
   | 'usuarios';
 
 const TITLES: Record<ViewId, { t: string; s: string }> = {
-  dashboard: { t: 'Dashboard', s: 'Panorama general del stock' },
+  // Las tareas tienen su propio título grande: el encabezado no lo repite
+  inicio: { t: '', s: '' },
+  producir: { t: '', s: '' },
+  salida: { t: '', s: '' },
+  compra: { t: '', s: '' },
+  contar: { t: '', s: '' },
+  historia: { t: '', s: '' },
+  dashboard: { t: 'Panorama', s: 'Cómo está el stock en general' },
   vender: {
-    t: 'Vender / Producir / Consumo',
-    s: 'Escaneá y descontá stock con receta automática',
+    t: 'Escanear código',
+    s: 'Con la cámara o el lector de códigos de barras',
   },
   producto: { t: 'Productos', s: 'Catálogo de productos terminados' },
   insumo: { t: 'Insumos de productos', s: 'Envases, frascos, bolsas y tapas' },
@@ -97,11 +119,12 @@ const TITLES: Record<ViewId, { t: string; s: string }> = {
 };
 
 export default function App() {
-  const { state, cargando, errorCarga, vacio, puedeEditar, refrescar, restablecerDesdeExcel } =
-    useStore();
+  const { state, cargando, errorCarga, vacio, puedeEditar, refrescar } = useStore();
   const { perfil, email, salir, esAdmin } = useAuth();
   const toast = useToast();
-  const [view, setViewBase] = useState<ViewId>('dashboard');
+  const [view, setViewBase] = useState<ViewId>('inicio');
+  // La historia que se está mirando y a dónde volver al cerrarla
+  const [historia, setHistoria] = useState<{ categoria: Categoria; codigo: string; volver: ViewId } | null>(null);
   const [refrescando, setRefrescando] = useState(false);
   // En el celular el menú lateral no entra: se esconde y se abre con el botón
   // del encabezado. Elegir una sección lo vuelve a cerrar.
@@ -109,6 +132,11 @@ export default function App() {
   const setView = (v: ViewId) => {
     setViewBase(v);
     setMenuAbierto(false);
+    window.scrollTo(0, 0);
+  };
+  const verHistoria = (categoria: Categoria, codigo: string) => {
+    setHistoria({ categoria, codigo, volver: view === 'historia' ? historia?.volver ?? 'inicio' : view });
+    setView('historia');
   };
   useEffect(() => {
     if (!menuAbierto) return;
@@ -217,19 +245,17 @@ export default function App() {
     }
   }
 
-  async function restablecer() {
-    // Ahora los datos son compartidos: restablecer le cambia el stock a todo el
-    // equipo, así que se avisa fuerte y se sugiere bajar el backup antes.
+  async function reiniciarPrueba() {
+    // Versión de prueba: los datos viven en este navegador. Volver a empezar
+    // borra lo cargado acá y vuelve a la copia inicial del inventario.
     if (
       !confirm(
-        'Esto reemplaza TODO el inventario de la nube por los valores originales del Excel.\n\n' +
-          'Le va a cambiar el stock a todo el equipo, no solo a vos. El historial de movimientos se conserva.\n\n' +
-          '¿Seguro? (conviene descargar el backup antes)'
+        'Esto borra todo lo que se cargó en esta computadora (producciones, salidas, conteos) y vuelve a los datos iniciales de la prueba.\n\n' +
+          'No toca el stock real. ¿Seguro?'
       )
     )
       return;
-    const res = await restablecerDesdeExcel();
-    toast(res.error ?? 'Inventario restablecido al Excel original', !!res.error);
+    await volverADatosIniciales();
   }
 
   return (
@@ -248,8 +274,10 @@ export default function App() {
         </div>
 
         <nav className="nav">
-          {nav('dashboard', <LayoutDashboard size={18} />, 'Dashboard')}
-          {puedeEditar && nav('vender', <ScanLine size={18} />, 'Vender / Escanear')}
+          {nav('inicio', <Home size={18} />, 'Inicio')}
+          {puedeEditar && nav('contar', <ClipboardCheck size={18} />, 'Contar el estante')}
+          {nav('dashboard', <LayoutDashboard size={18} />, 'Panorama')}
+          {puedeEditar && nav('vender', <ScanLine size={18} />, 'Escanear código')}
           {nav('reposicion', <ClipboardList size={18} />, 'Reposición', alertCounts.producto)}
           {nav('revision', <FileSearch size={18} />, 'Revisión de datos', pendientesGraves)}
 
@@ -287,10 +315,10 @@ export default function App() {
             <Download size={13} style={{ verticalAlign: 'middle', marginRight: 6 }} />
             Descargar backup (Excel)
           </button>
-          {puedeEditar && (
-            <button onClick={restablecer} style={{ marginTop: 8 }}>
+          {personasDePrueba.length > 0 && (
+            <button onClick={reiniciarPrueba} style={{ marginTop: 8 }}>
               <RotateCcw size={13} style={{ verticalAlign: 'middle', marginRight: 6 }} />
-              Restablecer datos
+              Volver a los datos iniciales
             </button>
           )}
           <button onClick={salir} style={{ marginTop: 8 }}>
@@ -299,7 +327,9 @@ export default function App() {
           </button>
           <p style={{ marginTop: 10, marginBottom: 0 }}>
             <Database size={11} style={{ verticalAlign: 'middle', marginRight: 4 }} />
-            Datos compartidos en la nube.
+            {personasDePrueba.length > 0
+              ? 'Versión de prueba: los datos se guardan en este navegador.'
+              : 'Datos compartidos en la nube.'}
           </p>
         </div>
       </aside>
@@ -310,8 +340,18 @@ export default function App() {
             <Menu size={19} />
           </button>
           <div className="topbar__titulo">
-            <h1>{TITLES[view].t}</h1>
-            <div className="subtitle">{TITLES[view].s}</div>
+            {TITLES[view].t ? (
+              <>
+                <h1><span className="titulo-marca">{TITLES[view].t}</span></h1>
+                <div className="subtitle">{TITLES[view].s}</div>
+              </>
+            ) : (
+              view !== 'inicio' && (
+                <button className="btn btn--sm" onClick={() => setView('inicio')}>
+                  <Home size={16} /> Inicio
+                </button>
+              )
+            )}
           </div>
           <div className="topbar__spacer" />
           <BuscadorGlobal onElegir={irAlItem} />
@@ -359,6 +399,27 @@ export default function App() {
             <CargaInicial />
           ) : (
             <>
+              {view === 'inicio' && (
+                <InicioView onTarea={(t) => setView(t)} onHistoria={verHistoria} />
+              )}
+              {view === 'producir' && puedeEditar && (
+                <ProducirView onSalir={() => setView('inicio')} onHistoria={(c) => verHistoria('producto', c)} />
+              )}
+              {view === 'salida' && puedeEditar && (
+                <SalidaView onSalir={() => setView('inicio')} onHistoria={(c) => verHistoria('producto', c)} />
+              )}
+              {view === 'compra' && puedeEditar && (
+                <CompraView onSalir={() => setView('inicio')} onHistoria={verHistoria} />
+              )}
+              {view === 'contar' && puedeEditar && <ContarView onSalir={() => setView('inicio')} />}
+              {view === 'historia' && historia && (
+                <HistoriaView
+                  key={historia.categoria + historia.codigo}
+                  categoria={historia.categoria}
+                  codigo={historia.codigo}
+                  onVolver={() => setView(historia.volver)}
+                />
+              )}
               {view === 'dashboard' && <Dashboard onNav={(v) => setView(v as ViewId)} />}
               {view === 'vender' && puedeEditar && <VenderView />}
               {view === 'producto' && (

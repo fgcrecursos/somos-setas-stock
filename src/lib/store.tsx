@@ -33,14 +33,16 @@ import {
   aplicarMovimiento,
   borrarItem,
   contarItems,
+  escucharCambios,
   estadoVacio,
   guardarItem,
+  huellaBase,
   insertarItem,
   leerActual,
   renombrarEnTienda,
   subirTodo,
   traerTodo,
-  vaciarItems,
+  type CambioItem,
   type Delta,
 } from './cloud';
 import {
@@ -104,6 +106,12 @@ export interface DatosConteoMP {
 export interface OpcionesFicha {
   /** El stock que la persona tenía a la vista cuando abrió el formulario */
   actualVisto?: number;
+  /**
+   * La ficha tal como estaba al abrir el formulario. Sólo se guardan los
+   * campos que la persona cambió contra esto: lo que otra persona haya
+   * cambiado mientras tanto en otros campos se respeta.
+   */
+  base?: any;
   motivoStock?: MotivoStock;
 }
 
@@ -176,7 +184,17 @@ interface StoreCtx {
    * todo en el mismo guardado.
    */
   pasarMateriaPrima: (codigo: string, datos: DatosConteoMP) => Promise<Resultado>;
-  restablecerDesdeExcel: () => Promise<Resultado>;
+  /**
+   * Conteo del estante: fija el número de cada ítem contado y deja un ajuste
+   * por ítem (cuánto decía el sistema y cuánto había). No toca recetas ni
+   * componentes. Devuelve cuántos se guardaron.
+   */
+  restablecer: (
+    conteo: { categoria: Categoria; codigo: string; contado: number }[],
+    nota?: string
+  ) => Promise<Resultado & { guardados?: number }>;
+  /** Si los cambios de otras personas llegan al instante (true) o cada unos segundos */
+  enVivo: boolean;
 }
 
 const Ctx = createContext<StoreCtx | null>(null);
@@ -199,24 +217,39 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [vacio, setVacio] = useState(false);
   const [guardando, setGuardando] = useState(false);
   const [datosLocales] = useState<DBState | null>(estadoGuardadoEnEsteNavegador);
+  const [enVivo, setEnVivo] = useState(false);
   const ultimaCarga = useRef(0);
+  // Cuántas escrituras hizo esta pestaña. Una recarga que arrancó ANTES de
+  // guardar algo trae una foto vieja: si se aplicara, lo recién guardado
+  // desaparecería de la pantalla hasta recargar. Se descarta y se vuelve a pedir.
+  const escrituras = useRef(0);
+  const huella = useRef('');
 
-  const refrescar = useCallback(async () => {
-    try {
-      const cantidad = await contarItems();
-      if (cantidad === 0) {
-        setVacio(true);
-        setState(estadoVacio());
+  const refrescar = useCallback(async (): Promise<void> => {
+    for (let intento = 0; intento < 3; intento++) {
+      const marca = escrituras.current;
+      try {
+        const h = await huellaBase().catch(() => '');
+        const cantidad = await contarItems();
+        if (cantidad === 0) {
+          if (escrituras.current !== marca) continue;
+          setVacio(true);
+          setState(estadoVacio());
+          setErrorCarga(null);
+          return;
+        }
+        const nuevo = await traerTodo();
+        if (escrituras.current !== marca) continue;
+        setState(nuevo);
+        setVacio(false);
         setErrorCarga(null);
+        ultimaCarga.current = Date.now();
+        huella.current = h;
+        return;
+      } catch (err) {
+        setErrorCarga(mensajeError(err));
         return;
       }
-      const nuevo = await traerTodo();
-      setState(nuevo);
-      setVacio(false);
-      setErrorCarga(null);
-      ultimaCarga.current = Date.now();
-    } catch (err) {
-      setErrorCarga(mensajeError(err));
     }
   }, []);
 
@@ -246,6 +279,76 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       document.removeEventListener('visibilitychange', alVolver);
     };
   }, [refrescar]);
+
+  // ---------- Cambios en vivo ----------
+  // Lo que guarda otra persona (o un pedido de la tienda) entra solo: el ítem
+  // se reemplaza por cómo quedó en la base y el movimiento se suma arriba.
+  useEffect(() => {
+    if (cargando) return;
+    // El canal cuenta como "en vivo" recién cuando trae un aviso de verdad:
+    // conectarse no alcanza (si la tabla no está publicada, conecta y calla).
+    const cortar = escucharCambios({
+      onItem: (c: CambioItem) => {
+        setEnVivo(true);
+        setState((prev) => {
+          const clave = (
+            {
+              producto: 'productos',
+              insumo: 'insumos',
+              insumo_interno: 'insumosInternos',
+              etiqueta: 'etiquetas',
+              materia_prima: 'materiaPrima',
+            } as const
+          )[c.categoria];
+          if (!clave) return prev;
+          const lista = [...(prev[clave] as any[])];
+          const codigo = c.tipo === 'borrado' ? c.codigo : c.item.codigo;
+          const idx = lista.findIndex((x) => x.codigo === codigo);
+          if (c.tipo === 'borrado') {
+            if (idx < 0) return prev;
+            lista.splice(idx, 1);
+          } else if (idx >= 0) lista[idx] = c.item;
+          else lista.unshift(c.item);
+          return { ...prev, [clave]: lista };
+        });
+      },
+      onMovimiento: (m) => {
+        setEnVivo(true);
+        setState((prev) =>
+          prev.movimientos.some((x) => x.id === m.id)
+            ? prev
+            : { ...prev, movimientos: [m, ...prev.movimientos] }
+        );
+      },
+      onEstado: (conectado) => {
+        if (!conectado) setEnVivo(false);
+      },
+    });
+    return cortar;
+  }, [cargando]);
+
+  // Red de seguridad: cada tanto se mira una huella chica de la base y, si
+  // cambió algo que no llegó en vivo, se recarga todo. Con el canal en vivo
+  // funcionando alcanza con mirar cada minuto; sin él, cada 15 segundos.
+  useEffect(() => {
+    if (cargando) return;
+    let ocupado = false;
+    const t = window.setInterval(async () => {
+      if (ocupado || document.visibilityState !== 'visible') return;
+      if (Date.now() - ultimaCarga.current < (enVivo ? 60000 : 15000)) return;
+      ocupado = true;
+      try {
+        const h = await huellaBase();
+        if (h !== huella.current) await refrescar();
+        else ultimaCarga.current = Date.now();
+      } catch {
+        /* sin conexión: se vuelve a intentar en la próxima vuelta */
+      } finally {
+        ocupado = false;
+      }
+    }, 5000);
+    return () => window.clearInterval(t);
+  }, [cargando, enVivo, refrescar]);
 
   /** Escribe en el estado local el stock que devolvió la base */
   const aplicarResultantes = useCallback(
@@ -363,10 +466,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       };
 
       try {
+        escrituras.current++;
         const { resultantes, movimiento } = await aplicarMovimiento(deltas, mov);
         aplicarResultantes(resultantes);
         const guardado = movimiento ?? mov;
-        setState((prev) => ({ ...prev, movimientos: [guardado, ...prev.movimientos] }));
+        sumarMovimiento(guardado);
 
         // Las alertas se arman con el stock REAL que devolvió la base.
         // Los avisos de receta (vacía / componentes inexistentes) van primero.
@@ -410,10 +514,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
     /** Manda un movimiento a la base y deja el estado local igual a lo que quedó allá */
     async function aplicarYAnotar(deltas: Delta[], mov: Movimiento): Promise<void> {
+      escrituras.current++;
       const { resultantes, movimiento } = await aplicarMovimiento(deltas, mov);
       aplicarResultantes(resultantes);
-      if (movimiento)
-        setState((prev) => ({ ...prev, movimientos: [movimiento, ...prev.movimientos] }));
+      if (movimiento) sumarMovimiento(movimiento);
     }
 
     /**
@@ -457,8 +561,18 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       };
     }
 
+    /** Suma un movimiento arriba del historial (si el aviso en vivo no lo trajo ya) */
+    function sumarMovimiento(m: Movimiento) {
+      setState((prev) =>
+        prev.movimientos.some((x) => x.id === m.id)
+          ? { ...prev, movimientos: prev.movimientos.map((x) => (x.id === m.id ? m : x)) }
+          : { ...prev, movimientos: [m, ...prev.movimientos] }
+      );
+    }
+
     /** Reemplaza (o agrega) un ítem en el estado local */
     function ponerEnEstado(categoria: Categoria, codigoViejo: string, item: any) {
+      escrituras.current++;
       setState((prev) => {
         const next = structuredClone(prev);
         const lista = listaDe(next, categoria) as any[];
@@ -504,6 +618,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         };
 
       const renombra = !esAlta && codigoViejo !== item.codigo;
+      // Contra qué se miden los cambios: la ficha que la persona vio al abrir
+      const base = opciones.base ?? anterior;
       const visto = opciones.actualVisto;
       const deltaStock = !esAlta && visto != null ? actualNuevo - visto : 0;
       const motivo = opciones.motivoStock;
@@ -520,6 +636,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       }
 
       setGuardando(true);
+      escrituras.current++;
       try {
         // ---------- ALTA ----------
         if (esAlta) {
@@ -543,6 +660,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
         // ---------- FICHA (sin el stock) ----------
         let stockBase = anterior!.actual;
+        let guardado: any;
         if (renombra) {
           // La fila nueva nace con el stock REAL de la vieja, leído recién.
           // Primero se crea la nueva y recién después se borra la vieja: si
@@ -552,14 +670,16 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           stockBase = real;
           await insertarItem(categoria, { ...item, actual: real });
           await borrarItem(categoria, codigoViejo);
+          guardado = { ...item, actual: stockBase };
         } else {
-          await guardarItem(categoria, item);
+          // Sólo viajan los campos que la persona tocó, sobre la ficha de hoy
+          guardado = await guardarItem(categoria, item, base);
+          stockBase = guardado.actual;
         }
-        const guardado = { ...item, actual: stockBase };
         ponerEnEstado(categoria, codigoViejo, guardado);
 
         const sinStock = (x: any) => ({ ...x, actual: undefined });
-        const cambios = describirCambios(sinStock(anterior), sinStock(item));
+        const cambios = describirCambios(sinStock(base), sinStock(item));
         if (cambios.length)
           await aplicarYAnotar(
             [],
@@ -582,8 +702,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
                     : b
                 ),
               };
-              await guardarItem('producto', actualizado);
-              ponerEnEstado('producto', p.codigo, actualizado);
+              const quedo = await guardarItem('producto', actualizado, p);
+              ponerEnEstado('producto', p.codigo, quedo);
               await aplicarYAnotar(
                 [],
                 anotar(
@@ -674,6 +794,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       datosLocales,
       puedeEditar: esAdmin,
       guardando,
+      enVivo,
       refrescar,
 
       async cargaInicial(origen) {
@@ -754,6 +875,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       eliminarItem: (categoria, codigo) =>
         escribir(async () => {
           const item = buscarItem(state, categoria, codigo);
+          escrituras.current++;
           await borrarItem(categoria, codigo);
           setState((prev) => {
             const next = structuredClone(prev);
@@ -780,8 +902,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
             /* el ítem ya se borró: que falle el registro no puede revertir la baja */
             return null;
           });
-          if (baja?.movimiento)
-            setState((prev) => ({ ...prev, movimientos: [baja.movimiento!, ...prev.movimientos] }));
+          if (baja?.movimiento) sumarMovimiento(baja.movimiento);
         }),
 
       async pasarMateriaPrima(codigo, datos) {
@@ -813,8 +934,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         try {
           // 1) Ficha: unidad y mínimo nuevos (sin el stock)
           const ficha = { ...mp, unidad: u, minimo: datos.minimo };
-          await guardarItem('materia_prima', ficha);
-          ponerEnEstado('materia_prima', codigo, { ...ficha, actual: mp.actual });
+          const quedoMP = await guardarItem('materia_prima', ficha, mp);
+          ponerEnEstado('materia_prima', codigo, quedoMP);
           const cambios = describirCambios({ ...mp, actual: undefined }, { ...ficha, actual: undefined });
           if (cambios.length)
             await aplicarYAnotar([], anotar('edicion', 'materia_prima', codigo, mp.nombre, 0, cambios.join(' · ')));
@@ -853,8 +974,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
             });
             try {
               const actualizado: Producto = { ...p, bom };
-              await guardarItem('producto', actualizado);
-              ponerEnEstado('producto', p.codigo, actualizado);
+              const quedo = await guardarItem('producto', actualizado, p);
+              ponerEnEstado('producto', p.codigo, quedo);
               await aplicarYAnotar(
                 [],
                 anotar(
@@ -884,16 +1005,37 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         }
       },
 
-      async restablecerDesdeExcel() {
+      async restablecer(conteo, nota) {
         if (!esAdmin) return { ok: false, error: SIN_PERMISO };
+        const validos = conteo.filter((c) => Number.isFinite(c.contado) && c.contado >= 0);
+        if (!validos.length) return { ok: false, error: 'No hay ningún número cargado.' };
         setGuardando(true);
+        let guardados = 0;
         try {
-          await vaciarItems();
-          await subirTodo(estadoDelExcel());
-          await refrescar();
-          return { ok: true };
+          for (const c of validos) {
+            const item = buscarItem(state, c.categoria, c.codigo);
+            if (!item) continue;
+            // Un conteo físico: `set` con el número exacto, como "Fijar actual"
+            await aplicarYAnotar(
+              [{ categoria: c.categoria, codigo: c.codigo, set: c.contado }],
+              anotar(
+                'ajuste',
+                c.categoria,
+                c.codigo,
+                item.nombre,
+                c.contado - item.actual,
+                nota?.trim() || `Conteo del estante: había ${formatNum(c.contado)}`
+              )
+            );
+            guardados++;
+          }
+          return { ok: true, guardados };
         } catch (err) {
-          return { ok: false, error: mensajeError(err) };
+          return {
+            ok: false,
+            guardados,
+            error: `Se guardaron ${guardados} de ${validos.length}. ${mensajeError(err)}`,
+          };
         } finally {
           setGuardando(false);
         }
@@ -908,6 +1050,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     esAdmin,
     email,
     guardando,
+    enVivo,
     refrescar,
     aplicarResultantes,
   ]);

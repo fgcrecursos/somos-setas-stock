@@ -63,7 +63,10 @@ export function ItemForm({ categoria, initial, onClose, onEliminar }: Props) {
     setItem((prev: any) => (prev.codigo === sugerido ? prev : { ...prev, codigo: sugerido }));
   }, [sugerido, codigoManual, editing]);
 
+  // Si se tocó algo, cerrar sin guardar pregunta antes
+  const [tocado, setTocado] = useState(false);
   function set(k: string, v: any) {
+    setTocado(true);
     setItem((prev: any) => ({ ...prev, [k]: v }));
   }
 
@@ -101,6 +104,7 @@ export function ItemForm({ categoria, initial, onClose, onEliminar }: Props) {
     const res = await upsertItem(categoria, limpio, initial?.codigo, {
       actualVisto: editing ? actualVisto : undefined,
       motivoStock: cambiaStock ? motivo ?? undefined : undefined,
+      base: initial,
     });
     if (!res.ok) return setError(res.error ?? 'No se pudo guardar.');
     if (res.aviso) toast(res.aviso, true);
@@ -112,6 +116,7 @@ export function ItemForm({ categoria, initial, onClose, onEliminar }: Props) {
       title={editing ? `Editar ${initial.codigo}` : TITULO_NUEVO[categoria]}
       icon={<Boxes size={20} color="var(--naranja)" />}
       onClose={onClose}
+      sinGuardar={tocado && !guardando}
       footer={
         <>
           {editing && onEliminar && (

@@ -55,6 +55,7 @@ export function ItemModal({ categoria, item: abierto, onClose, onEdit }: Props) 
   const ficha: { label: string; value: React.ReactNode }[] = [];
   if (d.tipo) ficha.push({ label: 'Tipo', value: d.tipo });
   if (d.presentacion) ficha.push({ label: 'Presentación', value: d.presentacion });
+  if (d.sinEtiquetar) ficha.push({ label: 'Etiqueta', value: 'Sin etiquetar' });
   if (d.lote) ficha.push({ label: 'Lote', value: d.lote });
   if (d.proveedor) ficha.push({ label: 'Proveedor', value: d.proveedor });
   if (d.ubicacion) ficha.push({ label: 'Ubicación', value: d.ubicacion });

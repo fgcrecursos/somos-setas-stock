@@ -208,6 +208,7 @@ export function camposBuscables(it: BaseItem): unknown[] {
     d.ubicacion,
     d.unidadCompra,
     d.observaciones,
+    d.sinEtiquetar ? 'sin etiquetar' : undefined,
   ];
 }
 
@@ -497,11 +498,13 @@ const ETIQUETA_CAMPO: Record<string, string> = {
   unidadCompra: 'unidad de compra',
   stockUnidad: 'stock por unidad',
   fecha: 'fecha',
+  sinEtiquetar: 'sin etiquetar',
 };
 
 function valorLegible(v: unknown): string {
   if (v === null || v === undefined || v === '') return '—';
   if (typeof v === 'number') return formatNum(v);
+  if (typeof v === 'boolean') return v ? 'sí' : 'no';
   return String(v);
 }
 

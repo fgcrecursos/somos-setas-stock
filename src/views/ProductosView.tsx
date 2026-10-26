@@ -1,4 +1,4 @@
-import { Eye, Link2, Package, Pencil, Plus, Trash2 } from 'lucide-react';
+import { Copy, Eye, Link2, Package, Pencil, Plus, Trash2 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { ConfirmarBaja } from '../components/ConfirmarBaja';
 import { DataTable, type Column } from '../components/DataTable';
@@ -21,9 +21,11 @@ export function ProductosView({ foco, onFocoAbierto }: Props) {
   const [q, setQ] = useState('');
   const [tipo, setTipo] = useState<string>('Todos');
   const [soloAlerta, setSoloAlerta] = useState(false);
+  const [etiquetado, setEtiquetado] = useState<'todos' | 'con' | 'sin'>('todos');
   const [ver, setVer] = useState<Producto | null>(null);
   const [editar, setEditar] = useState<Producto | null>(null);
   const [nuevo, setNuevo] = useState(false);
+  const [duplicar, setDuplicar] = useState<Producto | null>(null);
   const [borrar, setBorrar] = useState<Producto | null>(null);
 
   // Llegar desde el buscador general abre directamente la ficha del producto.
@@ -44,9 +46,11 @@ export function ProductosView({ foco, onFocoAbierto }: Props) {
     return state.productos.filter((p) => {
       if (tipo !== 'Todos' && p.tipo !== tipo) return false;
       if (soloAlerta && calcEstado(p.actual, p.minimo).faltan <= 0) return false;
+      if (etiquetado === 'sin' && !p.sinEtiquetar) return false;
+      if (etiquetado === 'con' && p.sinEtiquetar) return false;
       return coincideBusqueda(q, ...camposBuscables(p));
     });
-  }, [state.productos, q, tipo, soloAlerta]);
+  }, [state.productos, q, tipo, soloAlerta, etiquetado]);
 
   const columns: Column<Producto>[] = [
     { key: 'codigo', header: 'Código', movil: false, sortValue: (r) => r.codigo, className: 'codigo', render: (r) => r.codigo },
@@ -56,6 +60,7 @@ export function ProductosView({ foco, onFocoAbierto }: Props) {
           <button className="btn btn--ghost btn--sm" style={{ padding: 0, border: 'none', fontWeight: 600 }} onClick={() => setVer(r)}>
             {r.nombre}
           </button>
+          {r.sinEtiquetar && <span className="pill pill--sin-etq">Sin etiquetar</span>}
           {/* En el celular la columna de código se esconde: va acá abajo */}
           <span className="codigo solo-movil">{r.codigo}</span>
         </>
@@ -86,6 +91,16 @@ export function ProductosView({ foco, onFocoAbierto }: Props) {
           </button>
           {puedeEditar && (
             <button
+              className="btn btn--sm"
+              title={`Duplicar ${r.codigo} con su receta`}
+              aria-label={`Duplicar ${r.codigo}`}
+              onClick={() => setDuplicar(r)}
+            >
+              <Copy size={14} />
+            </button>
+          )}
+          {puedeEditar && (
+            <button
               className="btn btn--sm btn--peligro"
               title={`Eliminar ${r.codigo}`}
               aria-label={`Eliminar ${r.codigo}`}
@@ -105,16 +120,26 @@ export function ProductosView({ foco, onFocoAbierto }: Props) {
           q={q}
           setQ={setQ}
           placeholder="Buscar producto, tipo, código…"
-          activos={[...(tipo !== 'Todos' ? [tipo] : []), ...(soloAlerta ? ['Solo faltantes'] : [])]}
+          activos={[
+            ...(tipo !== 'Todos' ? [tipo] : []),
+            ...(soloAlerta ? ['Solo faltantes'] : []),
+            ...(etiquetado === 'sin' ? ['Sin etiquetar'] : etiquetado === 'con' ? ['Etiquetados'] : []),
+          ]}
           onLimpiar={() => {
             setTipo('Todos');
             setSoloAlerta(false);
+            setEtiquetado('todos');
           }}
         >
           <GrupoFiltro titulo="Tipo de producto">
             {tipos.map((t) => (
               <button key={t} className={'chip' + (tipo === t ? ' active' : '')} onClick={() => setTipo(t)}>{t}</button>
             ))}
+          </GrupoFiltro>
+          <GrupoFiltro titulo="Etiqueta">
+            <button className={'chip' + (etiquetado === 'todos' ? ' active' : '')} onClick={() => setEtiquetado('todos')}>Todos</button>
+            <button className={'chip' + (etiquetado === 'con' ? ' active' : '')} onClick={() => setEtiquetado('con')}>Etiquetados</button>
+            <button className={'chip' + (etiquetado === 'sin' ? ' active' : '')} onClick={() => setEtiquetado('sin')}>Sin etiquetar</button>
           </GrupoFiltro>
           <GrupoFiltro titulo="Estado del stock">
             <button className={'chip' + (!soloAlerta ? ' active' : '')} onClick={() => setSoloAlerta(false)}>Todos</button>
@@ -161,6 +186,7 @@ export function ProductosView({ foco, onFocoAbierto }: Props) {
         />
       )}
       {nuevo && <ProductForm onClose={() => setNuevo(false)} />}
+      {duplicar && <ProductForm duplicarDe={duplicar} onClose={() => setDuplicar(null)} />}
       {borrar && (
         <ConfirmarBaja
           categoria="producto"

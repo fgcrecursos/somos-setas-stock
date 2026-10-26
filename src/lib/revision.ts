@@ -224,7 +224,8 @@ export function revisarDatos(state: DBState): GrupoRevision[] {
       continue;
     }
     const cats = new Set(bom.map((b) => b.categoria));
-    if (!cats.has('etiqueta')) sinEtiqueta.push(fila('producto', p, p.presentacion || ''));
+    // Los sin etiquetar no llevan etiqueta a propósito
+    if (!cats.has('etiqueta') && !p.sinEtiquetar) sinEtiqueta.push(fila('producto', p, p.presentacion || ''));
     if (!cats.has('insumo')) sinEnvase.push(fila('producto', p, p.presentacion || ''));
     if (!cats.has('materia_prima')) sinMP.push(fila('producto', p, p.presentacion || ''));
     const vistos = new Set<string>();

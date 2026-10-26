@@ -20,12 +20,17 @@ const CATS_COMP: CategoriaComponente[] = [
 
 interface Props {
   initial?: Producto;
+  /**
+   * Alta a partir de otro producto: trae su ficha y su receta para no cargarla
+   * de cero. Es un producto nuevo (código propio, stock en 0).
+   */
+  duplicarDe?: Producto;
   onClose: () => void;
   /** Sólo en edición: abre la confirmación de baja del producto */
   onEliminar?: () => void;
 }
 
-export function ProductForm({ initial, onClose, onEliminar }: Props) {
+export function ProductForm({ initial, duplicarDe, onClose, onEliminar }: Props) {
   const { state, upsertProducto, guardando } = useStore();
   const toast = useToast();
   const editing = !!initial;
@@ -35,6 +40,18 @@ export function ProductForm({ initial, onClose, onEliminar }: Props) {
   const [p, setP] = useState<Producto>(
     initial
       ? structuredClone(initial)
+      : duplicarDe
+      ? {
+          ...structuredClone(duplicarDe),
+          codigo: '',
+          actual: 0,
+          // Lo que es de cada tanda no se hereda
+          fecha: null,
+          lote: null,
+          vencimiento: null,
+          // Se duplica casi siempre para cargar la versión sin etiqueta
+          sinEtiquetar: duplicarDe.sinEtiquetar ? undefined : true,
+        }
       : {
           codigo: '',
           nombre: '',
@@ -81,6 +98,11 @@ export function ProductForm({ initial, onClose, onEliminar }: Props) {
       bom[i] = { ...bom[i], ...patch };
       return { ...prev, bom };
     });
+  }
+  const etiquetasEnReceta = p.bom.filter((b) => b.categoria === 'etiqueta');
+  function quitarEtiquetas() {
+    setTocado(true);
+    setP((prev) => ({ ...prev, bom: prev.bom.filter((b) => b.categoria !== 'etiqueta') }));
   }
   function delBom(i: number) {
     setTocado(true);
@@ -159,7 +181,13 @@ export function ProductForm({ initial, onClose, onEliminar }: Props) {
 
   return (
     <Modal
-      title={editing ? `Editar ${initial!.codigo}` : 'Nuevo producto'}
+      title={
+        editing
+          ? `Editar ${initial!.codigo}`
+          : duplicarDe
+          ? `Duplicar ${duplicarDe.codigo}`
+          : 'Nuevo producto'
+      }
       icon={<Package size={20} color="var(--naranja)" />}
       wide
       onClose={onClose}
@@ -183,6 +211,12 @@ export function ProductForm({ initial, onClose, onEliminar }: Props) {
         </>
       }
     >
+      {duplicarDe && (
+        <p className="hlp" style={{ marginTop: 0, marginBottom: 12 }}>
+          Copia de <strong>{duplicarDe.codigo} {duplicarDe.nombre}</strong> con su receta. Es un
+          producto nuevo, con código propio y stock en 0: el original no cambia.
+        </p>
+      )}
       <div className="form-row">
         <CampoCodigo
           valor={p.codigo}
@@ -217,6 +251,29 @@ export function ProductForm({ initial, onClose, onEliminar }: Props) {
           <input className="input" value={p.ubicacion ?? ''} onChange={(e) => set('ubicacion', e.target.value)} />
         </div>
       </div>
+
+      <label className="check-sin-etiquetar">
+        <input
+          type="checkbox"
+          checked={!!p.sinEtiquetar}
+          onChange={(e) => set('sinEtiquetar', e.target.checked ? true : undefined)}
+        />
+        <span>
+          <strong>Sin etiquetar</strong> · se vende sin etiqueta (a granel, para reventa…)
+        </span>
+      </label>
+      {p.sinEtiquetar && etiquetasEnReceta.length > 0 && (
+        <div className="aviso-sin-etiquetar">
+          <span>
+            La receta todavía descuenta{' '}
+            {etiquetasEnReceta.length === 1 ? 'la etiqueta' : 'las etiquetas'}{' '}
+            <strong>{etiquetasEnReceta.map((b) => b.codigo).join(', ')}</strong> al producir.
+          </span>
+          <button className="btn btn--sm" onClick={quitarEtiquetas}>
+            Quitar de la receta
+          </button>
+        </div>
+      )}
 
       <div className="form-row-3">
         <div className="field">

@@ -766,3 +766,9 @@ table.tbl--anidada { font-size: 12.5px; background: #fff; border-radius: 10px; o
   .tbl thead th, .tbl tbody td { padding-left: 5px; padding-right: 5px; }
   .tbl tbody td, .tbl tbody td * { white-space: normal; overflow-wrap: anywhere; }
 }
+
+/* Producto sin etiquetar: casilla del formulario, aviso de receta y cartelito */
+.check-sin-etiquetar { display: flex; align-items: center; gap: 9px; margin: 2px 0 14px; font-size: 13px; color: var(--texto-2); cursor: pointer; }
+.check-sin-etiquetar input { width: 17px; height: 17px; accent-color: var(--naranja); flex: none; }
+.aviso-sin-etiquetar { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin: -6px 0 14px; padding: 9px 12px; border-radius: var(--radius-sm); background: var(--bajo-bg); color: var(--texto-2); font-size: 12.5px; }
+.pill--sin-etq { background: var(--naranja-100); color: var(--naranja-600); border-color: transparent; margin-left: 6px; white-space: nowrap; }

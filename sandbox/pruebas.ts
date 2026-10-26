@@ -474,6 +474,36 @@ export async function correrPruebas(q: Q) {
     return `${cod} quedó en 12, anotado como ajuste`;
   });
 
+  await prueba('24. Duplicar como sin etiquetar copia la receta sin la etiqueta', async () => {
+    const original = (await q(`select data->'bom' b from st_items where codigo = 'CAP-01'`))[0].b;
+    await ir('Productos');
+    clickTitulo('Duplicar CAP-01 con su receta');
+    await esperar(400);
+    const casilla = document.querySelector<HTMLInputElement>('.modal .check-sin-etiquetar input')!;
+    if (!casilla.checked) throw new Error('el duplicado no vino marcado como sin etiquetar');
+    click('Quitar de la receta');
+    await esperar(150);
+    click('Crear producto');
+    await esperar(1500);
+    if (errorModal()) throw new Error(errorModal()!);
+    const nuevo = (await q(`select codigo, actual, data from st_items where categoria = 'producto' and data->>'sinEtiquetar' = 'true'`))[0];
+    if (!nuevo) throw new Error('no se creó el duplicado');
+    igual(Number(nuevo.actual), 0, 'stock del duplicado');
+    igual(
+      nuevo.data.bom.map((b: any) => b.codigo),
+      original.filter((b: any) => b.categoria !== 'etiqueta').map((b: any) => b.codigo),
+      'receta del duplicado'
+    );
+    igual((await q(`select data->'bom' b from st_items where codigo = 'CAP-01'`))[0].b, original, 'receta de CAP-01 intacta');
+    const a = await stock(['ETQ-CAP-25', 'INS-14', 'MP-04']);
+    await vender('Producción', nuevo.codigo, 3);
+    const d = await stock(['ETQ-CAP-25', 'INS-14', 'MP-04']);
+    igual(d['ETQ-CAP-25'], a['ETQ-CAP-25'], 'etiqueta sin tocar');
+    igual(a['INS-14'] - d['INS-14'], 3, 'bolsa');
+    igual(a['MP-04'] - d['MP-04'], 180, 'cápsulas');
+    return `${nuevo.codigo} creado en 0 con la receta de CAP-01 sin etiqueta; producir 3 no tocó la etiqueta`;
+  });
+
   const ok = resultados.filter((r) => r.ok).length;
   return { resumen: `${ok} de ${resultados.length} pruebas OK`, resultados };
 }

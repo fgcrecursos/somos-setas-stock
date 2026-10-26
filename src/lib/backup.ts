@@ -240,13 +240,14 @@ export async function descargarBackup(state: DBState, quien: string) {
       ...filaBase(p),
       Tipo: p.tipo,
       Presentación: p.presentacion,
+      'Sin etiquetar': p.sinEtiquetar ? 'Sí' : '',
       Lote: p.lote ?? '',
       Vencimiento: p.vencimiento ?? '',
       Ubicación: p.ubicacion ?? '',
       'Componentes en receta': p.bom?.length ?? 0,
       Observaciones: p.observaciones ?? '',
     })),
-    [14, 40, 10, 10, 11, 11, 14, 20, 12, 12, 16, 18, 30]
+    [14, 40, 10, 10, 11, 11, 14, 20, 12, 12, 12, 16, 18, 30]
   );
 
   hoja(

@@ -32,6 +32,11 @@ export interface Producto extends BaseItem {
   vencimiento?: string | null;
   ubicacion?: string | null;
   observaciones?: string | null;
+  /**
+   * Se vende sin etiqueta (a granel, para reventa…). Es el mismo producto en
+   * otra presentación: su receta normalmente no lleva etiqueta.
+   */
+  sinEtiquetar?: boolean;
   /** Receta: componentes que se descuentan al vender/producir */
   bom: BomItem[];
 }

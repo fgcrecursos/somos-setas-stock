@@ -6,7 +6,7 @@
 // vincular la tienda con el stock. Las series son estas:
 //
 //   Productos        · por tipo: ACE (aceite), CAP (cápsulas), EXT (extracto),
-//                      POL (polvo), ENT (setas enteras)
+//                      POL (polvo), ENT (setas enteras), OTR (otros)
 //   Etiquetas        · ETQ + la serie del producto que etiquetan (ETQ-CAP-31)
 //   Insumos          · INS      Insumos internos · INSV      Materia prima · MP
 //
@@ -73,6 +73,8 @@ const SERIE_POR_TIPO: Record<string, string> = {
   entero: 'ENT',
   entera: 'ENT',
   gel: 'GEL',
+  otro: 'OTR',
+  otros: 'OTR',
 };
 
 /** Serie de la categoría, para lo que no se distingue por tipo */

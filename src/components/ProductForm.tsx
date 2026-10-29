@@ -10,7 +10,9 @@ import { Modal } from './Modal';
 import { MotivoStockSelector, opcionesMotivo } from './MotivoStock';
 import { useToast } from './Toast';
 
-const TIPOS = ['Aceite', 'Cápsulas', 'Extracto', 'Polvo', 'Setas'];
+// "Otros" es para lo que no encaja en ningún tipo (o todavía no se sabe cuál
+// es): va con su propia serie de códigos, OTR.
+const TIPOS = ['Aceite', 'Cápsulas', 'Extracto', 'Polvo', 'Setas', 'Otros'];
 const CATS_COMP: CategoriaComponente[] = [
   'etiqueta',
   'insumo',

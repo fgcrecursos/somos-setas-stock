@@ -7,6 +7,7 @@ import {
   abrevUnidad,
   calcVencimiento,
   diasAvisoGuardado,
+  normalizarBusqueda,
 } from '../lib/helpers';
 import { useStore, type MotivoStock } from '../lib/store';
 import type { Categoria } from '../lib/types';
@@ -24,6 +25,23 @@ interface Props {
 }
 
 const usaTipoPres: Categoria[] = ['etiqueta', 'materia_prima'];
+
+/**
+ * Tipos de materia prima: los que ya se usaban escritos a mano (polvo, entero,
+ * hojas…) más "Otros" para lo que no encaja o no está definido del todo.
+ */
+const TIPOS_MP = ['Polvo', 'Entero', 'Entero + polvo', 'Líquido', 'Hojas', 'Otros'];
+
+/** "POLVO", "entera", "hoja" y "Entero+polvo" caen en la opción de la lista */
+function claveTipo(t: string): string {
+  return normalizarBusqueda(t).replace(/\s+/g, '').replace(/s$/, '').replace(/a$/, 'o');
+}
+
+/** La opción de la lista que corresponde a lo que ya estaba escrito, si hay */
+function opcionTipoMP(actual: string): string | undefined {
+  const c = claveTipo(actual);
+  return TIPOS_MP.find((t) => claveTipo(t) === c);
+}
 
 /** "Nueva etiqueta", "Nuevo insumo": el título del alta concuerda en género */
 const TITULO_NUEVO: Record<Categoria, string> = {
@@ -158,7 +176,22 @@ export function ItemForm({ categoria, initial, onClose, onEliminar }: Props) {
         <div className="form-row">
           <div className="field">
             <label>Tipo</label>
-            <input className="input" value={item.tipo ?? ''} onChange={(e) => set('tipo', e.target.value)} />
+            {categoria === 'materia_prima' ? (
+              // Si lo escrito a mano coincide con una opción ("POLVO", "entera")
+              // se muestra esa opción, pero el dato no cambia hasta que se elija
+              // otra. Lo que no coincide queda como opción propia, tal cual.
+              <select
+                className="select"
+                value={opcionTipoMP(item.tipo ?? '') ?? item.tipo ?? ''}
+                onChange={(e) => set('tipo', e.target.value)}
+              >
+                <option value="">Elegí un tipo</option>
+                {item.tipo && !opcionTipoMP(item.tipo) && <option value={item.tipo}>{item.tipo}</option>}
+                {TIPOS_MP.map((t) => <option key={t}>{t}</option>)}
+              </select>
+            ) : (
+              <input className="input" value={item.tipo ?? ''} onChange={(e) => set('tipo', e.target.value)} />
+            )}
           </div>
           <div className="field">
             <label>Presentación</label>

@@ -143,7 +143,11 @@ export function cantidadSugerida(
     }
     return null;
   }
-  if (tipo.includes('extracto') || tipo.includes('aceite') || tipo.includes('gel')) return null;
+  // "Otros" es justamente lo que no se sabe cómo está armado: no se adivina
+  if (
+    tipo.includes('extracto') || tipo.includes('aceite') || tipo.includes('gel') || tipo.includes('otro')
+  )
+    return null;
 
   const t = leerTamano(p.presentacion);
   if (unidad === 'g' && t?.dim === 'g')

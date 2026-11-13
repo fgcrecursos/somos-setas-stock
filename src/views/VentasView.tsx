@@ -10,6 +10,7 @@
 // "tienda"). Lo que se factura en el panel de la tienda se mira allá.
 // =====================================================================
 import {
+  CalendarDays,
   Download,
   FlaskConical,
   PackageSearch,
@@ -23,6 +24,7 @@ import {
 import { useMemo, useState } from 'react';
 import { BarraFiltros, GrupoFiltro } from '../components/BarraFiltros';
 import { MovimientoModal } from '../components/MovimientoModal';
+import { ActividadMensualModal, type FocoActividad } from '../components/ActividadMensualModal';
 import { CalendarioDia } from '../components/CalendarioDia';
 import { useToast } from '../components/Toast';
 import { descargarInforme, type FilaActividad } from '../lib/backup';
@@ -105,6 +107,11 @@ export function VentasView() {
   // Movimiento abierto en el modal de detalle (se guarda el id, no el objeto)
   const [movAbierto, setMovAbierto] = useState<string | null>(null);
   const [q, setQ] = useState('');
+  // Modal mes a mes: desde una tarjeta (todos los productos) o una fila (uno)
+  const [mensual, setMensual] = useState<{
+    foco: FocoActividad;
+    producto?: { codigo: string; nombre: string; presentacion?: string };
+  } | null>(null);
 
   const movimientoAbierto = useMemo(
     () => (movAbierto ? (state.movimientos.find((m) => m.id === movAbierto) ?? null) : null),
@@ -297,6 +304,8 @@ export function VentasView() {
           bg="var(--naranja-100)"
           valor={formatNum(total.vendidas)}
           label="Unidades vendidas"
+          accion="Ver ventas mes a mes"
+          onClick={() => setMensual({ foco: 'venta' })}
           foot={
             total.tienda
               ? `${formatNum(total.tienda)} de la tienda · ${formatNum(
@@ -312,6 +321,8 @@ export function VentasView() {
           valor={formatNum(total.producidas)}
           label="Unidades producidas"
           foot={etiquetaPeriodo(periodo)}
+          accion="Ver producción mes a mes"
+          onClick={() => setMensual({ foco: 'produccion' })}
         />
         <Kpi
           icon={<Users size={19} />}
@@ -378,7 +389,17 @@ export function VentasView() {
               {rankingFiltrado.map((r) => {
                 const bal = r.producidas - r.vendidas - r.consumo;
                 return (
-                  <tr key={r.codigo}>
+                  <tr
+                    key={r.codigo}
+                    style={{ cursor: 'pointer' }}
+                    title="Ver producción y ventas de este producto mes a mes"
+                    onClick={() =>
+                      setMensual({
+                        foco: r.producidas > r.vendidas ? 'produccion' : 'venta',
+                        producto: { codigo: r.codigo, nombre: r.nombre, presentacion: r.presentacion },
+                      })
+                    }
+                  >
                     <td className="muted">{r.puesto}</td>
                     <td className="nombre">
                       {r.nombre} <span className="codigo">{r.codigo}</span>
@@ -575,6 +596,19 @@ export function VentasView() {
         tienda: acá se cuentan unidades, no plata.
       </p>
 
+      {mensual && (
+        <ActividadMensualModal
+          movimientos={state.movimientos}
+          foco={mensual.foco}
+          producto={mensual.producto}
+          onClose={() => setMensual(null)}
+          onVerMes={(ym) => {
+            setPeriodo(ym);
+            setMensual(null);
+          }}
+        />
+      )}
+
       {movimientoAbierto && (
         <MovimientoModal
           movimiento={movimientoAbierto}
@@ -587,16 +621,30 @@ export function VentasView() {
 }
 
 function Kpi({
-  icon, color, bg, valor, label, foot,
+  icon, color, bg, valor, label, foot, accion, onClick,
 }: {
   icon: React.ReactNode; color: string; bg: string; valor: string; label: string; foot?: string;
+  /** Texto del enlace al pie cuando la tarjeta se puede tocar */
+  accion?: string;
+  onClick?: () => void;
 }) {
-  return (
-    <div className="kpi">
+  const contenido = (
+    <>
       <div className="kpi__icon" style={{ background: bg, color }}>{icon}</div>
       <div className="kpi__value">{valor}</div>
       <div className="kpi__label">{label}</div>
       {foot && <div className="kpi__foot">{foot}</div>}
-    </div>
+      {accion && (
+        <div className="kpi__accion">
+          <CalendarDays size={13} /> {accion}
+        </div>
+      )}
+    </>
+  );
+  if (!onClick) return <div className="kpi">{contenido}</div>;
+  return (
+    <button type="button" className="kpi kpi--accion" onClick={onClick}>
+      {contenido}
+    </button>
   );
 }

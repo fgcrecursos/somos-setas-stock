@@ -772,3 +772,38 @@ table.tbl--anidada { font-size: 12.5px; background: #fff; border-radius: 10px; o
 .check-sin-etiquetar input { width: 17px; height: 17px; accent-color: var(--naranja); flex: none; }
 .aviso-sin-etiquetar { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin: -6px 0 14px; padding: 9px 12px; border-radius: var(--radius-sm); background: var(--bajo-bg); color: var(--texto-2); font-size: 12.5px; }
 .pill--sin-etq { background: var(--naranja-100); color: var(--naranja-600); border-color: transparent; margin-left: 6px; white-space: nowrap; }
+
+/* ===================== ACTIVIDAD MES A MES ===================== */
+.kpi--accion { display: block; width: 100%; text-align: left; font: inherit; color: inherit; cursor: pointer; transition: border-color .15s, box-shadow .15s, transform .15s; }
+.kpi--accion:hover { border-color: var(--naranja); box-shadow: var(--shadow-lg); transform: translateY(-1px); }
+.kpi--accion:focus-visible { outline: 2px solid var(--naranja); outline-offset: 2px; }
+.kpi__accion { display: inline-flex; align-items: center; gap: 5px; margin-top: 10px; font-size: 12px; font-weight: 700; color: var(--naranja); }
+.act-mes__resumen { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.act-mes__dato { background: #fff; border: 1px solid var(--borde); border-radius: 12px; padding: 12px 14px; }
+.act-mes__valor { font-family: var(--font-head); font-size: 26px; line-height: 1; }
+.act-mes__label { font-size: 12px; color: var(--texto-2); margin-top: 5px; }
+.act-mes__grafico { display: flex; align-items: flex-end; gap: 6px; height: 150px; padding: 12px 12px 6px; background: #fff; border: 1px solid var(--borde); border-radius: 12px; }
+.act-mes__col { flex: 1; min-width: 0; height: 100%; display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.act-mes__col small { font-size: 10.5px; color: var(--texto-3); }
+.act-mes__barras { flex: 1; width: 100%; display: flex; align-items: flex-end; justify-content: center; gap: 2px; }
+.act-mes__barras span { width: 42%; max-width: 16px; min-height: 2px; border-radius: 3px 3px 0 0; }
+.act-mes__leyenda { display: flex; gap: 16px; font-size: 12px; color: var(--texto-2); margin-top: -8px; }
+.act-mes__leyenda i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 5px; vertical-align: -1px; }
+.act-mes__corto { display: none; }
+.tbl.tbl--m-actmes .btn, .tbl.tbl--m-actmes > tbody > tr > td.nombre, .tbl.tbl--m-actmes > tbody > tr > td.nombre > *, .act-mes__productos .tbl thead th { white-space: nowrap; }
+.act-mes__detalle > td { background: var(--crema-3); padding: 10px 12px; }
+.act-mes__productos { background: #fff; border: 1px solid var(--borde); border-radius: 10px; overflow: hidden; }
+.act-mes__productos-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; padding: 10px 12px; font-size: 13px; }
+.act-mes__productos-head .input { max-width: 220px; min-height: 34px; padding: 6px 10px; }
+@media (max-width: 620px) {
+  .act-mes__resumen { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .act-mes__grafico { gap: 3px; padding: 10px 6px 6px; }
+  .act-mes__col small { font-size: 9px; }
+  .tbl--m-actmes > * > tr > :nth-child(4) { display: none; }
+  .act-mes__largo { display: none; }
+  .tbl.tbl--m-actmes .act-mes__detalle > td { padding: 6px 0; }
+  .act-mes__corto { display: inline; }
+  .act-mes__productos :is(th, td) { padding-left: 6px; padding-right: 6px; font-size: 12px; }
+  .tbl--m-actmes :is(th, td) { padding-left: 5px; padding-right: 5px; font-size: 12px; }
+  .tbl--m-actmes .btn--sm { padding: 5px 7px; min-height: 30px; font-size: 12px; }
+}

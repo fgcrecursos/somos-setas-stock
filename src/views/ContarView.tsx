@@ -8,6 +8,7 @@
 import { ArrowLeft, Check, Search } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { FotoItem, Titulo } from '../components/Tareas';
+import { traerPorDespachar, type PorDespachar } from '../lib/cloud';
 import { cuanto } from '../lib/frases';
 import { CATEGORIA_LABEL_PLURAL, camposBuscables, coincideBusqueda, formatNum, listaDe } from '../lib/helpers';
 import { useStore } from '../lib/store';
@@ -31,6 +32,22 @@ export function ContarView({ onSalir }: { onSalir: () => void }) {
   const [filtro, setFiltro] = useState<'todos' | 'faltan' | 'contados'>('todos');
   const [q, setQ] = useState('');
   const [confirmando, setConfirmando] = useState(false);
+  // Mercadería de pedidos confirmados que todavía no salió: el sistema ya la
+  // descontó, pero puede seguir en el estante. Antes de guardar hay que decir
+  // si se contó o no; si no, el conteo la vuelve a sumar.
+  const [porDespachar, setPorDespachar] = useState<Map<string, PorDespachar>>(new Map());
+  const [pedidosEnEstante, setPedidosEnEstante] = useState<'apartados' | 'contados' | null>(null);
+  useEffect(() => {
+    let vivo = true;
+    traerPorDespachar()
+      .then((m) => vivo && setPorDespachar(m))
+      .catch(() => {
+        /* sin acceso a los pedidos: se cuenta como siempre */
+      });
+    return () => {
+      vivo = false;
+    };
+  }, []);
   const [hecho, setHecho] = useState<number | null>(null);
   const [error, setError] = useState('');
 
@@ -59,18 +76,43 @@ export function ContarView({ onSalir }: { onSalir: () => void }) {
     return Number.isFinite(n) && n >= 0 ? n : null;
   };
   const conNumero = items.filter((it) => contado(it.codigo) != null);
+  const pendiente = (codigo: string) => porDespachar.get(`${cat}|${codigo}`)?.cantidad ?? 0;
+  // Lo que tiene que quedar en el sistema: si lo de los pedidos sin despachar
+  // se contó junto con el resto, se le resta (ya está descontado)
+  const paraGuardar = (codigo: string) => {
+    const n = contado(codigo);
+    if (n == null) return null;
+    return pedidosEnEstante === 'contados' ? Math.max(0, n - pendiente(codigo)) : n;
+  };
+  const contadosConPedidos = conNumero.filter((it) => pendiente(it.codigo) > 0);
+  const faltaDecidir = contadosConPedidos.length > 0 && pedidosEnEstante == null;
   const visibles = items.filter((it) => {
     if (q.trim() && !coincideBusqueda(q, ...camposBuscables(it))) return false;
     if (filtro === 'faltan') return contado(it.codigo) == null;
     if (filtro === 'contados') return contado(it.codigo) != null;
     return true;
   });
-  const diferencias = conNumero.filter((it) => contado(it.codigo) !== it.actual);
+  const diferencias = conNumero.filter((it) => paraGuardar(it.codigo) !== it.actual);
 
   async function guardar() {
     setError('');
     const r = await restablecer(
-      conNumero.map((it) => ({ categoria: cat, codigo: it.codigo, contado: contado(it.codigo)! }))
+      conNumero.map((it) => {
+        const visto = contado(it.codigo)!;
+        const queda = paraGuardar(it.codigo)!;
+        const p = pendiente(it.codigo);
+        return {
+          categoria: cat,
+          codigo: it.codigo,
+          contado: queda,
+          nota:
+            p > 0 && pedidosEnEstante === 'contados'
+              ? `Conteo del estante: había ${formatNum(visto)}, ${formatNum(Math.min(p, visto))} son de pedidos sin despachar; quedan ${formatNum(queda)}`
+              : p > 0
+                ? `Conteo del estante: había ${formatNum(visto)} (sin contar ${formatNum(p)} apartados para pedidos)`
+                : undefined,
+        };
+      })
     );
     if (!r.ok) return setError(r.error || 'No se pudo guardar.');
     setValores({});
@@ -80,6 +122,7 @@ export function ContarView({ onSalir }: { onSalir: () => void }) {
       /* nada */
     }
     setConfirmando(false);
+    setPedidosEnEstante(null);
     setHecho(r.guardados ?? 0);
   }
 
@@ -136,7 +179,9 @@ export function ContarView({ onSalir }: { onSalir: () => void }) {
       <div className="contar__lista">
         {visibles.map((it) => {
           const n = contado(it.codigo);
-          const dif = n == null ? null : n - it.actual;
+          const p = pendiente(it.codigo);
+          const queda = paraGuardar(it.codigo);
+          const dif = queda == null ? null : queda - it.actual;
           return (
             <div key={it.codigo} className={'tarjeta-conteo num' + (n == null ? ' tarjeta-conteo--pendiente' : '')}>
               <FotoItem item={it as any} categoria={cat} tam={56} />
@@ -159,11 +204,17 @@ export function ContarView({ onSalir }: { onSalir: () => void }) {
                 ) : (
                   <>
                     El sistema decía {formatNum(it.actual)}
+                    {p > 0 && pedidosEnEstante === 'contados' && <> · van {formatNum(Math.min(p, n ?? 0))} a pedidos</>}
                     <br />
                     <strong>{dif === 0 ? 'Coincide' : dif < 0 ? `Hay ${cuanto(dif, it as any)} menos` : `Hay ${cuanto(dif, it as any)} más`}</strong>
                   </>
                 )}
               </span>
+              {p > 0 && (
+                <span className="tarjeta-conteo__pedidos">
+                  {formatNum(p)} ya {p === 1 ? 'vendida' : 'vendidas'} en {porDespachar.get(`${cat}|${it.codigo}`)!.pedidos === 1 ? 'un pedido' : `${porDespachar.get(`${cat}|${it.codigo}`)!.pedidos} pedidos`} sin despachar
+                </span>
+              )}
             </div>
           );
         })}
@@ -171,6 +222,24 @@ export function ContarView({ onSalir }: { onSalir: () => void }) {
       </div>
 
       {error && <p className="aviso-fuerte" role="alert">{error}</p>}
+
+      {contadosConPedidos.length > 0 && (
+        <div className="aviso-fuerte pedidos-estante" role="group" aria-label="Pedidos sin despachar">
+          <p>
+            <strong>Hay pedidos confirmados que todavía no salieron.</strong> El sistema ya descontó esa
+            mercadería ({contadosConPedidos.length === 1 ? 'un producto' : `${contadosConPedidos.length} productos`} de
+            los que contaste). ¿Dónde estaba cuando contaste?
+          </p>
+          <div className="elegir__cats">
+            <button type="button" className={'opcion-chica' + (pedidosEnEstante === 'contados' ? ' opcion-chica--activa' : '')} onClick={() => setPedidosEnEstante('contados')}>
+              En el estante: la conté
+            </button>
+            <button type="button" className={'opcion-chica' + (pedidosEnEstante === 'apartados' ? ' opcion-chica--activa' : '')} onClick={() => setPedidosEnEstante('apartados')}>
+              Apartada: no la conté
+            </button>
+          </div>
+        </div>
+      )}
 
       <div className="barra-guardar">
         {confirmando ? (
@@ -190,8 +259,8 @@ export function ContarView({ onSalir }: { onSalir: () => void }) {
           <>
             <p>Podés dejarlo a medias y seguir otro día: lo que escribiste queda en esta computadora. Nada cambia hasta tocar <strong>Guardar el conteo</strong>.</p>
             <div className="tarea__acciones">
-              <button className="btn-grande btn-grande--naranja" disabled={conNumero.length === 0} onClick={() => setConfirmando(true)}>
-                Guardar el conteo
+              <button className="btn-grande btn-grande--naranja" disabled={conNumero.length === 0 || faltaDecidir} onClick={() => setConfirmando(true)}>
+                {faltaDecidir ? 'Decí dónde estaban los pedidos' : 'Guardar el conteo'}
               </button>
             </div>
           </>

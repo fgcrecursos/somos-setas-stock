@@ -27,7 +27,7 @@ import type {
   Movimiento,
   Producto,
 } from './types';
-import { abrevUnidad, buscarItem, describirCambios, formatNum, listaDe, uid } from './helpers';
+import { abrevUnidad, buscarItem, describirCambios, esUnidadDeStock, formatNum, listaDe, uid } from './helpers';
 import { useAuth } from './auth';
 import {
   aplicarMovimiento,
@@ -101,6 +101,8 @@ export interface DatosConteoMP {
   minimo: number;
   /** Cuánto lleva una unidad de cada producto que la usa, en la unidad nueva */
   recetas: { producto: string; cantidad: number }[];
+  /** Cuánto trae un envase de compra, en la unidad nueva (opcional) */
+  contenidoEnvase?: number | null;
 }
 
 export interface OpcionesFicha {
@@ -164,7 +166,8 @@ interface StoreCtx {
     cantidad: number,
     nota?: string
   ) => Promise<Resultado>;
-  ingreso: (categoria: Categoria, codigo: string, cantidad: number) => Promise<Resultado>;
+  /** `nota`: cómo llegó (2 × Bolsa 5 kg, proveedor, remito). Queda en el historial. */
+  ingreso: (categoria: Categoria, codigo: string, cantidad: number, nota?: string) => Promise<Resultado>;
   ajustar: (categoria: Categoria, codigo: string, nuevoActual: number) => Promise<Resultado>;
   upsertProducto: (
     p: Producto,
@@ -190,7 +193,7 @@ interface StoreCtx {
    * componentes. Devuelve cuántos se guardaron.
    */
   restablecer: (
-    conteo: { categoria: Categoria; codigo: string; contado: number }[],
+    conteo: { categoria: Categoria; codigo: string; contado: number; nota?: string }[],
     nota?: string
   ) => Promise<Resultado & { guardados?: number }>;
   /** Si los cambios de otras personas llegan al instante (true) o cada unos segundos */
@@ -816,14 +819,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       vender: (codigo, cantidad, nota) => registrar(codigo, cantidad, 'venta', nota),
       producir: (codigo, cantidad, nota) => registrar(codigo, cantidad, 'produccion', nota),
 
-      async ingreso(categoria, codigo, cantidad) {
+      async ingreso(categoria, codigo, cantidad, nota) {
         const item = buscarItem(state, categoria, codigo);
         if (!item) return { ok: false, error: 'No se encontró el ítem.' };
         if (!cantidadValida(cantidad))
           return { ok: false, error: 'La cantidad tiene que ser un número mayor a cero.' };
         return movimientoSimple(
           [{ categoria, codigo, delta: cantidad }],
-          anotar('ingreso', categoria, codigo, item.nombre, cantidad, `Ingreso de ${cantidad}`)
+          anotar('ingreso', categoria, codigo, item.nombre, cantidad, nota?.trim() || `Ingreso de ${cantidad}`)
         );
       },
 
@@ -911,6 +914,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         if (!mp) return { ok: false, error: 'No se encontró la materia prima. Actualizá la página.' };
         const u = abrevUnidad(datos.unidad);
         if (!u) return { ok: false, error: 'Elegí en qué unidad se cuenta.' };
+        if (!esUnidadDeStock(u))
+          return { ok: false, error: 'La materia prima se cuenta en gramos, mililitros o unidades.' };
+        const envase = datos.contenidoEnvase;
+        if (envase != null && !(Number.isFinite(envase) && envase > 0))
+          return { ok: false, error: 'Lo que trae cada envase tiene que ser un número mayor a cero.' };
         if (!Number.isFinite(datos.conteo) || datos.conteo < 0)
           return { ok: false, error: 'Cargá lo que se contó (cero o más).' };
         if (!Number.isFinite(datos.minimo) || datos.minimo < 0)
@@ -933,7 +941,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         setGuardando(true);
         try {
           // 1) Ficha: unidad y mínimo nuevos (sin el stock)
-          const ficha = { ...mp, unidad: u, minimo: datos.minimo };
+          const ficha = {
+            ...mp,
+            unidad: u,
+            minimo: datos.minimo,
+            ...(datos.contenidoEnvase !== undefined ? { contenidoEnvase: datos.contenidoEnvase } : {}),
+          };
           const quedoMP = await guardarItem('materia_prima', ficha, mp);
           ponerEnEstado('materia_prima', codigo, quedoMP);
           const cambios = describirCambios({ ...mp, actual: undefined }, { ...ficha, actual: undefined });
@@ -1024,7 +1037,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
                 c.codigo,
                 item.nombre,
                 c.contado - item.actual,
-                nota?.trim() || `Conteo del estante: había ${formatNum(c.contado)}`
+                c.nota?.trim() || nota?.trim() || `Conteo del estante: había ${formatNum(c.contado)}`
               )
             );
             guardados++;

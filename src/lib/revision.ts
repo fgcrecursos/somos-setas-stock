@@ -13,6 +13,7 @@ import {
   CATEGORIAS_TODAS,
   CATEGORIA_LABEL,
   abrevUnidad,
+  esUnidadDeStock,
   buscarItem,
   compactar,
   listaDe,
@@ -191,6 +192,109 @@ export function revisarDatos(state: DBState): GrupoRevision[] {
           `${mp.presentacion || 'sin presentación'} · stock ${Number(mp.actual)} · la usan ${usan.length} producto(s): ${usan.slice(0, 6).join(', ')}${usan.length > 6 ? '…' : ''}`
         )
       ),
+  });
+
+  // ---------- 2b. Stock en kilos o litros con recetas en chico ----------
+  // Alguien puso "kg" en la ficha y pasó las recetas a gramos a mano: el
+  // número del stock sigue en kilos y cada unidad producida descuenta 30 "kg".
+  const enGrande: FilaRevision[] = [];
+  // ---------- 2c. Stock en gramos/ml con una receta que sigue pidiendo 1 ----------
+  const pideUno: FilaRevision[] = [];
+  for (const mp of state.materiaPrima as any[]) {
+    const u = abrevUnidad(mp.unidad);
+    if (!u) continue;
+    const lineas = productos.flatMap((p) =>
+      (p.bom ?? [])
+        .filter((b) => b.categoria === 'materia_prima' && b.codigo === mp.codigo)
+        .map((b) => ({ producto: p.codigo, cantidad: Number(b.cantidad) || 0 }))
+    );
+    if (!esUnidadDeStock(u)) {
+      const cantidades = [...new Set(lineas.map((l) => l.cantidad))].sort((a, b) => a - b);
+      enGrande.push(
+        fila(
+          'materia_prima',
+          mp,
+          `Stock ${Number(mp.actual)} ${u}` +
+            (lineas.length
+              ? ` · ${lineas.length} receta(s) le piden ${cantidades.join(', ')} por unidad producida`
+              : ' · ninguna receta la usa')
+        )
+      );
+    } else if (u !== 'u') {
+      const enUno = lineas.filter((l) => l.cantidad > 0 && l.cantidad <= 1);
+      if (enUno.length)
+        pideUno.push(
+          fila(
+            'materia_prima',
+            mp,
+            `Se cuenta en ${u} y ${enUno.length} receta(s) le piden 1 ${u}: ${enUno
+              .slice(0, 8)
+              .map((l) => l.producto)
+              .join(', ')}${enUno.length > 8 ? '…' : ''}`
+          )
+        );
+    }
+  }
+  grupos.push({
+    id: 'mp-en-kilos',
+    gravedad: 'grave',
+    titulo: 'Materia prima en kilos o litros con recetas en gramos',
+    explicacion:
+      'La ficha dice "kg" pero las recetas piden gramos (30, 15, 50): cada bolsita producida descuenta 30 del número en kilos. Es el motivo de los −1.000 en materia prima.',
+    comoSeCorrige:
+      'En "Conteo materia prima": tocá Contar, pesá lo que hay y cargalo en gramos. Las recetas que ya estaban en gramos se confirman con un toque; las que dicen 1 hay que completarlas.',
+    filas: enGrande,
+  });
+  grupos.push({
+    id: 'mp-receta-en-uno',
+    gravedad: 'grave',
+    titulo: 'Recetas que le piden "1" a una materia prima en gramos',
+    explicacion:
+      'El stock está en gramos o mililitros, pero esa receta descuenta 1 por cada unidad producida: el producto casi no gasta materia prima en el sistema.',
+    comoSeCorrige:
+      'En "Conteo materia prima" → Contar de nuevo: cargá cuánto lleva una unidad de cada producto.',
+    filas: pideUno,
+  });
+
+  // ---------- 2d. La misma materia prima cargada dos veces ----------
+  const porNombre = new Map<string, any[]>();
+  for (const mp of state.materiaPrima as any[]) {
+    const clave = normalizarBusqueda(mp.nombre)
+      .replace(/\bmagnesio\b/g, 'mg')
+      .split(/[^a-z0-9+]+/)
+      .filter((w) => w && w !== 'de' && w !== 'del')
+      .join(' ');
+    if (!clave) continue;
+    porNombre.set(clave, [...(porNombre.get(clave) ?? []), mp]);
+  }
+  const mpRepetidas: FilaRevision[] = [];
+  for (const grupo of porNombre.values()) {
+    if (grupo.length < 2) continue;
+    for (const mp of grupo) {
+      const usan = productos.filter((p) =>
+        (p.bom ?? []).some((b) => b.categoria === 'materia_prima' && b.codigo === mp.codigo)
+      ).length;
+      mpRepetidas.push(
+        fila(
+          'materia_prima',
+          mp,
+          `${mp.presentacion || 'sin presentación'} · stock ${Number(mp.actual)} · la usan ${usan} receta(s) · mismo nombre que ${grupo
+            .filter((x) => x !== mp)
+            .map((x) => x.codigo)
+            .join(', ')}`
+        )
+      );
+    }
+  }
+  grupos.push({
+    id: 'mp-repetida',
+    gravedad: 'revisar',
+    titulo: 'Materia prima con el mismo nombre cargada dos veces',
+    explicacion:
+      'Si son la misma cosa, las recetas se reparten entre dos códigos y ninguno de los dos stocks dice la verdad. Si son distintas (polvo y entero), el nombre tiene que decirlo.',
+    comoSeCorrige:
+      'Si es la misma: pasá las recetas a un solo código y eliminá el otro. Si son distintas: cambiales el nombre ("Reishi polvo", "Reishi entero").',
+    filas: mpRepetidas,
   });
 
   // ---------- 3. Ítems en negativo ----------

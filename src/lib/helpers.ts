@@ -277,6 +277,18 @@ export const UNIDADES = [
   { valor: 'L', label: 'Litros' },
 ] as const;
 
+/**
+ * Unidades en las que se puede llevar la cuenta de una materia prima: la
+ * misma en la que piden las recetas. Kilos y litros quedaron afuera a
+ * propósito: con el stock en kilos y la receta en gramos, cada unidad
+ * producida descontaba 30 "kilos".
+ */
+export const UNIDADES_STOCK = ['g', 'ml', 'u'] as const;
+
+export function esUnidadDeStock(unidad?: string | null): boolean {
+  return (UNIDADES_STOCK as readonly string[]).includes(abrevUnidad(unidad));
+}
+
 /** La abreviatura a mostrar, o '' si el ítem no tiene unidad cargada. */
 export function abrevUnidad(unidad?: string | null): string {
   return (unidad ?? '').trim();
@@ -497,6 +509,7 @@ const ETIQUETA_CAMPO: Record<string, string> = {
   packDeCompra: 'pack de compra',
   unidadCompra: 'unidad de compra',
   stockUnidad: 'stock por unidad',
+  contenidoEnvase: 'contenido de cada envase',
   fecha: 'fecha',
   sinEtiquetar: 'sin etiquetar',
 };

@@ -15,7 +15,9 @@ import { traerSkuMap } from '../lib/cloud';
 import {
   UNIDADES_CONTEO,
   descripcionesPorProducto,
+  envaseSugerido,
   minimoSugerido,
+  motivoPendiente,
   tieneUnidad,
   unidadSugerida,
   usosDe,
@@ -49,7 +51,13 @@ export function ConteoMPView() {
   }, []);
 
   const mps = state.materiaPrima as MateriaPrima[];
-  const contadas = mps.filter(tieneUnidad).length;
+  // Por qué falta cada una (null = cierra). Tener "kg" cargado no la da por lista.
+  const motivos = useMemo(
+    () => new Map(mps.map((m) => [m.codigo, motivoPendiente(state, m)])),
+    [state, mps]
+  );
+  const lista = (m: MateriaPrima) => motivos.get(m.codigo) == null;
+  const contadas = mps.filter(lista).length;
   const usos = useMemo(() => {
     const n = new Map<string, number>();
     for (const p of state.productos)
@@ -59,7 +67,7 @@ export function ConteoMPView() {
   }, [state.productos]);
 
   const filas = mps
-    .filter((m) => (filtro === 'pendientes' ? !tieneUnidad(m) : filtro === 'contadas' ? tieneUnidad(m) : true))
+    .filter((m) => (filtro === 'pendientes' ? !lista(m) : filtro === 'contadas' ? lista(m) : true))
     .filter((m) => coincideBusqueda(q, m.codigo, m.nombre, m.presentacion, m.ubicacion, m.lote))
     .sort((a, b) => (usos.get(b.codigo) ?? 0) - (usos.get(a.codigo) ?? 0) || a.codigo.localeCompare(b.codigo));
 
@@ -70,10 +78,11 @@ export function ConteoMPView() {
       <div className="card">
         <div className="card__body">
           <p style={{ marginTop: 0 }}>
-            La materia prima se contaba por envase y las recetas pedían "1" por cada unidad
-            producida: <strong>cada frasco o bolsita descontaba una bolsa entera</strong>. Para que
-            cierre, cada materia prima se pasa a <strong>gramos</strong> (o ml, o unidades) y en el
-            mismo paso se carga cuánto lleva cada producto.
+            Para que la materia prima cierre, el stock y las recetas tienen que hablar el mismo
+            idioma: <strong>todo en gramos</strong> (o ml, o unidades). Hoy muchas están contadas
+            en kilos o bolsas mientras la receta pide gramos, y otras recetas siguen pidiendo "1":
+            por eso viven en negativo. Acá se corrigen las dos cosas juntas, una materia prima por
+            vez.
           </p>
           <ol className="conteo-pasos">
             <li>
@@ -88,7 +97,8 @@ export function ConteoMPView() {
             <li>Al guardar, el conteo y las recetas quedan juntos.</li>
           </ol>
           <span className="muted" style={{ fontSize: 13 }}>
-            <strong>{contadas}</strong> de {mps.length} materias primas ya se cuentan en su unidad.
+            <strong>{contadas}</strong> de {mps.length} materias primas ya cierran: se cuentan en
+            gramos, ml o unidades y todas sus recetas piden en esa unidad.
           </span>
         </div>
       </div>
@@ -98,7 +108,7 @@ export function ConteoMPView() {
           {(
             [
               ['pendientes', `Pendientes (${mps.length - contadas})`],
-              ['contadas', `Ya contadas (${contadas})`],
+              ['contadas', `Listas (${contadas})`],
               ['todas', `Todas (${mps.length})`],
             ] as [Filtro, string][]
           ).map(([id, label]) => (
@@ -143,21 +153,24 @@ export function ConteoMPView() {
                   <td className="muted col-opcional">{m.ubicacion || '—'}</td>
                   <td className={'num' + (m.actual < 0 ? ' diff-neg' : '')}>
                     <Cantidad valor={m.actual} unidad={m.unidad} />
-                    {!tieneUnidad(m) && <div className="hlp">sin unidad</div>}
+                    {!abrevUnidad(m.unidad) && <div className="hlp">sin unidad</div>}
                   </td>
                   <td className="num col-opcional">{usos.get(m.codigo) ?? 0}</td>
                   <td>
-                    {tieneUnidad(m) ? (
+                    {lista(m) ? (
                       <span className="badge-estado st-ok">En {abrevUnidad(m.unidad)}</span>
                     ) : (
-                      <span className="badge-estado st-bajo">Pendiente</span>
+                      <>
+                        <span className="badge-estado st-bajo">Pendiente</span>
+                        <div className="hlp">{motivos.get(m.codigo)}</div>
+                      </>
                     )}
                   </td>
                   <td className="actions">
                     {puedeEditar && (
                       <button className="btn btn--sm btn--fila" onClick={() => setContar(m.codigo)}>
                         <Scale className="btn__ico" size={14} />
-                        <span className="btn__txt">{tieneUnidad(m) ? 'Contar de nuevo' : 'Contar'}</span>
+                        <span className="btn__txt">{lista(m) ? 'Contar de nuevo' : 'Contar'}</span>
                       </button>
                     )}
                   </td>
@@ -203,6 +216,8 @@ function ContarMP({
   // Si ya se contaba en esta unidad, el mínimo y las recetas son datos reales
   // y se muestran cargados. Si no, sólo se sugieren: nada se precarga.
   const [minimo, setMinimo] = useState(yaTenia ? String(mp.minimo) : '');
+  // Cuánto trae cada envase de compra: la conversión de "Llegó una compra"
+  const [envase, setEnvase] = useState(yaTenia && mp.contenidoEnvase ? String(mp.contenidoEnvase) : '');
   const usos = useMemo(() => usosDe(state, mp, unidad, tienda), [state, mp, unidad, tienda]);
   const [recetas, setRecetas] = useState<Record<string, string>>(() =>
     yaTenia ? Object.fromEntries(usosDe(state, mp, unidadSugerida(mp), tienda).map((x) => [x.producto.codigo, String(x.cantidadHoy)])) : {}
@@ -210,11 +225,15 @@ function ContarMP({
   const [error, setError] = useState('');
 
   const minSug = minimoSugerido(mp, unidad);
+  const envSug = envaseSugerido(mp, unidad);
   const hayQueCompletar =
-    (minSug && minimo.trim() === '') || usos.some((x) => x.sugerido && !(recetas[x.producto.codigo] ?? '').trim());
+    (minSug && minimo.trim() === '') ||
+    (envSug && envase.trim() === '') ||
+    usos.some((x) => x.sugerido && !(recetas[x.producto.codigo] ?? '').trim());
 
   function completarSugeridos() {
     if (minSug && minimo.trim() === '') setMinimo(String(minSug.cantidad));
+    if (envSug && envase.trim() === '') setEnvase(String(envSug.cantidad));
     setRecetas((prev) => {
       const next = { ...prev };
       for (const x of usos)
@@ -236,10 +255,14 @@ function ContarMP({
       return setError(
         `Falta cuánto lleva por unidad: ${faltan.map((x) => x.producto.codigo).join(', ')}. Si todavía no lo sabe producción, esta materia prima espera.`
       );
+    const env = envase.trim() === '' ? null : n(envase);
+    if (env != null && !(env > 0))
+      return setError(`Lo que trae cada envase tiene que ser mayor a cero (en ${unidad}), o dejalo vacío.`);
     const res = await pasarMateriaPrima(mp.codigo, {
       unidad,
       conteo: c,
       minimo: min,
+      contenidoEnvase: env,
       recetas: usos.map((x) => ({ producto: x.producto.codigo, cantidad: n(recetas[x.producto.codigo]) })),
     });
     if (!res.ok) return setError(res.error ?? 'No se pudo guardar.');
@@ -252,7 +275,7 @@ function ContarMP({
 
   return (
     <Modal
-      title={`${yaTenia ? 'Contar' : 'Pasar a gramos'} · ${mp.codigo}`}
+      title={`${yaTenia ? 'Contar' : unidad === 'g' ? 'Pasar a gramos' : unidad === 'ml' ? 'Pasar a mililitros' : 'Pasar a unidades'} · ${mp.codigo}`}
       icon={<Scale size={20} color="var(--naranja)" />}
       wide
       onClose={onClose}
@@ -271,7 +294,7 @@ function ContarMP({
         Se compra como {mp.presentacion || '—'} · hoy el sistema dice{' '}
         <strong>
           {formatNum(mp.actual)}
-          {yaTenia ? ` ${abrevUnidad(mp.unidad)}` : ' (sin unidad)'}
+          {abrevUnidad(mp.unidad) ? ` ${abrevUnidad(mp.unidad)}` : ' (sin unidad)'}
         </strong>
         {mp.ubicacion ? ` · ubicación ${mp.ubicacion}` : ''}
       </p>
@@ -313,6 +336,23 @@ function ContarMP({
         </div>
       </div>
 
+      <div className="field" style={{ maxWidth: 360 }}>
+        <label>Cada envase de compra trae ({unidad})</label>
+        <input
+          className="input"
+          type="number"
+          min={0}
+          step="any"
+          placeholder={envSug ? `sugerido: ${formatNum(envSug.cantidad)}` : 'vacío si se compra suelto'}
+          value={envase}
+          onChange={(e) => setEnvase(e.target.value)}
+        />
+        <span className="hlp">
+          Con este dato, cuando llega una compra se cargan los envases ("2 bolsas") y el sistema
+          suma los {unidad} solo.{envSug ? ` Sugerido ${formatNum(envSug.cantidad)}: ${envSug.porque}.` : ''}
+        </span>
+      </div>
+
       <div className="section-title" style={{ marginTop: 6 }}>
         Recetas que la usan · cuánto lleva UNA unidad del producto
       </div>
@@ -347,7 +387,25 @@ function ContarMP({
                           : ' · sin sugerencia: lo da producción'}
                       </div>
                     </td>
-                    <td className="num muted">{formatNum(x.cantidadHoy)}</td>
+                    <td className="num muted">
+                      {formatNum(x.cantidadHoy)}
+                      {/* Lo que el equipo ya cargó en gramos se repite con un toque;
+                          un "1" no, porque es justo lo que hay que corregir */}
+                      {!yaTenia && x.cantidadHoy > 1 && !(recetas[x.producto.codigo] ?? '').trim() && (
+                        <div>
+                          <button
+                            type="button"
+                            className="btn btn--sm"
+                            title={`Ya está en ${unidad}: dejar ${formatNum(x.cantidadHoy)}`}
+                            onClick={() =>
+                              setRecetas((prev) => ({ ...prev, [x.producto.codigo]: String(x.cantidadHoy) }))
+                            }
+                          >
+                            Dejar {formatNum(x.cantidadHoy)}
+                          </button>
+                        </div>
+                      )}
+                    </td>
                     <td className="num" style={{ width: 130 }}>
                       <input
                         className="input qty"

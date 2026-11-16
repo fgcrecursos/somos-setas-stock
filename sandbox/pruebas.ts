@@ -292,6 +292,8 @@ export async function correrPruebas(q: Q) {
     await esperar(2500);
     const mp = (await q(`select actual, data->>'unidad' u from st_items where codigo='MP-10'`))[0];
     igual([Number(mp.actual), mp.u], [4800, 'g'], 'MP-10');
+    const envase = (await q(`select data->>'contenidoEnvase' e from st_items where codigo='MP-10'`))[0].e;
+    igual(Number(envase), 1000, 'contenido de cada envase (Bolsa 1 kg)');
     await vender('Producción', 'POL-26', 2);
     igual((await stock(['MP-10']))['MP-10'], 4600, 'MP-10 tras producir 2 × 100 g');
     return '4.800 g contados; producir 2 bolsas de 100 g descontó 200 g';
@@ -502,6 +504,113 @@ export async function correrPruebas(q: Q) {
     igual(a['INS-14'] - d['INS-14'], 3, 'bolsa');
     igual(a['MP-04'] - d['MP-04'], 180, 'cápsulas');
     return `${nuevo.codigo} creado en 0 con la receta de CAP-01 sin etiqueta; producir 3 no tocó la etiqueta`;
+  });
+
+  await prueba('25. Llegó una compra: 2 bolsas de 1 kg suman 2.000 g', async () => {
+    const a = (await stock(['MP-10']))['MP-10'];
+    await ir('Inicio');
+    const tarea = [...document.querySelectorAll<HTMLButtonElement>('.opcion-grande')].find((b) => b.textContent!.includes('Llegó una compra'));
+    if (!tarea) throw new Error('no encontré la tarea "Llegó una compra"');
+    tarea.click();
+    await esperar(400);
+    escribir(document.querySelector('.buscador-grande input') as HTMLInputElement, 'MP-10');
+    await esperar(300);
+    (document.querySelector('.fila-item') as HTMLButtonElement).click();
+    await esperar(300);
+    if (!document.querySelector('.tarea')!.textContent!.includes('Por envase de 1.000 g'))
+      throw new Error('no ofrece cargar por envase');
+    escribir(document.querySelector('.contador__num') as HTMLInputElement, 2);
+    await esperar(200);
+    escribir(document.querySelector('.campo-compra input') as HTMLInputElement, 'Remito 123');
+    await esperar(150);
+    click('Sumar', document);
+    await esperar(1500);
+    igual((await stock(['MP-10']))['MP-10'], a + 2000, 'MP-10');
+    const m = await ultimo();
+    igual([m.tipo, Number(m.cantidad)], ['ingreso', 2000], 'movimiento');
+    if (!String(m.nota).includes('2 envases') || !String(m.nota).includes('Remito 123'))
+      throw new Error(`la nota no dice cómo llegó: ${m.nota}`);
+    return `MP-10 ${a}→${a + 2000} g; nota: ${m.nota}`;
+  });
+
+  await prueba('26. Materia prima en kilos con receta en gramos: pendiente y se pasa con un toque', async () => {
+    await ir('Conteo materia');
+    const filaDe = () => [...document.querySelectorAll('tbody tr')].find((tr) => tr.querySelector('.codigo')?.textContent === 'MP-20');
+    const fila = filaDe();
+    if (!fila) throw new Error('MP-20 (en kg) no figura entre las pendientes');
+    if (!fila.textContent!.includes('Está en kg')) throw new Error(`no dice por qué está pendiente: ${fila.textContent}`);
+    (([...fila.querySelectorAll('button')].find((b) => b.textContent!.includes('Contar'))) as HTMLButtonElement).click();
+    await esperar(500);
+    escribir('Contado', 4000);
+    escribir('Stock mínimo', 2000);
+    click('Dejar 1.000');
+    await esperar(200);
+    click('Guardar conteo');
+    await esperar(2500);
+    if (errorModal()) throw new Error(errorModal()!);
+    const mp = (await q(`select actual, data->>'unidad' u from st_items where codigo='MP-20'`))[0];
+    igual([Number(mp.actual), mp.u], [4000, 'g'], 'MP-20');
+    const linea = (await q(`select data->'bom' b from st_items where codigo='POL-37'`))[0].b.find((b: any) => b.codigo === 'MP-20');
+    igual(Number(linea.cantidad), 1000, 'receta de POL-37');
+    if (filaDe()) throw new Error('MP-20 sigue figurando como pendiente');
+    await vender('Producción', 'POL-37', 1);
+    igual((await stock(['MP-20']))['MP-20'], 3000, 'MP-20 tras producir 1 kg');
+    return 'figuraba pendiente por estar en kg; 4.000 g contados, receta confirmada en 1.000 g, producir 1 descontó 1.000 g';
+  });
+
+  await prueba('27. Contar con pedidos sin despachar no vuelve a sumar lo ya vendido', async () => {
+    const p = (await q(`select nombre, data->>'tipo' t, data->>'presentacion' pr from st_items where codigo='CAP-06'`))[0];
+    await q(`insert into ss_orders (id, ts, status, data) values ('ORD-T9', 0, 'confirmado', $1::jsonb)`, [
+      JSON.stringify({ name: 'Prueba', items: [{ productName: 'Melena de León — Cápsulas — 60u × 500 mg', qty: 3 }] }),
+    ]);
+    await ir('Inicio');
+    await ir('Contar el estante');
+    await esperar(800);
+    const tarjeta = [...document.querySelectorAll('.tarjeta-conteo')].find(
+      (t) =>
+        t.querySelector('strong')!.textContent === p.nombre &&
+        t.querySelector('.tarjeta-conteo__nombre span')!.textContent!.includes(p.pr) &&
+        t.querySelector('.tarjeta-conteo__nombre span')!.textContent!.includes(p.t)
+    );
+    if (!tarjeta) throw new Error('no encontré la tarjeta de CAP-06');
+    if (!tarjeta.textContent!.includes('sin despachar')) throw new Error('la tarjeta no avisa del pedido sin despachar');
+    escribir(tarjeta.querySelector('input')!, 10);
+    await esperar(300);
+    const guardar = document.querySelector('.barra-guardar button') as HTMLButtonElement;
+    if (!guardar.disabled) throw new Error('deja guardar sin decir dónde estaban los pedidos');
+    click('En el estante', document);
+    await esperar(200);
+    click('Guardar el conteo', document);
+    await esperar(200);
+    click('Sí, guardar', document);
+    await esperar(1500);
+    igual((await stock(['CAP-06']))['CAP-06'], 7, 'CAP-06 (10 contados, 3 de un pedido)');
+    const m = await ultimo();
+    if (m.tipo !== 'ajuste' || !String(m.nota).includes('pedidos sin despachar'))
+      throw new Error(`movimiento inesperado: ${m.tipo} · ${m.nota}`);
+    await q(`update ss_orders set status = 'anulado' where id = 'ORD-T9'`);
+    return `10 en el estante, 3 ya vendidos: quedó en 7 · ${m.nota}`;
+  });
+
+  await prueba('28. Una línea "No sale del depósito" no figura como sin vincular', async () => {
+    await q(`insert into ss_orders (id, ts, status, data) values ('ORD-T10', 0, 'confirmado', $1::jsonb)`, [
+      JSON.stringify({
+        name: 'Prueba',
+        items: [
+          { productName: 'Redondeo', qty: 1, sinStock: true },
+          { productName: 'Serum de prueba', qty: 2 },
+        ],
+      }),
+    ]);
+    await ir('Inicio');
+    await ir('Pedidos de la tienda');
+    await esperar(1500);
+    const fila = [...document.querySelectorAll('tr, .pedido')].find((x) => x.textContent!.includes('ORD-T10'));
+    if (!fila) throw new Error('no aparece el pedido ORD-T10');
+    if (!fila.textContent!.includes('1 línea(s) sin vincular'))
+      throw new Error(`esperaba 1 línea sin vincular (el serum): ${fila.textContent!.slice(0, 200)}`);
+    await q(`update ss_orders set status = 'anulado' where id = 'ORD-T10'`);
+    return 'el redondeo no cuenta; el serum sí';
   });
 
   const ok = resultados.filter((r) => r.ok).length;

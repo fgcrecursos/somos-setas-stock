@@ -60,14 +60,19 @@ export interface MateriaPrima extends BaseItem {
   tipo: string;
   presentacion: string;
   /**
-   * En qué se cuenta el stock: unidades, gramos, kilogramos, mililitros, litros.
-   * Es sólo la etiqueta del número — no convierte ni multiplica nada. Una receta
-   * que pide 1 de esta materia prima pide 1 de ESTA unidad.
-   * Guarda la abreviatura ('kg', 'ml', …); vacío = sin especificar.
+   * En qué se cuenta el stock Y en qué piden las recetas: gramos, mililitros
+   * o unidades ('g', 'ml', 'u'). Una receta que pide 30 pide 30 de ESTA unidad.
+   * Vacío, 'kg' o 'L' = todavía no se pasó (ver conteoMP.ts).
    */
   unidad?: string | null;
   stockUnidad?: number | null;
   cantidadPorPack?: number | null;
+  /**
+   * Cuánto trae un envase de compra, en la unidad del stock ("Bolsa 5 kg" =
+   * 5000 g). Es la conversión que usa "Llegó una compra": 2 bolsas suman
+   * 10.000 g. Vacío = la compra se carga directo en la unidad del stock.
+   */
+  contenidoEnvase?: number | null;
   ubicacion?: string | null;
   proveedor?: string | null;
   lote?: string | null;

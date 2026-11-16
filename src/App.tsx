@@ -50,6 +50,7 @@ import { ProductosView } from './views/ProductosView';
 import { ReposicionView } from './views/ReposicionView';
 import { RevisionView } from './views/RevisionView';
 import { ConteoMPView } from './views/ConteoMPView';
+import { pendientesMP } from './lib/conteoMP';
 import { revisarDatos } from './lib/revision';
 import { UsuariosView } from './views/UsuariosView';
 import { VenderView } from './views/VenderView';
@@ -167,11 +168,9 @@ export default function App() {
     };
   }, [state]);
 
-  // Materias primas que todavía se cuentan por envase (sin unidad)
-  const mpSinUnidad = useMemo(
-    () => state.materiaPrima.filter((m) => !String(m.unidad ?? '').trim()).length,
-    [state.materiaPrima]
-  );
+  // Materias primas que todavía no cierran: sin unidad, en kilos, con una
+  // receta en "1" o en negativo
+  const mpSinUnidad = useMemo(() => pendientesMP(state).length, [state]);
 
   // Filas de la revisión que hoy desacomodan el stock (recetas, negativos…)
   const pendientesGraves = useMemo(

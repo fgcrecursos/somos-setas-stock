@@ -118,6 +118,12 @@
 .receta-previa__fila strong { white-space: nowrap; }
 
 .nota-chica { margin: 0; font-size: 16px; line-height: 1.5; color: var(--texto-2); }
+.campo-compra { display: flex; flex-direction: column; gap: 6px; font-size: 16px; color: var(--texto-2); max-width: 460px; }
+.campo-compra input {
+  min-height: 56px; padding: 0 16px; border: 2px solid var(--borde); border-radius: 10px;
+  background: var(--panel); font: 400 18px var(--font-body); color: var(--texto);
+}
+.campo-compra input:focus { outline: 3px solid var(--naranja); outline-offset: 2px; border-color: var(--texto); }
 .aviso-suave { margin: 0; padding: 16px 20px; border-radius: 12px; background: var(--panel); border: 2px solid var(--borde); line-height: 1.5; }
 .aviso-fuerte { margin: 0; padding: 16px 20px; border-radius: 12px; background: var(--naranja-100); border: 2px solid #f2c08e; color: #6e3500; line-height: 1.5; }
 .enlace { margin-left: 10px; border: 0; background: none; padding: 0; font: inherit; font-weight: 700; color: inherit; text-decoration: underline; text-underline-offset: 4px; min-height: 0; }
@@ -156,6 +162,9 @@
 .tarjeta-conteo__campo input:focus { outline: 3px solid var(--naranja); outline-offset: 2px; }
 .tarjeta-conteo__dif { min-width: 210px; font-size: 17px; line-height: 1.4; color: var(--texto-2); }
 .tarjeta-conteo__dif--hay { color: #8a4a00; }
+.tarjeta-conteo__pedidos { flex: 1 1 100%; font-size: 16px; color: #6e3500; border-top: 1px dashed var(--borde); padding-top: 10px; }
+.pedidos-estante { display: flex; flex-direction: column; gap: 12px; }
+.pedidos-estante p { margin: 0; }
 .barra-guardar {
   position: sticky; bottom: 12px; z-index: 5; display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 18px;
   padding: 20px 24px; border-radius: 14px; background: var(--texto); color: var(--crema);

@@ -15,7 +15,7 @@
 // Todo se carga directo en la plataforma (sin planilla intermedia): pasar los
 // datos por un Excel era cargar dos veces la misma información.
 // =====================================================================
-import { abrevUnidad, formatNum, normalizarBusqueda } from './helpers';
+import { abrevUnidad, esUnidadDeStock, formatNum, normalizarBusqueda } from './helpers';
 import { leerTamano } from './revision';
 import type { DBState, MateriaPrima, Producto, SkuMap } from './types';
 
@@ -47,9 +47,46 @@ export function esCapsulaVacia(mp: { nombre?: string | null }): boolean {
   return /^\s*c[aá]psulas?\s*$/i.test(String(mp.nombre ?? ''));
 }
 
-/** Ya se cuenta en una unidad (se pasó a gramos o se cargó la unidad a mano) */
+/**
+ * Ya se cuenta en gramos, mililitros o unidades. Tener cargado "kg" no
+ * alcanza: es una etiqueta puesta a mano en la ficha, el stock sigue contado
+ * en kilos y las recetas piden gramos.
+ */
 export function tieneUnidad(mp: MateriaPrima): boolean {
-  return !!abrevUnidad(mp.unidad);
+  return esUnidadDeStock(mp.unidad);
+}
+
+/**
+ * Por qué esta materia prima todavía no cierra, en palabras. null = está bien:
+ * se cuenta en g/ml/u, no está en negativo y ninguna receta le pide "1".
+ */
+export function motivoPendiente(state: DBState, mp: MateriaPrima): string | null {
+  const u = abrevUnidad(mp.unidad);
+  if (!u) return 'Se cuenta por envase (sin unidad)';
+  if (!esUnidadDeStock(u)) return `Está en ${u}: las recetas piden en chico`;
+  const enUno: string[] = [];
+  for (const p of state.productos) {
+    const total = (p.bom ?? [])
+      .filter((b) => b.categoria === 'materia_prima' && b.codigo === mp.codigo)
+      .reduce((a, b) => a + (Number(b.cantidad) || 0), 0);
+    // En unidades, 1 puede ser cierto (una tapa); en gramos o ml casi nunca
+    if (u !== 'u' && total > 0 && total <= 1) enUno.push(p.codigo);
+  }
+  if (enUno.length)
+    return `${enUno.length === 1 ? 'Una receta pide' : `${enUno.length} recetas piden`} 1 ${u}: ${enUno.slice(0, 4).join(', ')}${enUno.length > 4 ? '…' : ''}`;
+  if (mp.actual < 0) return 'Quedó en negativo: hay que pesarla';
+  return null;
+}
+
+/** Las materias primas que hay que contar y corregir */
+export function pendientesMP(state: DBState): MateriaPrima[] {
+  return (state.materiaPrima as MateriaPrima[]).filter((m) => motivoPendiente(state, m) != null);
+}
+
+/** Cuánto trae un envase de compra según la presentación ("Bolsa 5 kg" → 5000) */
+export function envaseSugerido(mp: MateriaPrima, unidad: UnidadConteo): Sugerencia | null {
+  const n = contenidoEnvase(mp, unidad);
+  return n && n > 1 ? { cantidad: n, porque: `se compra como ${mp.presentacion}` } : null;
 }
 
 export function unidadSugerida(mp: MateriaPrima): UnidadConteo {
@@ -78,6 +115,10 @@ export function minimoSugerido(mp: MateriaPrima, unidad: UnidadConteo): Sugerenc
   if (!(mp.minimo > 0)) return null;
   if (tieneUnidad(mp) && abrevUnidad(mp.unidad) === unidad)
     return { cantidad: mp.minimo, porque: 'el mínimo que ya tenía' };
+  // Estaba en kilos o litros: el mismo mínimo, en chico
+  const grande = abrevUnidad(mp.unidad).toLowerCase();
+  if ((grande === 'kg' && unidad === 'g') || (grande === 'l' && unidad === 'ml'))
+    return { cantidad: mp.minimo * 1000, porque: `${formatNum(mp.minimo)} ${abrevUnidad(mp.unidad)}` };
   if (unidad === 'u' || mp.minimo >= 1000 || Math.abs(mp.actual) >= 1000)
     return { cantidad: mp.minimo, porque: 'el mínimo de hoy ya parece estar en esa unidad' };
   // Entre 100 y 1000 no se sabe si son envases, kilos o gramos (Creatina: 120)

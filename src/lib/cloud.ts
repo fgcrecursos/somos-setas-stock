@@ -631,6 +631,13 @@ export async function traerPedidosTienda(limite = 200): Promise<PedidoTienda[]> 
   return (pedidos.data ?? []).map((row: any) => {
     const d = row.data ?? {};
     const est = porId.get(row.id);
+    // Líneas que en el remito se marcaron "No sale del depósito" (flete,
+    // redondeo): la base las anota como sin vincular, pero no hay nada que vincular.
+    const noSonMercaderia = new Set(
+      (d.items ?? [])
+        .filter((i: any) => i.sinStock)
+        .map((i: any) => String(i.productName || i.desc || '').trim())
+    );
     return {
       order_id: row.id,
       fecha: fechaPedido(row.ts),
@@ -641,7 +648,9 @@ export async function traerPedidosTienda(limite = 200): Promise<PedidoTienda[]> 
       aplicado: !!est?.aplicado,
       ignorar: !!est?.ignorar,
       lineas: est?.lineas ?? [],
-      sinMapear: (est?.sin_mapear ?? []) as LineaSinMapear[],
+      sinMapear: ((est?.sin_mapear ?? []) as LineaSinMapear[]).filter(
+        (l) => !noSonMercaderia.has(String(l.descripcion ?? '').trim())
+      ),
       aplicadoAt: est?.aplicado_at ?? null,
       nota: est?.nota ?? null,
       items: (d.items ?? []).map((i: any) => ({
@@ -652,6 +661,41 @@ export async function traerPedidosTienda(limite = 200): Promise<PedidoTienda[]> 
       })),
     };
   });
+}
+
+/** Estados en los que el pedido ya descontó stock pero la mercadería sigue en el depósito */
+export const ESTADOS_SIN_DESPACHAR = ['confirmado', 'preparacion'];
+
+export interface PorDespachar {
+  /** Unidades ya descontadas que todavía no salieron */
+  cantidad: number;
+  pedidos: number;
+}
+
+/**
+ * Mercadería ya descontada por pedidos que todavía no se despacharon, por ítem
+ * (clave "categoria|codigo"). La tienda descuenta al confirmar el pedido, así
+ * que hasta que sale del depósito el estante tiene más de lo que dice el
+ * sistema: contar en ese momento sin tenerlo en cuenta lo suma dos veces.
+ */
+export async function traerPorDespachar(): Promise<Map<string, PorDespachar>> {
+  const { data, error } = await sb
+    .from('st_pedidos')
+    .select('order_id, estado, aplicado, lineas')
+    .in('estado', ESTADOS_SIN_DESPACHAR);
+  if (error) throw new Error(error.message);
+  const out = new Map<string, PorDespachar>();
+  for (const p of (data ?? []) as any[]) {
+    if (!p.aplicado) continue;
+    for (const l of (p.lineas ?? []) as any[]) {
+      const cantidad = Number(l.cantidad) || 0;
+      if (cantidad <= 0) continue;
+      const clave = `${l.categoria}|${l.codigo}`;
+      const hoy = out.get(clave) ?? { cantidad: 0, pedidos: 0 };
+      out.set(clave, { cantidad: hoy.cantidad + cantidad, pedidos: hoy.pedidos + 1 });
+    }
+  }
+  return out;
 }
 
 /** Descuenta (o devuelve, con revertir=true) el stock de un pedido */

@@ -5,6 +5,7 @@ import {
   UNIDADES,
   VENCIMIENTO_CLASE,
   abrevUnidad,
+  esUnidadDeStock,
   calcVencimiento,
   diasAvisoGuardado,
   normalizarBusqueda,
@@ -220,9 +221,11 @@ export function ItemForm({ categoria, initial, onClose, onEliminar }: Props) {
               onChange={(e) => set('unidad', e.target.value || null)}
             >
               <option value="">Sin especificar</option>
-              {UNIDADES.map((u) => (
+              {/* Sólo gramos, ml o unidades: es en lo que piden las recetas. Kilos y
+                  litros se muestran únicamente si la ficha ya los tenía. */}
+              {UNIDADES.filter((u) => esUnidadDeStock(u.valor) || u.valor === initial.unidad).map((u) => (
                 <option key={u.valor} value={u.valor}>
-                  {u.label} ({u.valor})
+                  {u.label} ({u.valor}){esUnidadDeStock(u.valor) ? '' : ' — pasar a chico'}
                 </option>
               ))}
             </select>
@@ -232,8 +235,8 @@ export function ItemForm({ categoria, initial, onClose, onEliminar }: Props) {
 
       {categoria === 'materia_prima' && (
         <p className="hlp" style={{ marginTop: -6 }}>
-          Es la etiqueta del número: el stock y el mínimo se leen en esta unidad. No convierte
-          nada — una receta que pide 1 de esta materia prima pide 1 {abrevUnidad(item.unidad) || 'unidad'}.
+          El stock, el mínimo y las recetas van todos en esta unidad: una receta que pide 30 pide
+          30 {abrevUnidad(item.unidad) || 'unidades'}. Los kilos se cargan en gramos (5 kg = 5.000 g).
         </p>
       )}
       {categoria === 'materia_prima' &&
@@ -279,6 +282,22 @@ export function ItemForm({ categoria, initial, onClose, onEliminar }: Props) {
 
       {categoria === 'materia_prima' && (
         <>
+          <div className="field">
+            <label>Cada envase de compra trae{abrevUnidad(item.unidad) ? ` (${abrevUnidad(item.unidad)})` : ''}</label>
+            <input
+              className="input"
+              type="number"
+              min={0}
+              step="any"
+              placeholder="Ej: 5000 si llega en bolsas de 5 kg"
+              value={item.contenidoEnvase ?? ''}
+              onChange={(e) => set('contenidoEnvase', e.target.value === '' ? null : Number(e.target.value))}
+            />
+            <p className="hlp" style={{ marginTop: 6 }}>
+              Es la conversión de “Llegó una compra”: se anotan los envases y el sistema suma el
+              contenido. Vacío = la compra se carga suelta.
+            </p>
+          </div>
           <div className="form-row">
             <div className="field">
               <label>Lote</label>

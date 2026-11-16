@@ -29,7 +29,7 @@
     ["materia_prima","MP-10","Citrato de Mg",5,2,{"tipo":"polvo","proveedor":null,"ubicacion":null,"stockUnidad":5000,"presentacion":"Bolsa 1 kg","cantidadPorPack":50}],
     ["materia_prima","MP-17","Cúrcuma",7,3,{"tipo":"polvo","proveedor":null,"ubicacion":"MPB 3","stockUnidad":2.1,"presentacion":"Polvo 1.200kg","cantidadPorPack":50}],
     ["materia_prima","MP-18","Espirulina",2,2,{"tipo":"polvo","proveedor":null,"ubicacion":null,"stockUnidad":1800,"presentacion":"Polvo 1 kg","cantidadPorPack":50}],
-    ["materia_prima","MP-20","Glicinato de Mg",4,2,{"tipo":"polvo","proveedor":null,"ubicacion":null,"stockUnidad":5500,"presentacion":"Polvo 1 kg","cantidadPorPack":50}],
+    ["materia_prima","MP-20","Glicinato de Mg",4,2,{"tipo":"polvo","unidad":"kg","proveedor":null,"ubicacion":null,"stockUnidad":5500,"presentacion":"Polvo 1 kg","cantidadPorPack":50}],
     ["materia_prima","MP-27","Melena de León",3,2,{"tipo":"polvo","proveedor":null,"ubicacion":null,"stockUnidad":2000,"presentacion":"Polvo 1 kg","cantidadPorPack":null}],
     ["materia_prima","MP-29","Pimienta Negra",1,1,{"tipo":"polvo","proveedor":null,"ubicacion":null,"stockUnidad":1200,"presentacion":"Polvo 1 kg","cantidadPorPack":null}],
     ["materia_prima","MP-30","Reishi",5,2,{"tipo":"polvo","proveedor":null,"ubicacion":null,"stockUnidad":null,"presentacion":"Polvo 5 kg","cantidadPorPack":null}],
@@ -49,7 +49,7 @@
     ["producto","POL-26","Citrato de MAGNESIO",-1,0,{"bom":[{"codigo":"ETQ-POL-33","cantidad":1,"categoria":"etiqueta"},{"codigo":"INS-05","cantidad":1,"categoria":"insumo"},{"codigo":"MP-10","cantidad":1,"categoria":"materia_prima"}],"lote":null,"tipo":"Polvo","fecha":null,"ubicacion":null,"vencimiento":null,"presentacion":"Bolsa 100g","observaciones":null}],
     ["producto","POL-31","Citrato de MAGNESIO",0,0,{"bom":[{"codigo":"ETQ-POL-36","cantidad":1,"categoria":"etiqueta"},{"codigo":"INS-05","cantidad":1,"categoria":"insumo"},{"codigo":"MP-10","cantidad":1,"categoria":"materia_prima"}],"lote":null,"tipo":"Polvo","fecha":null,"ubicacion":null,"vencimiento":null,"presentacion":"Bolsa 500g","observaciones":null}],
     ["producto","POL-35","Citrato de MAGNESIO",-2,0,{"bom":[{"codigo":"ETQ-POL-23","cantidad":1,"categoria":"etiqueta"},{"codigo":"INS-05","cantidad":1,"categoria":"insumo"},{"codigo":"MP-10","cantidad":1,"categoria":"materia_prima"}],"lote":null,"tipo":"Polvo","fecha":null,"ubicacion":null,"vencimiento":null,"presentacion":"Bolsa 1kg","observaciones":null}],
-    ["producto","POL-37","Glicinato de MAGNESIO",-13,0,{"bom":[{"codigo":"ETQ-POL-38","cantidad":1,"categoria":"etiqueta"},{"codigo":"INS-05","cantidad":1,"categoria":"insumo"},{"codigo":"MP-20","cantidad":1,"categoria":"materia_prima"}],"lote":null,"tipo":"Polvo","fecha":null,"ubicacion":null,"vencimiento":null,"presentacion":"Bolsa 1kg","observaciones":null}]
+    ["producto","POL-37","Glicinato de MAGNESIO",-13,0,{"bom":[{"codigo":"ETQ-POL-38","cantidad":1,"categoria":"etiqueta"},{"codigo":"INS-05","cantidad":1,"categoria":"insumo"},{"codigo":"MP-20","cantidad":1000,"categoria":"materia_prima"}],"lote":null,"tipo":"Polvo","fecha":null,"ubicacion":null,"vencimiento":null,"presentacion":"Bolsa 1kg","observaciones":null}]
   ],
   "skuMap": [
     {"producto_id":"melena-de-leon","pres_id":"gotas","categoria":"producto","codigo":"EXT-09","unidades":1,"activo":true,"revisar":false,"etiqueta":"Melena de León — Extracto en gotas — 60 ml"},

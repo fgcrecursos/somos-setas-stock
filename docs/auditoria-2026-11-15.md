@@ -56,6 +56,24 @@ cargar.
 **Base** (`supabase/auditoria_2026-11-15.sql`): lectura del inventario para todos los usuarios del
 panel y el cepillo amarillo vinculado a OTR-04.
 
+## 16/11: el pedido descuenta en "En preparación"
+
+`supabase/descuento_en_preparacion_2026-11-16.sql` cambia cuándo descuenta un pedido:
+
+| Estado | Qué pasa con el stock |
+|---|---|
+| Nuevo | Nada |
+| Confirmado | Queda **reservado**: se anota qué va a descontar, sin tocar el stock |
+| En preparación, Enviado, Entregado | Descuenta (de Confirmado directo a Enviado también) |
+| Anulado, o vuelve a Nuevo | Devuelve lo descontado y libera la reserva |
+| Vuelve de En preparación a Confirmado | Devuelve y queda reservado otra vez |
+
+En Stock, Productos muestra "En el estante" y "Disponible" (con las reservadas abajo). Los
+avisos de stock bajo, el contador del menú y Reposición miran el disponible. Pedidos de la
+tienda muestra "Reservado · N u" en los confirmados.
+
+Regla para el equipo: **pasar el pedido a "En preparación" cuando se empieza a armar.**
+
 ## Qué tiene que hacer el equipo (no es de código)
 
 1. **Pasar cada materia prima a gramos** desde "Conteo materia prima": pesar lo que hay, cargar
@@ -84,6 +102,6 @@ muevan el número.
 
 ## Pruebas
 
-`npm run banco` → `await __banco.pruebas()`: 28 pruebas. Las nuevas son la 25 (compra por envases),
+`npm run banco` → `await __banco.pruebas()`: 29 pruebas (la 9 se reescribió y la 29 es nueva el 16/11). Las nuevas son la 25 (compra por envases),
 26 (materia prima en kilos), 27 (conteo con pedidos sin despachar) y 28 (línea que no sale del
 depósito).

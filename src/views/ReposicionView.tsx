@@ -24,6 +24,7 @@ import { BarraFiltros, GrupoFiltro } from '../components/BarraFiltros';
 import { Cantidad, StatusBadge } from '../components/StatusBadge';
 import { COMPONENTE_LABEL, coincideBusqueda, formatNum } from '../lib/helpers';
 import { calcularReposicion } from '../lib/reposicion';
+import { conDisponible, useReservado } from '../lib/reservado';
 import { useStore } from '../lib/store';
 import type { CategoriaComponente } from '../lib/types';
 
@@ -45,7 +46,10 @@ export function ReposicionView() {
   const [cats, setCats] = useState<CategoriaComponente[]>([]);
   const [abierto, setAbierto] = useState<string | null>(null);
 
-  const rep = useMemo(() => calcularReposicion(state), [state]);
+  // Se calcula sobre el disponible: lo reservado en pedidos confirmados ya
+  // está vendido aunque siga en el estante.
+  const reservado = useReservado();
+  const rep = useMemo(() => calcularReposicion(conDisponible(state, reservado)), [state, reservado]);
 
   const producir = useMemo(
     () => rep.producir.filter((p) => coincideBusqueda(q, p.codigo, p.nombre, p.tipo, p.presentacion)),

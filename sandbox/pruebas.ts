@@ -195,8 +195,9 @@ export async function correrPruebas(q: Q) {
     return `stock real ${real} intacto`;
   });
 
-  await prueba('9. Pedido de la tienda: confirmar, re-guardar y anular', async () => {
-    const a = await stock(['CAP-35', 'POL-26', 'CAP-06']);
+  await prueba('9. Pedido de la tienda: confirmar reserva, preparar descuenta, anular devuelve', async () => {
+    const cods = ['CAP-35', 'POL-26', 'CAP-06'];
+    const a = await stock(cods);
     const pedido = {
       name: 'Prueba', items: [
         { productId: 'caps-espirulina', presId: '60', qty: 2 },
@@ -205,16 +206,34 @@ export async function correrPruebas(q: Q) {
         { productName: 'Cepillo de dientes', qty: 4 },
       ],
     };
+    const reserva = async () =>
+      Object.fromEntries(
+        ((await q(`select reservado from st_pedidos where order_id='ORD-T1'`))[0]?.reservado ?? [])
+          .map((l: any) => [l.codigo, Number(l.cantidad)])
+          .sort((x: any[], y: any[]) => String(x[0]).localeCompare(String(y[0])))
+      );
     await q(`insert into ss_orders (id, ts, status, data) values ('ORD-T1', 0, 'confirmado', $1::jsonb)`, [JSON.stringify(pedido)]);
-    const c = await stock(['CAP-35', 'POL-26', 'CAP-06']);
-    igual([a['CAP-35'] - c['CAP-35'], a['POL-26'] - c['POL-26'], a['CAP-06'] - c['CAP-06']], [2, 3, 1], 'descuentos');
-    await q(`update ss_orders set data = data where id = 'ORD-T1'`);
-    igual(await stock(['CAP-35', 'POL-26', 'CAP-06']), c, 're-guardar no descuenta de nuevo');
+    igual(await stock(cods), a, 'confirmar no descuenta');
+    igual(await reserva(), { 'CAP-06': 1, 'CAP-35': 2, 'POL-26': 3 }, 'reserva al confirmar');
     const sm = (await q(`select sin_mapear from st_pedidos where order_id='ORD-T1'`))[0].sin_mapear;
     igual(sm.length, 1, 'líneas sin vincular (el cepillo)');
+    await q(`update ss_orders set status = 'preparacion' where id = 'ORD-T1'`);
+    const c = await stock(cods);
+    igual([a['CAP-35'] - c['CAP-35'], a['POL-26'] - c['POL-26'], a['CAP-06'] - c['CAP-06']], [2, 3, 1], 'descuentos al preparar');
+    igual(await reserva(), {}, 'la reserva se borra al preparar');
+    await q(`update ss_orders set data = data where id = 'ORD-T1'`);
+    igual(await stock(cods), c, 're-guardar no descuenta de nuevo');
+    await q(`update ss_orders set status = 'confirmado' where id = 'ORD-T1'`);
+    igual(await stock(cods), a, 'volver a confirmado devuelve');
+    igual(await reserva(), { 'CAP-06': 1, 'CAP-35': 2, 'POL-26': 3 }, 'y queda reservado otra vez');
+    const nota = (await ultimo()).nota;
+    if (!String(nota).includes('queda reservado')) throw new Error(`nota del movimiento: ${nota}`);
+    await q(`update ss_orders set status = 'enviado' where id = 'ORD-T1'`);
+    igual(await stock(cods), c, 'de confirmado directo a enviado descuenta');
     await q(`update ss_orders set status = 'anulado' where id = 'ORD-T1'`);
-    igual(await stock(['CAP-35', 'POL-26', 'CAP-06']), a, 'anular devuelve todo');
-    return 'descuenta Espirulina, Citrato 100 g y la línea por descripción; no duplica; anular devuelve';
+    igual(await stock(cods), a, 'anular devuelve todo');
+    igual(await reserva(), {}, 'anulado sin reserva');
+    return 'confirmar reserva sin descontar; preparar o enviar descuenta; volver a confirmado devuelve y reserva; anular devuelve';
   });
 
   await prueba('10. Renombrar etiqueta usada en receta', async () => {
@@ -233,7 +252,7 @@ export async function correrPruebas(q: Q) {
   });
 
   await prueba('11. Renombrar producto vinculado a la tienda', async () => {
-    await q(`insert into ss_orders (id, ts, status, data) values ('ORD-T2', 0, 'confirmado', $1::jsonb)`,
+    await q(`insert into ss_orders (id, ts, status, data) values ('ORD-T2', 0, 'preparacion', $1::jsonb)`,
       [JSON.stringify({ name: 'P2', items: [{ productId: 'caps-espirulina', presId: '60', qty: 1 }] })]);
     click('Actualizar', document);
     await esperar(1200);
@@ -560,7 +579,7 @@ export async function correrPruebas(q: Q) {
 
   await prueba('27. Contar con pedidos sin despachar no vuelve a sumar lo ya vendido', async () => {
     const p = (await q(`select nombre, data->>'tipo' t, data->>'presentacion' pr from st_items where codigo='CAP-06'`))[0];
-    await q(`insert into ss_orders (id, ts, status, data) values ('ORD-T9', 0, 'confirmado', $1::jsonb)`, [
+    await q(`insert into ss_orders (id, ts, status, data) values ('ORD-T9', 0, 'preparacion', $1::jsonb)`, [
       JSON.stringify({ name: 'Prueba', items: [{ productName: 'Melena de León — Cápsulas — 60u × 500 mg', qty: 3 }] }),
     ]);
     await ir('Inicio');
@@ -611,6 +630,36 @@ export async function correrPruebas(q: Q) {
       throw new Error(`esperaba 1 línea sin vincular (el serum): ${fila.textContent!.slice(0, 200)}`);
     await q(`update ss_orders set status = 'anulado' where id = 'ORD-T10'`);
     return 'el redondeo no cuenta; el serum sí';
+  });
+
+  await prueba('29. Pedido confirmado: Productos muestra lo reservado y el disponible', async () => {
+    const actual = (await stock(['CAP-06']))['CAP-06'];
+    await q(`insert into ss_orders (id, ts, status, data) values ('ORD-T11', 0, 'confirmado', $1::jsonb)`, [
+      JSON.stringify({ name: 'Prueba', items: [{ productName: 'Melena de León — Cápsulas — 60u × 500 mg', qty: 4 }] }),
+    ]);
+    igual((await stock(['CAP-06']))['CAP-06'], actual, 'confirmar no descuenta');
+    click('Actualizar', document);
+    await esperar(1200);
+    await ir('Inicio');
+    await ir('Productos');
+    await esperar(1500);
+    const ths = [...document.querySelectorAll('thead th')].map((th) => th.textContent!.trim());
+    const iEst = ths.findIndex((t) => t.startsWith('En el estante'));
+    const iDisp = ths.findIndex((t) => t.startsWith('Disponible'));
+    if (iEst < 0 || iDisp < 0) throw new Error(`no aparecen las columnas: ${ths.join(' | ')}`);
+    const fila = [...document.querySelectorAll('tbody tr')].find((tr) => tr.textContent!.includes('CAP-06'));
+    if (!fila) throw new Error('no encontré la fila de CAP-06');
+    const celda = (i: number) => fila.children[i].textContent!.trim();
+    const d = fila.children[iDisp];
+    igual(
+      [celda(iEst), d.querySelector('.disp-num')?.textContent, d.querySelector('.disp-res')?.textContent?.trim()],
+      [String(actual), String(actual - 4), '4 reservadas'],
+      'estante, disponible y reservadas de CAP-06'
+    );
+    await q(`update ss_orders set status = 'anulado' where id = 'ORD-T11'`);
+    const r = (await q(`select reservado from st_pedidos where order_id='ORD-T11'`))[0].reservado;
+    igual(r, [], 'anular libera la reserva');
+    return `CAP-06: ${actual} en el estante, 4 reservadas, ${actual - 4} disponibles; el stock no se tocó`;
   });
 
   const ok = resultados.filter((r) => r.ok).length;

@@ -165,6 +165,8 @@ export interface PedidoTienda {
   /** Se descontó a mano en su momento: no tocarlo */
   ignorar: boolean;
   lineas: { categoria: Categoria; codigo: string; cantidad: number }[];
+  /** Pedido confirmado sin preparar: lo que va a descontar cuando pase a En preparación */
+  reservado: { categoria: Categoria; codigo: string; cantidad: number }[];
   sinMapear: LineaSinMapear[];
   aplicadoAt?: string | null;
   nota?: string | null;

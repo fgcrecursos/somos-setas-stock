@@ -352,6 +352,20 @@ export async function renombrarEnTienda(
     const { error } = await sb.from('st_pedidos').update({ lineas }).eq('order_id', p.order_id);
     if (error) throw new Error(error.message);
   }
+  // Las reservas de pedidos confirmados también. Si la base todavía no tiene
+  // la columna (falta correr descuento_en_preparacion_2026-11-16.sql), no hay
+  // nada que renombrar.
+  const res = await sb
+    .from('st_pedidos')
+    .select('order_id, reservado')
+    .contains('reservado', [{ categoria, codigo: viejo }]);
+  for (const p of res.error ? [] : res.data ?? []) {
+    const reservado = ((p.reservado ?? []) as any[]).map((l) =>
+      l.categoria === categoria && l.codigo === viejo ? { ...l, codigo: nuevo } : l
+    );
+    const { error } = await sb.from('st_pedidos').update({ reservado }).eq('order_id', p.order_id);
+    if (error) throw new Error(error.message);
+  }
   return { vinculos: vinc.data?.length ?? 0, pedidos: peds.data?.length ?? 0 };
 }
 
@@ -648,6 +662,7 @@ export async function traerPedidosTienda(limite = 200): Promise<PedidoTienda[]> 
       aplicado: !!est?.aplicado,
       ignorar: !!est?.ignorar,
       lineas: est?.lineas ?? [],
+      reservado: est?.reservado ?? [],
       sinMapear: ((est?.sin_mapear ?? []) as LineaSinMapear[]).filter(
         (l) => !noSonMercaderia.has(String(l.descripcion ?? '').trim())
       ),
@@ -663,7 +678,12 @@ export async function traerPedidosTienda(limite = 200): Promise<PedidoTienda[]> 
   });
 }
 
-/** Estados en los que el pedido ya descontó stock pero la mercadería sigue en el depósito */
+/**
+ * Estados en los que el pedido puede haber descontado stock con la mercadería
+ * todavía en el depósito. Desde el 16/11 descuenta recién en "En preparación"
+ * (un confirmado sólo reserva y queda con aplicado = false), pero se sigue
+ * mirando "confirmado" por los pedidos de antes del cambio.
+ */
 export const ESTADOS_SIN_DESPACHAR = ['confirmado', 'preparacion'];
 
 export interface PorDespachar {
@@ -674,9 +694,9 @@ export interface PorDespachar {
 
 /**
  * Mercadería ya descontada por pedidos que todavía no se despacharon, por ítem
- * (clave "categoria|codigo"). La tienda descuenta al confirmar el pedido, así
- * que hasta que sale del depósito el estante tiene más de lo que dice el
- * sistema: contar en ese momento sin tenerlo en cuenta lo suma dos veces.
+ * (clave "categoria|codigo"). El pedido descuenta al pasar a En preparación,
+ * y hasta que sale del depósito puede seguir en el estante: contar en ese
+ * momento sin tenerlo en cuenta lo suma dos veces.
  */
 export async function traerPorDespachar(): Promise<Map<string, PorDespachar>> {
   const { data, error } = await sb
@@ -693,6 +713,30 @@ export async function traerPorDespachar(): Promise<Map<string, PorDespachar>> {
       const clave = `${l.categoria}|${l.codigo}`;
       const hoy = out.get(clave) ?? { cantidad: 0, pedidos: 0 };
       out.set(clave, { cantidad: hoy.cantidad + cantidad, pedidos: hoy.pedidos + 1 });
+    }
+  }
+  return out;
+}
+
+/**
+ * Lo reservado por pedidos confirmados que todavía no pasaron a En
+ * preparación, por ítem (clave "categoria|codigo"). No está descontado: el
+ * stock lo sigue contando, pero ya está prometido. Si la base todavía no
+ * tiene la columna, devuelve vacío.
+ */
+export async function traerReservado(): Promise<Map<string, number>> {
+  const out = new Map<string, number>();
+  const { data, error } = await sb
+    .from('st_pedidos')
+    .select('order_id, estado, reservado')
+    .eq('estado', 'confirmado');
+  if (error) return out;
+  for (const p of (data ?? []) as any[]) {
+    for (const l of (p.reservado ?? []) as any[]) {
+      const cantidad = Number(l.cantidad) || 0;
+      if (cantidad <= 0) continue;
+      const clave = `${l.categoria}|${l.codigo}`;
+      out.set(clave, (out.get(clave) ?? 0) + cantidad);
     }
   }
   return out;

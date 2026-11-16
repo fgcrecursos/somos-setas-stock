@@ -7,6 +7,7 @@ import { ProductForm } from '../components/ProductForm';
 import { DiffCell, StatusBadge, StockBar } from '../components/StatusBadge';
 import { BarraFiltros, GrupoFiltro } from '../components/BarraFiltros';
 import { calcEstado, camposBuscables, coincideBusqueda, formatNum } from '../lib/helpers';
+import { reservadoDe, useReservado } from '../lib/reservado';
 import { useStore } from '../lib/store';
 import type { Producto } from '../lib/types';
 
@@ -18,6 +19,12 @@ interface Props {
 
 export function ProductosView({ foco, onFocoAbierto }: Props) {
   const { state, puedeEditar } = useStore();
+  // Lo prometido en pedidos confirmados sin preparar: el estado y las alertas
+  // miran el disponible (en el estante menos lo reservado).
+  const reservado = useReservado();
+  const res = (p: Producto) => reservadoDe(reservado, 'producto', p.codigo);
+  const disp = (p: Producto) => p.actual - res(p);
+  const hayReservas = reservado.size > 0;
   const [q, setQ] = useState('');
   const [tipo, setTipo] = useState<string>('Todos');
   const [soloAlerta, setSoloAlerta] = useState(false);
@@ -45,12 +52,12 @@ export function ProductosView({ foco, onFocoAbierto }: Props) {
   const rows = useMemo(() => {
     return state.productos.filter((p) => {
       if (tipo !== 'Todos' && p.tipo !== tipo) return false;
-      if (soloAlerta && calcEstado(p.actual, p.minimo).faltan <= 0) return false;
+      if (soloAlerta && calcEstado(p.actual - reservadoDe(reservado, 'producto', p.codigo), p.minimo).faltan <= 0) return false;
       if (etiquetado === 'sin' && !p.sinEtiquetar) return false;
       if (etiquetado === 'con' && p.sinEtiquetar) return false;
       return coincideBusqueda(q, ...camposBuscables(p));
     });
-  }, [state.productos, q, tipo, soloAlerta, etiquetado]);
+  }, [state.productos, q, tipo, soloAlerta, etiquetado, reservado]);
 
   const columns: Column<Producto>[] = [
     { key: 'codigo', header: 'Código', movil: false, sortValue: (r) => r.codigo, className: 'codigo', render: (r) => r.codigo },
@@ -67,17 +74,33 @@ export function ProductosView({ foco, onFocoAbierto }: Props) {
       ) },
     { key: 'tipo', movil: false, header: 'Tipo', sortValue: (r) => r.tipo, render: (r) => <span className="pill">{r.tipo}</span> },
     { key: 'pres', movil: false, header: 'Presentación', sortValue: (r) => r.presentacion, render: (r) => <span className="muted">{r.presentacion}</span> },
-    { key: 'actual', header: 'Actual', align: 'right', sortValue: (r) => r.actual, render: (r) => formatNum(r.actual) },
+    // En el celular, con reservas, se ve sólo el disponible (no entran las dos)
+    { key: 'actual', movil: !hayReservas, header: hayReservas ? 'En el estante' : 'Actual', align: 'right', sortValue: (r) => r.actual, render: (r) => formatNum(r.actual) },
+    ...(hayReservas
+      ? ([
+          { key: 'disponible', header: 'Disponible', align: 'right', sortValue: (r) => disp(r),
+            render: (r) => (
+              <>
+                <strong className="disp-num">{formatNum(disp(r))}</strong>
+                {res(r) > 0 && (
+                  <div className="hlp disp-res" title="En pedidos confirmados que todavía no pasaron a En preparación">
+                    {formatNum(res(r))} {res(r) === 1 ? 'reservada' : 'reservadas'}
+                  </div>
+                )}
+              </>
+            ) },
+        ] as Column<Producto>[])
+      : []),
     { key: 'minimo', movil: false, header: 'Mínimo', align: 'right', sortValue: (r) => r.minimo, render: (r) => formatNum(r.minimo) },
-    { key: 'nivel', movil: false, header: 'Nivel', sortable: false, render: (r) => <StockBar actual={r.actual} minimo={r.minimo} /> },
-    { key: 'diff', movil: false, header: 'Diferencia', align: 'right', sortValue: (r) => r.actual - r.minimo, render: (r) => <DiffCell actual={r.actual} minimo={r.minimo} /> },
+    { key: 'nivel', movil: false, header: 'Nivel', sortable: false, render: (r) => <StockBar actual={disp(r)} minimo={r.minimo} /> },
+    { key: 'diff', movil: false, header: 'Diferencia', align: 'right', sortValue: (r) => disp(r) - r.minimo, render: (r) => <DiffCell actual={disp(r)} minimo={r.minimo} /> },
     { key: 'bom', movil: false, header: 'Receta', align: 'center', sortValue: (r) => r.bom.length,
       render: (r) => (
         <span className="pill" title={`${r.bom.length} componentes`}>
           <Link2 size={12} /> {r.bom.length}
         </span>
       ) },
-    { key: 'estado', header: 'Estado', sortValue: (r) => calcEstado(r.actual, r.minimo).diferencia, render: (r) => <StatusBadge actual={r.actual} minimo={r.minimo} /> },
+    { key: 'estado', header: 'Estado', sortValue: (r) => calcEstado(disp(r), r.minimo).diferencia, render: (r) => <StatusBadge actual={disp(r)} minimo={r.minimo} /> },
     { key: 'acc', header: '', sortable: false, align: 'right', className: 'actions',
       render: (r) => (
         <div className="row-acciones">

@@ -33,6 +33,7 @@ import { useToast } from './components/Toast';
 import { useAuth } from './lib/auth';
 import { descargarBackup } from './lib/backup';
 import { alertasVencimiento, calcEstado, diasAvisoGuardado, listaDe } from './lib/helpers';
+import { conDisponible, useReservado } from './lib/reservado';
 import { useStore } from './lib/store';
 import type { Categoria } from './lib/types';
 import { CategoriaView } from './views/CategoriaView';
@@ -111,7 +112,7 @@ const TITLES: Record<ViewId, { t: string; s: string }> = {
     s: 'Recetas, etiquetas y materia prima que hacen que el stock no coincida con el estante',
   },
   ventas: { t: 'Ventas y producción', s: 'Qué se vendió, qué se produjo y qué se consumió' },
-  pedidos: { t: 'Pedidos de la tienda', s: 'Los pedidos confirmados descuentan el stock solos' },
+  pedidos: { t: 'Pedidos de la tienda', s: 'Confirmado reserva; En preparación descuenta el stock' },
   movimientos: {
     t: 'Movimientos',
     s: 'Todo lo que entró, salió o cambió: ventas, producción, ingresos, ajustes, altas y bajas',
@@ -156,9 +157,13 @@ export default function App() {
   const focoDe = (categoria: Categoria) =>
     foco?.categoria === categoria ? foco.codigo : undefined;
 
+  // Los avisos de stock bajo miran el disponible (en el estante menos lo
+  // reservado en pedidos confirmados sin preparar).
+  const reservado = useReservado();
   const alertCounts = useMemo(() => {
+    const disp = conDisponible(state, reservado);
     const count = (cat: Categoria) =>
-      listaDe(state, cat).filter((it) => calcEstado(it.actual, it.minimo).faltan > 0).length;
+      listaDe(disp, cat).filter((it) => calcEstado(it.actual, it.minimo).faltan > 0).length;
     return {
       producto: count('producto'),
       insumo: count('insumo'),
@@ -166,7 +171,7 @@ export default function App() {
       etiqueta: count('etiqueta'),
       materia_prima: count('materia_prima'),
     };
-  }, [state]);
+  }, [state, reservado]);
 
   // Materias primas que todavía no cierran: sin unidad, en kilos, con una
   // receta en "1" o en negativo

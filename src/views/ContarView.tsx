@@ -32,7 +32,7 @@ export function ContarView({ onSalir }: { onSalir: () => void }) {
   const [filtro, setFiltro] = useState<'todos' | 'faltan' | 'contados'>('todos');
   const [q, setQ] = useState('');
   const [confirmando, setConfirmando] = useState(false);
-  // Mercadería de pedidos confirmados que todavía no salió: el sistema ya la
+  // Mercadería de pedidos en preparación que todavía no salió: el sistema ya la
   // descontó, pero puede seguir en el estante. Antes de guardar hay que decir
   // si se contó o no; si no, el conteo la vuelve a sumar.
   const [porDespachar, setPorDespachar] = useState<Map<string, PorDespachar>>(new Map());
@@ -226,7 +226,7 @@ export function ContarView({ onSalir }: { onSalir: () => void }) {
       {contadosConPedidos.length > 0 && (
         <div className="aviso-fuerte pedidos-estante" role="group" aria-label="Pedidos sin despachar">
           <p>
-            <strong>Hay pedidos confirmados que todavía no salieron.</strong> El sistema ya descontó esa
+            <strong>Hay pedidos en preparación que todavía no salieron.</strong> El sistema ya descontó esa
             mercadería ({contadosConPedidos.length === 1 ? 'un producto' : `${contadosConPedidos.length} productos`} de
             los que contaste). ¿Dónde estaba cuando contaste?
           </p>

@@ -1,8 +1,10 @@
 // =====================================================================
 // PEDIDOS DE LA TIENDA — el puente entre somossetas.com.ar y el inventario.
 //
-// Cuando un pedido pasa a "confirmado", la base descuenta el stock sola (lo
-// hace un disparador en Supabase, no esta pantalla). Acá se ve qué se descontó,
+// Cuando un pedido pasa a "confirmado", la base lo RESERVA (anota qué va a
+// descontar, sin tocar el stock). Cuando pasa a "En preparación" (o directo a
+// enviado o entregado), lo descuenta. Lo hace un disparador en Supabase, no
+// esta pantalla. Acá se ve qué se reservó, qué se descontó,
 // qué quedó pendiente y por qué, y se arregla el vínculo entre lo que vende la
 // web y lo que cuenta el inventario.
 //
@@ -36,8 +38,8 @@ import { formatFecha, formatNum } from '../lib/helpers';
 import { useStore } from '../lib/store';
 import type { PedidoTienda, SkuMap } from '../lib/types';
 
-/** Estados en los que el pedido ya cuenta como venta y debe estar descontado */
-const ESTADOS_DESCUENTAN = ['confirmado', 'preparacion', 'enviado', 'entregado'];
+/** Estados en los que el pedido ya salió del estante y debe estar descontado */
+const ESTADOS_DESCUENTAN = ['preparacion', 'enviado', 'entregado'];
 
 const ESTADO_LABEL: Record<string, string> = {
   nuevo: 'Nuevo',
@@ -184,7 +186,7 @@ export function PedidosView() {
               color={resumen.pendientes ? 'var(--bajo)' : 'var(--verde-700)'}
               bg={resumen.pendientes ? 'var(--bajo-bg)' : 'var(--crema-3)'}
               valor={formatNum(resumen.pendientes)}
-              label="Confirmados sin descontar"
+              label="Preparados sin descontar"
               foot={resumen.pendientes ? 'Revisalos abajo' : 'Todo al día'}
             />
             <Kpi
@@ -410,6 +412,14 @@ function EstadoStock({ pedido, deberia }: { pedido: PedidoTienda; deberia: boole
       </span>
     );
   if (pedido.ignorar) return <span className="badge-estado">Descontado a mano</span>;
+  if (pedido.estado === 'confirmado' && pedido.reservado.length > 0) {
+    const u = pedido.reservado.reduce((s, l) => s + (Number(l.cantidad) || 0), 0);
+    return (
+      <span className="badge-estado" title="Descuenta cuando pase a En preparación">
+        Reservado · {formatNum(u)} u
+      </span>
+    );
+  }
   if (deberia) return <span className="badge-estado st-bajo">Pendiente</span>;
   return <span className="muted" style={{ fontSize: 12 }}>Sin efecto</span>;
 }

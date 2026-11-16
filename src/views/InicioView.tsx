@@ -9,6 +9,7 @@ import { FotoItem, Titulo } from '../components/Tareas';
 import { useAuth } from '../lib/auth';
 import { etiquetaDia, fraseDe, hora, trozos } from '../lib/frases';
 import { buscarEnTodo, calcEstado, listaDe } from '../lib/helpers';
+import { conDisponible, useReservado } from '../lib/reservado';
 import { useStore } from '../lib/store';
 import type { Categoria } from '../lib/types';
 
@@ -29,7 +30,11 @@ export function InicioView({ onTarea, onHistoria }: { onTarea: (t: Tarea) => voi
   const resultados = useMemo(() => (q.trim().length >= 2 ? buscarEnTodo(state, q).slice(0, 8) : []), [state, q]);
   const ultimos = useMemo(() => state.movimientos.filter((m) => m.tipo !== 'edicion').slice(0, 8).map((m) => fraseDe(m, state)), [state]);
   const negativos = useMemo(() => listaDe(state, 'producto').filter((p) => p.actual < 0).length, [state]);
-  const bajos = useMemo(() => listaDe(state, 'producto').filter((p) => p.actual >= 0 && calcEstado(p.actual, p.minimo).faltan > 0).length, [state]);
+  const reservado = useReservado();
+  const bajos = useMemo(
+    () => listaDe(conDisponible(state, reservado), 'producto').filter((p) => p.actual >= 0 && calcEstado(p.actual, p.minimo).faltan > 0).length,
+    [state, reservado]
+  );
 
   return (
     <div className="tarea inicio">

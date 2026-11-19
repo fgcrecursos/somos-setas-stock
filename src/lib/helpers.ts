@@ -256,6 +256,16 @@ export const COMPONENTE_LABEL: Record<CategoriaComponente, string> = {
   materia_prima: 'Materia prima',
 };
 
+/**
+ * Productos que se cuentan en kilos y no por unidad: el gel. GEL-01 (Tremella)
+ * es una sola ficha para los frascos de 250 g, 500 g y 1 kg de la tienda, que
+ * descuentan 0,25, 0,5 y 1. Para estos la cantidad admite decimales y se
+ * muestra en kg.
+ */
+export function seCuentaEnKilos(item: { tipo?: string | null } | null | undefined): boolean {
+  return normalizarBusqueda(item?.tipo).trim() === 'gel';
+}
+
 export function formatNum(n: number): string {
   if (Number.isInteger(n)) return n.toLocaleString('es-AR');
   return n.toLocaleString('es-AR', { maximumFractionDigits: 2 });

@@ -36,6 +36,7 @@ import {
   formatFecha,
   formatNum,
   listaDe,
+  seCuentaEnKilos,
 } from '../lib/helpers';
 import { useStore } from '../lib/store';
 import type { BaseItem, Categoria, DBState, Producto } from '../lib/types';
@@ -211,6 +212,17 @@ export function VenderView() {
 
   const esConsumo = modo === 'consumo_interno';
   const producto = sel?.categoria === 'producto' ? (sel.item as Producto) : null;
+  // El gel se cuenta en kilos: la cantidad va de a 0,25 (un frasco de 250 g)
+  // y se escribe con coma. Mientras se escribe se muestra tal cual.
+  const enKilos = seCuentaEnKilos(producto);
+  const paso = enKilos ? 0.25 : 1;
+  const kg = enKilos ? ' kg' : '';
+  const [cantEscrita, setCantEscrita] = useState<string | null>(null);
+  useEffect(() => setCantEscrita(null), [codigoSel]);
+  function moverCant(d: number) {
+    setCantEscrita(null);
+    setCant((c) => Math.max(paso, Math.round((c + d) * 1000) / 1000));
+  }
 
   function resolver(texto: string) {
     const code = texto.trim();
@@ -289,11 +301,12 @@ export function VenderView() {
       setUltima({
         modo,
         cant,
+        kg: enKilos,
         nombre: sel.item.nombre,
         codigo: sel.item.codigo,
         componentes: [],
       });
-      toast(`Consumo interno registrado: ${cant} × ${sel.item.nombre}`);
+      toast(`Consumo interno registrado: ${formatNum(cant)}${kg} × ${sel.item.nombre}`);
     } else {
       // Producción con receta vacía o con componentes que no están en el
       // inventario: no se bloquea, pero se pide confirmar de nuevo.
@@ -323,7 +336,7 @@ export function VenderView() {
         toast(res.mensaje, true);
         return;
       }
-      setUltima({ ...res, modo, cant, nombre: sel.item.nombre, codigo: sel.item.codigo });
+      setUltima({ ...res, modo, cant, kg: enKilos, nombre: sel.item.nombre, codigo: sel.item.codigo });
       if (res.alertas.length) {
         toast(`${res.mensaje}. ${res.alertas.length} alerta(s) de stock`, true);
       } else {
@@ -360,7 +373,7 @@ export function VenderView() {
             </div>
             <div className="card__body">
               <p style={{ margin: '0 0 10px', fontWeight: 600 }}>
-                {MOVIMIENTO_LABEL[ultima.modo as Modo]}: {ultima.cant} × {ultima.nombre}
+                {MOVIMIENTO_LABEL[ultima.modo as Modo]}: {formatNum(ultima.cant)}{ultima.kg ? ' kg' : ''} × {ultima.nombre}
               </p>
               {ultima.producto && (
                 <div className="comp-row" style={{ fontWeight: 600 }}>
@@ -482,20 +495,41 @@ export function VenderView() {
                 <div>
                   <div className="section-title" style={{ margin: 0 }}>Cantidad</div>
                   <div className="row" style={{ marginTop: 8 }}>
-                    <button className="btn btn--sm" onClick={() => setCant((c) => Math.max(1, c - 1))}>
+                    <button className="btn btn--sm" onClick={() => moverCant(-paso)} aria-label={`Restar ${formatNum(paso)}`}>
                       <Minus size={15} />
                     </button>
-                    <input
-                      className="input"
-                      style={{ width: 90, textAlign: 'center', fontFamily: 'var(--font-head)', fontSize: 18 }}
-                      type="number"
-                      min={1}
-                      value={cant}
-                      onChange={(e) => setCant(Math.max(1, parseInt(e.target.value) || 1))}
-                    />
-                    <button className="btn btn--sm" onClick={() => setCant((c) => c + 1)}>
+                    {enKilos ? (
+                      <input
+                        className="input"
+                        style={{ width: 90, textAlign: 'center', fontFamily: 'var(--font-head)', fontSize: 18 }}
+                        inputMode="decimal"
+                        aria-label="Kilos"
+                        value={cantEscrita ?? String(cant).replace('.', ',')}
+                        onBlur={() => setCantEscrita(null)}
+                        onChange={(e) => {
+                          const limpio = e.target.value
+                            .replace(/[^\d.,]/g, '')
+                            .replace(/\./g, ',')
+                            .replace(/,(?=.*,)/g, '');
+                          setCantEscrita(limpio);
+                          const n = Number(limpio.replace(',', '.'));
+                          setCant(Number.isFinite(n) && n > 0 ? n : 0);
+                        }}
+                      />
+                    ) : (
+                      <input
+                        className="input"
+                        style={{ width: 90, textAlign: 'center', fontFamily: 'var(--font-head)', fontSize: 18 }}
+                        type="number"
+                        min={1}
+                        value={cant}
+                        onChange={(e) => setCant(Math.max(1, parseInt(e.target.value) || 1))}
+                      />
+                    )}
+                    <button className="btn btn--sm" onClick={() => moverCant(paso)} aria-label={`Sumar ${formatNum(paso)}`}>
                       <Plus size={15} />
                     </button>
+                    {enKilos && <span className="muted">kg</span>}
                   </div>
                 </div>
                 {(modo === 'venta' || esConsumo) && selEstado && (
@@ -638,7 +672,7 @@ export function VenderView() {
               <button className="btn" onClick={() => setSel(null)}>
                 <Trash2 size={15} /> Cancelar
               </button>
-              <button className="btn btn--primary" onClick={confirmar} disabled={guardando}>
+              <button className="btn btn--primary" onClick={confirmar} disabled={guardando || !(cant > 0)}>
                 {esConsumo ? <Users size={16} /> : <Check size={16} />}{' '}
                 {guardando
                   ? 'Registrando…'
@@ -648,7 +682,7 @@ export function VenderView() {
                         : modo === 'produccion'
                           ? 'producción'
                           : 'consumo interno'
-                    } (${cant})`}
+                    } (${formatNum(cant)}${kg})`}
               </button>
             </div>
           </div>

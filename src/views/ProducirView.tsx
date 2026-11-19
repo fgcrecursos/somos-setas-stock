@@ -9,7 +9,7 @@ import { ArrowLeft, Check } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { Contador, ElegirItem, FotoItem, Titulo } from '../components/Tareas';
 import { cuanto, hay } from '../lib/frases';
-import { buscarItem, formatNum } from '../lib/helpers';
+import { buscarItem, formatNum, seCuentaEnKilos } from '../lib/helpers';
 import { useStore } from '../lib/store';
 import type { Producto } from '../lib/types';
 
@@ -63,7 +63,7 @@ export function ProducirView({ onSalir, onHistoria }: { onSalir: () => void; onH
         <span className="listo__marca"><Check size={44} strokeWidth={2.6} /></span>
         <h1>Listo, quedó anotado</h1>
         <p className="num">
-          {producto.nombre} ahora tiene <strong>{formatNum(hecho.quedan)}</strong>. Ya se descontó lo que lleva la receta.
+          {producto.nombre} ahora tiene <strong>{formatNum(hecho.quedan)}{seCuentaEnKilos(producto) ? ' kg' : ''}</strong>. Ya se descontó lo que lleva la receta.
         </p>
         {hecho.avisos.length > 0 && (
           <ul className="listo__avisos">
@@ -90,11 +90,18 @@ export function ProducirView({ onSalir, onHistoria }: { onSalir: () => void; onH
     );
 
   const noAlcanza = lineas.filter((l) => !l.alcanza);
+  // El gel se cuenta en kilos: se puede producir 2,5
+  const enKilos = seCuentaEnKilos(producto);
+  const kg = enKilos ? ' kg' : '';
 
   return (
     <div className="tarea">
       <button className="volver" onClick={() => setCodigo(null)}><ArrowLeft size={22} /> Elegir otro producto</button>
-      <Titulo marcado="¿Cuántos" titulo="¿Cuántos hiciste?" sub="Paso 2 de 2" />
+      <Titulo
+        marcado="¿Cuántos"
+        titulo={enKilos ? '¿Cuántos kilos hiciste?' : '¿Cuántos hiciste?'}
+        sub={enKilos ? 'Paso 2 de 2 · En kilos: 250 g es 0,25' : 'Paso 2 de 2'}
+      />
 
       <div className="tarea__dos">
         <div className="panel-producto">
@@ -102,8 +109,8 @@ export function ProducirView({ onSalir, onHistoria }: { onSalir: () => void; onH
           <div className="panel-producto__txt">
             <strong className="panel-producto__nombre">{producto.nombre}</strong>
             <span className="subtitulo-marca">{[producto.tipo, producto.presentacion].filter(Boolean).join(' · ')}</span>
-            <Contador valor={cant} onCambio={setCant} etiqueta="Cantidad producida" />
-            <span className="num">Hoy hay {formatNum(producto.actual)} · después van a quedar <strong>{formatNum(producto.actual + cant)}</strong></span>
+            <Contador valor={cant} onCambio={setCant} etiqueta={enKilos ? 'Kilos producidos' : 'Cantidad producida'} enKilos={enKilos} />
+            <span className="num">Hoy hay {formatNum(producto.actual)}{kg} · después van a quedar <strong>{formatNum(producto.actual + cant)}{kg}</strong></span>
           </div>
         </div>
 
@@ -141,8 +148,8 @@ export function ProducirView({ onSalir, onHistoria }: { onSalir: () => void; onH
 
       <div className="tarea__acciones">
         <button className="btn-grande btn-grande--borde" onClick={onSalir}>Cancelar</button>
-        <button className="btn-grande" disabled={guardando || cant < 1} onClick={confirmar}>
-          {guardando ? 'Guardando…' : `Registrar ${formatNum(cant)}`}
+        <button className="btn-grande" disabled={guardando || !(cant >= (enKilos ? 0.01 : 1))} onClick={confirmar}>
+          {guardando ? 'Guardando…' : `Registrar ${formatNum(cant)}${kg}`}
         </button>
       </div>
     </div>

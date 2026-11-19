@@ -691,6 +691,81 @@ export async function correrPruebas(q: Q) {
     return 'el alta abre en las 5 secciones; MP nueva con 500 g guardada';
   });
 
+  await prueba('31. Gel: se elige el tipo, toma la serie GEL y se produce y vende en kilos', async () => {
+    const tareaInicio = async (titulo: string) => {
+      await ir('Inicio');
+      const t = [...document.querySelectorAll<HTMLButtonElement>('.opcion-grande')].find((b) => b.textContent!.includes(titulo));
+      if (!t) throw new Error(`no encontré la tarea "${titulo}"`);
+      t.click();
+      await esperar(400);
+    };
+    const elegir = async (cod: string) => {
+      escribir(document.querySelector('.buscador-grande input') as HTMLInputElement, cod);
+      await esperar(300);
+      (document.querySelector('.fila-item') as HTMLButtonElement).click();
+      await esperar(300);
+    };
+
+    // Alta con tipo Gel: el código propuesto sale de la serie GEL
+    await ir('Productos');
+    click('Nuevo', document);
+    await esperar(400);
+    escribir('Tipo', 'Gel');
+    await esperar(200);
+    const cod = (campo('Código') as HTMLInputElement).value;
+    if (!/^GEL-\d+$/.test(cod)) throw new Error(`el código propuesto para un gel es "${cod}"`);
+    if (!modal().textContent!.includes('se cuenta en kilos')) throw new Error('la ficha no avisa que el gel va en kilos');
+    escribir('Nombre', 'Gel de prueba');
+    click('Crear producto');
+    await esperar(1500);
+    if (errorModal()) throw new Error(`no guardó: ${errorModal()}`);
+    const f = (await q(`select data->>'tipo' t from st_items where categoria = 'producto' and codigo = $1`, [cod]))[0];
+    igual(f?.t, 'Gel', 'tipo guardado');
+
+    // Produje: 2,5 kg escrito con coma
+    await tareaInicio('Produje en el laboratorio');
+    await elegir(cod);
+    escribir(document.querySelector('.contador__num') as HTMLInputElement, '2,5');
+    await esperar(200);
+    click('Registrar 2,5 kg', document);
+    await esperar(1500);
+    igual((await stock([cod]))[cod], 2.5, 'después de producir 2,5 kg');
+
+    // Escanear → venta de un frasco de 250 g
+    await ir('Escanear');
+    click('Venta', document.querySelector('.toolbar .chips')!);
+    await esperar(150);
+    const inp = document.querySelector('.producto-select input') as HTMLInputElement;
+    inp.focus();
+    escribir(inp, cod);
+    await esperar(200);
+    inp.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    await esperar(300);
+    const kilos = document.querySelector<HTMLInputElement>('.vender-panel input[inputmode=decimal]');
+    if (!kilos) throw new Error('Escanear no ofrece cargar kilos para el gel');
+    escribir(kilos, '0,25');
+    await esperar(200);
+    click('Confirmar', document.querySelector('.vender-panel')!);
+    await esperar(1200);
+    igual((await stock([cod]))[cod], 2.25, 'después de vender 0,25 kg');
+    const m = await ultimo();
+    igual([m.tipo, Number(m.cantidad)], ['venta', 0.25], 'movimiento de la venta');
+
+    // Salió mercadería: arranca en 1 kg y se baja de a 0,25 con los botones
+    await tareaInicio('Salió mercadería');
+    [...document.querySelectorAll<HTMLButtonElement>('.opcion-grande')].find((b) => b.textContent!.includes('Se vendió'))!.click();
+    await esperar(300);
+    await elegir(cod);
+    click('−0,25', document);
+    await esperar(100);
+    click('−0,25', document);
+    await esperar(100);
+    click('Anotar 0,5 kg', document);
+    await esperar(1500);
+    igual((await stock([cod]))[cod], 1.75, 'después de la salida de 0,5 kg');
+    return `${cod} creado como Gel; produjo 2,5 kg, vendió 0,25 y salieron 0,5: quedan 1,75 kg`;
+  });
+
   const ok = resultados.filter((r) => r.ok).length;
   return { resumen: `${ok} de ${resultados.length} pruebas OK`, resultados };
 }

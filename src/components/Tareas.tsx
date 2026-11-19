@@ -85,24 +85,65 @@ export function Titulo({ titulo, marcado, sub }: { titulo: string; marcado?: str
 }
 
 // ---------------------------------------------------------------------
-export function Contador({ valor, onCambio, min = 1, etiqueta }: { valor: number; onCambio: (n: number) => void; min?: number; etiqueta: string }) {
-  const cambiar = (d: number) => onCambio(Math.max(min, (Number.isFinite(valor) ? valor : 0) + d));
+/**
+ * `enKilos` es para lo que se cuenta por peso (el gel): los botones van de a
+ * 1 kg y de a 0,25 (un frasco chico) y se puede escribir con coma. Sin eso el
+ * número es entero y "1.000" se lee mil, como se escribe acá.
+ */
+export function Contador({
+  valor,
+  onCambio,
+  min,
+  etiqueta,
+  enKilos = false,
+}: {
+  valor: number;
+  onCambio: (n: number) => void;
+  min?: number;
+  etiqueta: string;
+  enKilos?: boolean;
+}) {
+  const minimo = min ?? (enKilos ? 0.25 : 1);
+  const chico = enKilos ? 0.25 : 1;
+  const grande = enKilos ? 1 : 10;
+  // Mientras se escribe se muestra tal cual ("0," todavía no es un número)
+  const [escrito, setEscrito] = useState<string | null>(null);
+  const cambiar = (d: number) => {
+    setEscrito(null);
+    const n = Math.max(minimo, (Number.isFinite(valor) ? valor : 0) + d);
+    onCambio(Math.round(n * 1000) / 1000);
+  };
+  const mostrado = Number.isFinite(valor) ? (enKilos ? String(valor).replace('.', ',') : String(valor)) : '';
+  const txt = (n: number) => formatNum(n);
   return (
     <div className="contador num" role="group" aria-label={etiqueta}>
-      <button type="button" className="contador__btn" onClick={() => cambiar(-10)} aria-label="Restar 10">−10</button>
-      <button type="button" className="contador__btn" onClick={() => cambiar(-1)} aria-label="Restar 1"><Minus size={26} /></button>
+      <button type="button" className="contador__btn" onClick={() => cambiar(-grande)} aria-label={`Restar ${txt(grande)}`}>−{txt(grande)}</button>
+      <button type="button" className="contador__btn" onClick={() => cambiar(-chico)} aria-label={`Restar ${txt(chico)}`}>
+        {enKilos ? `−${txt(chico)}` : <Minus size={26} />}
+      </button>
       <input
         className="contador__num"
-        inputMode="numeric"
+        inputMode={enKilos ? 'decimal' : 'numeric'}
         aria-label={etiqueta}
-        value={Number.isFinite(valor) ? String(valor) : ''}
+        value={escrito ?? mostrado}
+        onBlur={() => setEscrito(null)}
         onChange={(e) => {
-          const n = Number(e.target.value.replace(/\D/g, ''));
-          onCambio(Number.isFinite(n) ? n : min);
+          if (!enKilos) {
+            const n = Number(e.target.value.replace(/\D/g, ''));
+            onCambio(Number.isFinite(n) ? n : minimo);
+            return;
+          }
+          // Coma o punto como decimal; un solo separador
+          const limpio = e.target.value.replace(/[^\d.,]/g, '').replace(/\./g, ',').replace(/,(?=.*,)/g, '');
+          setEscrito(limpio);
+          const n = Number(limpio.replace(',', '.'));
+          onCambio(Number.isFinite(n) ? n : 0);
         }}
       />
-      <button type="button" className="contador__btn" onClick={() => cambiar(1)} aria-label="Sumar 1"><Plus size={26} /></button>
-      <button type="button" className="contador__btn" onClick={() => cambiar(10)} aria-label="Sumar 10">+10</button>
+      <button type="button" className="contador__btn" onClick={() => cambiar(chico)} aria-label={`Sumar ${txt(chico)}`}>
+        {enKilos ? `+${txt(chico)}` : <Plus size={26} />}
+      </button>
+      <button type="button" className="contador__btn" onClick={() => cambiar(grande)} aria-label={`Sumar ${txt(grande)}`}>+{txt(grande)}</button>
     </div>
   );
 }

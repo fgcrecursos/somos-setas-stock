@@ -1,7 +1,7 @@
 import { Plus, Trash2, Package } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { problemaConCodigo, siguienteCodigo } from '../lib/codigos';
-import { abrevUnidad, buscarItem, CATEGORIA_LABEL, formatNum, listaDe } from '../lib/helpers';
+import { abrevUnidad, buscarItem, CATEGORIA_LABEL, formatNum, listaDe, seCuentaEnKilos } from '../lib/helpers';
 import { useStore, type MotivoStock } from '../lib/store';
 import type { BomItem, CategoriaComponente, Producto } from '../lib/types';
 import { CampoCodigo } from './CampoCodigo';
@@ -11,8 +11,9 @@ import { MotivoStockSelector, opcionesMotivo } from './MotivoStock';
 import { useToast } from './Toast';
 
 // "Otros" es para lo que no encaja en ningún tipo (o todavía no se sabe cuál
-// es): va con su propia serie de códigos, OTR.
-const TIPOS = ['Aceite', 'Cápsulas', 'Extracto', 'Polvo', 'Setas', 'Otros'];
+// es): va con su propia serie de códigos, OTR. "Gel" va con la serie GEL y se
+// cuenta en kilos (ver seCuentaEnKilos).
+const TIPOS = ['Aceite', 'Cápsulas', 'Extracto', 'Gel', 'Polvo', 'Setas', 'Otros'];
 const CATS_COMP: CategoriaComponente[] = [
   'etiqueta',
   'insumo',
@@ -111,6 +112,7 @@ export function ProductForm({ initial, duplicarDe, onClose, onEliminar }: Props)
     setP((prev) => ({ ...prev, bom: prev.bom.filter((_, idx) => idx !== i) }));
   }
 
+  const enKilos = seCuentaEnKilos(p);
   const cambiaStock = editing && Number(p.actual) !== actualVisto;
   const deltaStock = Number(p.actual) - actualVisto;
   // Si el número cambia de sentido, el motivo elegido puede dejar de valer
@@ -241,6 +243,8 @@ export function ProductForm({ initial, duplicarDe, onClose, onEliminar }: Props)
         <div className="field">
           <label>Tipo</label>
           <select className="select" value={p.tipo} onChange={(e) => set('tipo', e.target.value)}>
+            {/* Un tipo escrito antes de que existiera la lista queda como opción propia */}
+            {p.tipo && !TIPOS.includes(p.tipo) && <option>{p.tipo}</option>}
             {TIPOS.map((t) => <option key={t}>{t}</option>)}
           </select>
         </div>
@@ -277,14 +281,21 @@ export function ProductForm({ initial, duplicarDe, onClose, onEliminar }: Props)
         </div>
       )}
 
+      {enKilos && (
+        <p className="hlp" style={{ marginTop: 0, marginBottom: 12 }}>
+          El gel se cuenta en <strong>kilos</strong>: el stock, el mínimo y lo que se produce van en
+          kg (un frasco de 250 g es 0,25). La receta se descuenta por kilo producido.
+        </p>
+      )}
+
       <div className="form-row-3">
         <div className="field">
-          <label>Stock actual</label>
-          <input className="input" type="number" value={p.actual} onChange={(e) => set('actual', Number(e.target.value))} />
+          <label>Stock actual{enKilos ? ' (kg)' : ''}</label>
+          <input className="input" type="number" step="any" value={p.actual} onChange={(e) => set('actual', Number(e.target.value))} />
         </div>
         <div className="field">
-          <label>Stock mínimo</label>
-          <input className="input" type="number" value={p.minimo} onChange={(e) => set('minimo', Number(e.target.value))} />
+          <label>Stock mínimo{enKilos ? ' (kg)' : ''}</label>
+          <input className="input" type="number" step="any" value={p.minimo} onChange={(e) => set('minimo', Number(e.target.value))} />
         </div>
         <div className="field">
           <label>Vencimiento</label>
@@ -361,7 +372,7 @@ export function ProductForm({ initial, duplicarDe, onClose, onEliminar }: Props)
             {comp && (
               <div className={'bom-line__info' + (pideMucho ? ' bom-line__info--ojo' : '')}>
                 Pide {formatNum(Number(b.cantidad) || 0)}
-                {unidad ? ` ${unidad}` : ''} por unidad producida · hay {formatNum(comp.actual)}
+                {unidad ? ` ${unidad}` : ''} por {enKilos ? 'kilo producido' : 'unidad producida'} · hay {formatNum(comp.actual)}
                 {unidad ? ` ${unidad}` : ''} en stock
                 {!unidad && comp.presentacion ? ` (se compra como: ${comp.presentacion})` : ''}
                 {pideMucho &&

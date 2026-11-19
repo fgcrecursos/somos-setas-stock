@@ -6,7 +6,7 @@
 import { ArrowLeft, Check } from 'lucide-react';
 import { useState } from 'react';
 import { Contador, ElegirItem, FotoItem, Titulo } from '../components/Tareas';
-import { formatNum } from '../lib/helpers';
+import { formatNum, seCuentaEnKilos } from '../lib/helpers';
 import { useStore } from '../lib/store';
 
 type Motivo = 'venta' | 'uso' | 'rotura';
@@ -50,7 +50,7 @@ export function SalidaView({ onSalir, onHistoria }: { onSalir: () => void; onHis
       <div className="tarea tarea--listo">
         <span className="listo__marca"><Check size={44} strokeWidth={2.6} /></span>
         <h1>Listo, quedó anotado</h1>
-        <p className="num">{producto.nombre} ahora tiene <strong>{formatNum(hecho)}</strong>.</p>
+        <p className="num">{producto.nombre} ahora tiene <strong>{formatNum(hecho)}{seCuentaEnKilos(producto) ? ' kg' : ''}</strong>.</p>
         {hecho < 0 && <p className="aviso-fuerte">Quedó en negativo: según el sistema no había tantos. Conviene contar el estante.</p>}
         <div className="tarea__acciones tarea__acciones--centro">
           <button className="btn-grande btn-grande--borde" onClick={() => { setHecho(null); setCodigo(null); setCant(1); setNota(''); }}>Anotar otra salida</button>
@@ -87,17 +87,24 @@ export function SalidaView({ onSalir, onHistoria }: { onSalir: () => void; onHis
     );
 
   const m = MOTIVOS.find((x) => x.id === motivo)!;
+  // El gel se cuenta en kilos: un frasco de 250 g es 0,25
+  const enKilos = seCuentaEnKilos(producto);
+  const kg = enKilos ? ' kg' : '';
   return (
     <div className="tarea">
       <button className="volver" onClick={() => setCodigo(null)}><ArrowLeft size={22} /> Elegir otro producto</button>
-      <Titulo marcado="¿Cuántos" titulo="¿Cuántos salieron?" sub={`Paso 3 de 3 · ${m.titulo}`} />
+      <Titulo
+        marcado="¿Cuántos"
+        titulo={enKilos ? '¿Cuántos kilos salieron?' : '¿Cuántos salieron?'}
+        sub={`Paso 3 de 3 · ${m.titulo}${enKilos ? ' · En kilos: 250 g es 0,25' : ''}`}
+      />
       <div className="panel-producto">
         <FotoItem item={producto} categoria="producto" tam={130} />
         <div className="panel-producto__txt">
           <strong className="panel-producto__nombre">{producto.nombre}</strong>
           <span className="subtitulo-marca">{[producto.tipo, producto.presentacion].filter(Boolean).join(' · ')}</span>
-          <Contador valor={cant} onCambio={setCant} etiqueta="Cantidad que salió" />
-          <span className="num">Hoy hay {formatNum(producto.actual)} · después van a quedar <strong>{formatNum(producto.actual - cant)}</strong></span>
+          <Contador valor={cant} onCambio={setCant} etiqueta={enKilos ? 'Kilos que salieron' : 'Cantidad que salió'} enKilos={enKilos} />
+          <span className="num">Hoy hay {formatNum(producto.actual)}{kg} · después van a quedar <strong>{formatNum(producto.actual - cant)}{kg}</strong></span>
         </div>
       </div>
       <label className="campo-grande">
@@ -108,8 +115,8 @@ export function SalidaView({ onSalir, onHistoria }: { onSalir: () => void; onHis
       {error && <p className="aviso-fuerte" role="alert">{error}</p>}
       <div className="tarea__acciones">
         <button className="btn-grande btn-grande--borde" onClick={onSalir}>Cancelar</button>
-        <button className="btn-grande" disabled={guardando || cant < 1} onClick={confirmar}>
-          {guardando ? 'Guardando…' : `Anotar ${formatNum(cant)}`}
+        <button className="btn-grande" disabled={guardando || !(cant >= (enKilos ? 0.01 : 1))} onClick={confirmar}>
+          {guardando ? 'Guardando…' : `Anotar ${formatNum(cant)}${kg}`}
         </button>
       </div>
     </div>

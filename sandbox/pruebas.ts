@@ -662,6 +662,35 @@ export async function correrPruebas(q: Q) {
     return `CAP-06: ${actual} en el estante, 4 reservadas, ${actual - 4} disponibles; el stock no se tocó`;
   });
 
+  // El 19/11 "Nuevo" en Materia prima dejaba la app en blanco: el formulario de
+  // alta leía la unidad de una ficha que no existe. Va última porque si el
+  // formulario rompe, React desmonta toda la app y las demás pruebas no corren.
+  await prueba('30. "Nuevo" abre el alta en cada sección y la materia prima se guarda', async () => {
+    const secciones = ['Productos', 'Insumos productos', 'Etiquetas', 'Insumos internos', 'Materia prima'];
+    for (const s of secciones) {
+      await ir(s);
+      click('Nuevo', document);
+      await esperar(400);
+      if (!document.querySelector('.nav__item')) throw new Error(`"Nuevo" en ${s} dejó la app en blanco`);
+      if (!document.querySelector('.modal')) throw new Error(`"Nuevo" en ${s} no abrió el formulario`);
+      if (s !== 'Materia prima') {
+        click('Cancelar');
+        await esperar(300);
+      }
+    }
+    escribir('Nombre', 'MP de prueba');
+    escribir('Tipo', 'Polvo');
+    escribir('Unidad de medida', 'g');
+    escribir('Stock actual', 500);
+    click('Crear');
+    await esperar(1200);
+    if (errorModal()) throw new Error(`no guardó: ${errorModal()}`);
+    const f = (await q(`select actual, data->>'unidad' u, data->>'tipo' t from st_items where categoria='materia_prima' and nombre='MP de prueba'`))[0];
+    if (!f) throw new Error('la materia prima nueva no está en la base');
+    igual([Number(f.actual), f.u, f.t], [500, 'g', 'Polvo'], 'stock, unidad y tipo de la MP nueva');
+    return 'el alta abre en las 5 secciones; MP nueva con 500 g guardada';
+  });
+
   const ok = resultados.filter((r) => r.ok).length;
   return { resumen: `${ok} de ${resultados.length} pruebas OK`, resultados };
 }

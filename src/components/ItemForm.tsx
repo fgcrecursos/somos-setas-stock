@@ -223,7 +223,7 @@ export function ItemForm({ categoria, initial, onClose, onEliminar }: Props) {
               <option value="">Sin especificar</option>
               {/* Sólo gramos, ml o unidades: es en lo que piden las recetas. Kilos y
                   litros se muestran únicamente si la ficha ya los tenía. */}
-              {UNIDADES.filter((u) => esUnidadDeStock(u.valor) || u.valor === initial.unidad).map((u) => (
+              {UNIDADES.filter((u) => esUnidadDeStock(u.valor) || u.valor === initial?.unidad).map((u) => (
                 <option key={u.valor} value={u.valor}>
                   {u.label} ({u.valor}){esUnidadDeStock(u.valor) ? '' : ' — pasar a chico'}
                 </option>

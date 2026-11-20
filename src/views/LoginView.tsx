@@ -1,7 +1,7 @@
 import { AlertTriangle, Eye, EyeOff, KeyRound, LogIn, RefreshCw, ShieldAlert } from 'lucide-react';
 import { useState } from 'react';
 import { useAuth } from '../lib/auth';
-import { personasDePrueba } from '../lib/supabase';
+import { entrarConDatosDeEjemplo, personasDePrueba, servidorDePruebas } from '../lib/supabase';
 
 const EMAIL_INVITADO = 'invitado@somossetas.com.ar';
 // Cuenta compartida de solo lectura: cualquiera que toque el botón entra sin
@@ -110,12 +110,30 @@ function LoginEmail() {
     if (res.error) setError(res.error);
   }
 
+  async function probarConEjemplo() {
+    setError('');
+    setEntrando(true);
+    const res = await entrarConDatosDeEjemplo();
+    setEntrando(false);
+    if (res.error) setError(res.error);
+  }
+
   return (
     <div className="login">
       <form className="login__card" onSubmit={submit} autoComplete="off">
         <img src="/brand/logo-vertical.png" alt="Somos Setas" className="login__logo" />
         <h1 className="login__title">Control de Stock</h1>
-        <p className="login__sub">Ingresá con tu cuenta de Somos Setas.</p>
+        {servidorDePruebas ? (
+          <>
+            <p className="login__prueba">Servidor de pruebas</p>
+            <p className="login__sub">
+              Entrá con tu cuenta de Somos Setas: se copia el stock real de este momento a esta computadora. Lo que
+              cargues acá no cambia el stock real.
+            </p>
+          </>
+        ) : (
+          <p className="login__sub">Ingresá con tu cuenta de Somos Setas.</p>
+        )}
 
         <div className="field">
           <label>Email</label>
@@ -179,9 +197,12 @@ function LoginEmail() {
           <LogIn size={16} /> {entrando ? 'Entrando…' : 'Entrar'}
         </button>
 
-        <button type="button" className="login__guest" onClick={olvide} disabled={entrando}>
-          Olvidé mi contraseña
-        </button>
+        {/* En el servidor de pruebas las contraseñas no se tocan: son las de la plataforma real */}
+        {!servidorDePruebas && (
+          <button type="button" className="login__guest" onClick={olvide} disabled={entrando}>
+            Olvidé mi contraseña
+          </button>
+        )}
 
         <button
           type="button"
@@ -194,6 +215,15 @@ function LoginEmail() {
         <p className="login__hint">
           La cuenta de invitado ve todo el inventario y el historial, pero no puede modificar nada.
         </p>
+
+        {servidorDePruebas && (
+          <>
+            <button type="button" className="login__guest" onClick={probarConEjemplo} disabled={entrando}>
+              Probar con datos de ejemplo, sin usuario
+            </button>
+            <p className="login__hint">16 productos con sus etiquetas, envases y materia prima.</p>
+          </>
+        )}
       </form>
     </div>
   );

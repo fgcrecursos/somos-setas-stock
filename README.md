@@ -104,6 +104,37 @@ motivo, concurrencia, pedidos de la tienda, renombres, altas, conteo en gramos, 
 pantalla). Al recargar la
 página vuelve a los datos iniciales.
 
+## 🧫 Servidor de pruebas
+
+Link fijo: **https://somos-setas-stock-git-servidor-pruebas-franco-guinazus-projects.vercel.app**
+(rama `servidor-pruebas`; Vercel pide entrar con la cuenta del equipo). En la compu:
+
+```bash
+npm run pruebas   # http://localhost:5234
+```
+
+- Es la misma app con la base dentro del navegador. Toda publicación de Vercel que no sea producción
+  (la rama `servidor-pruebas` y cualquier vista previa) se arma así; sólo `master` habla con la base
+  real (`vite.config.ts`). El registro del armado en Vercel dice `[base] SERVIDOR DE PRUEBAS` o
+  `[base] BASE REAL`.
+- Al entrar con el usuario de siempre se copia el stock real de ese momento, con los permisos de esa
+  persona: inventario, recetas, historial, vínculos con la tienda, lo descontado de cada pedido, los
+  últimos 200 pedidos de la tienda (sin DNI, teléfono ni dirección) y el catálogo. La copia se hace
+  sólo con pedidos GET y la sesión real se cierra al terminar: desde el servidor de pruebas no se
+  puede escribir en la base real.
+- Lo que se carga queda en ese navegador y cerrar sesión lo borra. Cada computadora tiene su copia.
+- Sin usuario: "Probar con datos de ejemplo" arma la base con `sandbox/datos.json`.
+- Dos frenos por si el armado sale mal: el de la base real no abre en una dirección `…-git-…vercel.app`
+  y el de prueba no abre en `somos-setas-stock.vercel.app` ni en `stock.somossetas.com.ar`.
+
+**Cómo se usa:** los cambios se commitean en `servidor-pruebas`, se prueban en el link fijo y
+publicar es hacer merge de `servidor-pruebas` a `master`. Si `master` avanzó por otro lado, antes de
+probar va `git merge master` en `servidor-pruebas`.
+
+**Lo que no cubre:** la tienda no le manda pedidos nuevos (los estados de un pedido se cambian en el
+panel de la tienda, que sigue en la base real), no hay cambios en vivo entre computadoras y no
+existen los disparadores que en producción suman productos nuevos al catálogo de la tienda.
+
 ## 🚀 Quick Start
 
 ```bash

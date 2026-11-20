@@ -1,21 +1,33 @@
 // =====================================================================
-// BANCO DE PRUEBAS — un "Supabase" que vive en el navegador.
+// BASE DE PRUEBA — un "Supabase" que vive en el navegador.
 //
-// `npm run banco` levanta la app real, con todo su código, pero en lugar de
-// hablar con la base de producción habla con esta: un Postgres completo
-// (PGlite) armado con los mismos scripts de Supabase y cargado con una copia
-// del inventario. Sirve para probar de punta a punta que producir, vender,
-// ingresar, contar o renombrar descuenta y carga lo que tiene que cargar,
-// sin tocar un solo número real.
+// La app real, con todo su código, pero en lugar de hablar con la base de
+// producción habla con esta: un Postgres completo (PGlite) armado con los
+// mismos scripts de Supabase. Sirve para probar de punta a punta que
+// producir, vender, ingresar, contar o renombrar descuenta y carga lo que
+// tiene que cargar, sin tocar un solo número real.
 //
 // Implementa sólo lo que la app usa de supabase-js (from/select/eq/…, rpc y
-// auth). La vite.banco.config.ts reemplaza src/lib/supabase.ts por este
-// archivo; en el build de producción no existe.
+// auth). La configuración de Vite (baseDePrueba en vite.config.ts) reemplaza
+// src/lib/supabase.ts por este archivo; en el build de producción no existe.
+//
+// Dos modos, según __BASE_DE_PRUEBA__ (lo fija esa misma configuración):
+//  · 'banco' (`npm run banco`): base en memoria, armada de cero en cada carga
+//    con la copia chica de sandbox/datos.json y ya adentro como admin. Es la
+//    de las pruebas automáticas (`await __banco.pruebas()`).
+//  · 'servidor' (el servidor de pruebas: rama servidor-pruebas en Vercel y
+//    `npm run pruebas`): la base se guarda en el navegador. Al entrar con el
+//    usuario de siempre se copia el stock real de ese momento —sólo con
+//    pedidos GET: desde acá no se puede escribir en la base real— y todo lo
+//    que se haga queda en esta computadora hasta cerrar sesión. Sin usuario
+//    se puede probar con los datos de ejemplo.
 // =====================================================================
 import { PGlite } from '@electric-sql/pglite';
 import { EMAIL_PRUEBA, PRELUDIO, SCRIPTS, USUARIO_PRUEBA } from './esquema';
 import datos from './datos.json';
-import { correrPruebas, revisarPantallas } from './pruebas';
+
+declare const __BASE_DE_PRUEBA__: 'banco' | 'servidor';
+const SERVIDOR = __BASE_DE_PRUEBA__ === 'servidor';
 
 type Fila = Record<string, any>;
 interface Resultado {
@@ -24,23 +36,36 @@ interface Resultado {
   count?: number | null;
 }
 
+// Si este armado llegara a publicarse en la dirección de la plataforma real,
+// el equipo cargaría todo en su navegador creyendo que se guarda: se frena.
+const DIRECCIONES_REALES = ['somos-setas-stock.vercel.app', 'stock.somossetas.com.ar'];
+if (SERVIDOR && DIRECCIONES_REALES.includes(location.hostname)) {
+  const aviso =
+    'Esta dirección tiene publicado el servidor de pruebas en lugar de la plataforma real. No cargues nada: avisale a Franco.';
+  document.body.innerHTML = `<p style="font:600 18px/1.5 sans-serif;max-width:520px;margin:20vh auto;padding:0 24px;text-align:center">${aviso}</p>`;
+  throw new Error(aviso);
+}
+
 // ---------------------------------------------------------------------
-// La base: se arma una sola vez por carga de página
+// La base
 // ---------------------------------------------------------------------
+const OPCIONES = {
+  parsers: {
+    1700: (v: string) => Number(v), // numeric → número, como PostgREST
+    20: (v: string) => Number(v), // bigint
+    // timestamptz → texto ISO con todos los decimales, como PostgREST (así
+    // una marca leída se puede volver a comparar por igualdad)
+    1184: (v: string) => v.replace(' ', 'T').replace(/([+-]\d\d)$/, '$1:00'),
+  },
+};
+
 let db: PGlite;
 const tipos = new Map<string, Map<string, string>>(); // tabla → columna → tipo
 const claves = new Map<string, string[]>(); // tabla → clave primaria
+const firmas = new Map<string, Map<string, string>>(); // función → parámetro → tipo
 
-async function armar(): Promise<void> {
-  db = new PGlite({
-    parsers: {
-      1700: (v: string) => Number(v), // numeric → número, como PostgREST
-      20: (v: string) => Number(v), // bigint
-      // timestamptz → texto ISO con todos los decimales, como PostgREST (así
-      // una marca leída se puede volver a comparar por igualdad)
-      1184: (v: string) => v.replace(' ', 'T').replace(/([+-]\d\d)$/, '$1:00'),
-    },
-  });
+/** Los mismos scripts que se corrieron en Supabase, en el mismo orden */
+async function correrScripts(): Promise<void> {
   await db.exec(PRELUDIO);
   for (const [nombre, sql] of SCRIPTS) {
     try {
@@ -50,9 +75,13 @@ async function armar(): Promise<void> {
       throw e;
     }
   }
-  await db.exec(USUARIO_PRUEBA);
-  await cargarDatos();
+}
 
+/** Tipo de cada columna y claves primarias, para armar las consultas */
+async function leerEsquema(): Promise<void> {
+  tipos.clear();
+  claves.clear();
+  firmas.clear();
   const cols = await db.query<Fila>(
     `select table_name, column_name, udt_name from information_schema.columns where table_schema = 'public'`
   );
@@ -70,7 +99,8 @@ async function armar(): Promise<void> {
   for (const r of pk.rows) claves.set(r.table_name, [...(claves.get(r.table_name) ?? []), r.column_name]);
 }
 
-async function cargarDatos(): Promise<void> {
+/** La copia chica de ejemplo (sandbox/datos.json): 15 productos reales con sus componentes */
+async function cargarDatosDeEjemplo(): Promise<void> {
   const d = datos as any;
   // Los scripts de producción traen su propia carga inicial (el mapa de la
   // tienda de agosto): se reemplaza por la copia de datos.json.
@@ -92,7 +122,377 @@ async function cargarDatos(): Promise<void> {
   ]);
 }
 
-const lista = armar();
+/** Quién está usando la app: lo que la base ve como auth.jwt() ->> 'email' */
+async function fijarQuien(email: string): Promise<void> {
+  await db.query(`select set_config('banco.email', $1, false)`, [email]);
+}
+
+// ---------------------------------------------------------------------
+// Banco: en memoria y de cero en cada carga
+// ---------------------------------------------------------------------
+async function armarBanco(): Promise<void> {
+  db = new PGlite(OPCIONES);
+  await correrScripts();
+  await db.exec(USUARIO_PRUEBA);
+  await cargarDatosDeEjemplo();
+  await leerEsquema();
+}
+
+// =====================================================================
+// SERVIDOR DE PRUEBAS
+// =====================================================================
+const BASE_IDB = 'somos-setas-stock-pruebas';
+const CLAVE_SESION = 'ss-stock-pruebas:sesion';
+const PAGINA = 1000; // tope de filas por pedido a la base real
+const PEDIDOS_TIENDA = 200; // los mismos que muestra "Pedidos de la tienda"
+
+// La base real: las mismas que usa src/lib/supabase.ts (la clave es pública
+// por diseño; lo que protege los datos es el usuario y RLS)
+const URL_REAL: string = import.meta.env.VITE_SUPABASE_URL ?? 'https://muuqqbocpumdvhvxsigz.supabase.co';
+const CLAVE_PUBLICA: string =
+  import.meta.env.VITE_SUPABASE_KEY ?? 'sb_publishable_9OnAKU_5FngXR2kn55spXw_JPhB1jjt';
+
+/** Si cambia algún script, una copia armada con las funciones viejas no se retoma */
+const VERSION_ESQUEMA = huella(PRELUDIO + SCRIPTS.map(([, sql]) => sql).join('\n'));
+function huella(texto: string): string {
+  let h = 0x811c9dc5; // FNV-1a
+  for (let i = 0; i < texto.length; i++) {
+    h ^= texto.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+  }
+  return (h >>> 0).toString(16);
+}
+
+interface Meta {
+  origen: 'real' | 'ejemplo';
+  email: string;
+  /** Cuándo se copió (ISO) */
+  copiada: string;
+  esquema: string;
+}
+let meta: Meta | null = null;
+
+async function leerMeta(): Promise<Meta | null> {
+  try {
+    const r = await db.query<Fila>(`select valor from public.prueba_meta where clave = 'meta'`);
+    return r.rows[0] ? (JSON.parse(r.rows[0].valor) as Meta) : null;
+  } catch {
+    return null; // base vacía: nunca se entró desde este navegador
+  }
+}
+
+function emailGuardado(): string | null {
+  try {
+    return localStorage.getItem(CLAVE_SESION);
+  } catch {
+    return null;
+  }
+}
+function guardarEmail(email: string | null): void {
+  try {
+    if (email) localStorage.setItem(CLAVE_SESION, email);
+    else localStorage.removeItem(CLAVE_SESION);
+  } catch {
+    /* sin almacenamiento: la sesión dura lo que dure la pestaña */
+  }
+}
+
+/**
+ * Deja la base del navegador como recién creada. Se vacía en lugar de
+ * borrarla y abrirla de nuevo: con la conexión abierta, el navegador deja
+ * el borrado esperando y la base nueva no llegaría a abrir.
+ */
+async function vaciarBase(): Promise<void> {
+  meta = null;
+  await db.exec(`drop schema if exists public cascade; create schema public; drop schema if exists auth cascade;`);
+}
+
+/** Al cargar la página: retoma la copia de este navegador si la sesión sigue abierta */
+async function abrirServidor(): Promise<void> {
+  db = new PGlite(`idb://${BASE_IDB}`, { ...OPCIONES, relaxedDurability: true });
+  const guardada = await leerMeta();
+  const email = emailGuardado();
+  if (guardada && email && guardada.email === email && guardada.esquema === VERSION_ESQUEMA) {
+    meta = guardada;
+    sesion = sesionDe(email);
+    await leerEsquema();
+    await fijarQuien(email);
+  } else {
+    // Primera vez, sesión cerrada o servidor actualizado: hay que volver a
+    // entrar. Una copia que quedó de antes no se deja dando vueltas.
+    guardarEmail(null);
+    if (guardada) await vaciarBase();
+  }
+  ponerCartel();
+}
+
+/** Arma la base de cero (scripts + datos) y la deja guardada en el navegador */
+async function armarServidor(cargar: () => Promise<void>, origen: Meta['origen'], email: string): Promise<void> {
+  await vaciarBase();
+  await correrScripts();
+  await cargar();
+  const nueva: Meta = { origen, email, copiada: new Date().toISOString(), esquema: VERSION_ESQUEMA };
+  await db.exec(`create table if not exists public.prueba_meta (clave text primary key, valor text not null)`);
+  await db.query(
+    `insert into public.prueba_meta values ('meta', $1) on conflict (clave) do update set valor = excluded.valor`,
+    [JSON.stringify(nueva)]
+  );
+  await leerEsquema();
+  await fijarQuien(email);
+  meta = nueva;
+}
+
+async function reconstruir(cargar: () => Promise<void>, origen: Meta['origen'], email: string): Promise<void> {
+  const armado = armarServidor(cargar, origen, email);
+  // Si falla, que las consultas no queden colgadas de un error para siempre
+  lista = armado.catch(() => undefined);
+  await armado;
+}
+
+// ---------------------------------------------------------------------
+// La copia del stock real
+// ---------------------------------------------------------------------
+interface Copia {
+  usuarios: Fila[];
+  items: Fila[];
+  movimientos: Fila[];
+  skuMap: Fila[];
+  pedidos: Fila[];
+  ordenes: Fila[];
+  catalogo: unknown[];
+}
+
+/** Entra a la base real con el usuario y la contraseña de siempre (no se guardan) */
+async function autenticar(email: string, password: string): Promise<string> {
+  let r: Response;
+  try {
+    r = await fetch(`${URL_REAL}/auth/v1/token?grant_type=password`, {
+      method: 'POST',
+      headers: { apikey: CLAVE_PUBLICA, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password }),
+    });
+  } catch {
+    throw new Error('Failed to fetch'); // → "No se pudo conectar con el servidor"
+  }
+  const j: Fila = await r.json().catch(() => ({}));
+  if (!r.ok || !j.access_token)
+    throw new Error(j.msg ?? j.error_description ?? j.message ?? `No se pudo entrar (error ${r.status}).`);
+  return j.access_token;
+}
+
+/** Cierra sólo esta sesión en la base real: las otras de la misma persona siguen abiertas */
+async function cerrarSesionReal(token: string): Promise<void> {
+  try {
+    await fetch(`${URL_REAL}/auth/v1/logout?scope=local`, {
+      method: 'POST',
+      headers: { apikey: CLAVE_PUBLICA, Authorization: `Bearer ${token}` },
+    });
+  } catch {
+    /* si no llega, el token vence solo en una hora */
+  }
+}
+
+/** De cada pedido de la tienda viaja sólo lo que usa el stock (nada de DNI, teléfono ni dirección) */
+function minimizarPedido(p: Fila): Fila {
+  const d = p.data ?? {};
+  return {
+    id: p.id,
+    ts: p.ts,
+    status: p.status,
+    data: {
+      name: d.name ?? null,
+      total: d.total ?? null,
+      status: d.status ?? null,
+      consumoInterno: d.consumoInterno ?? null,
+      items: d.items ?? [],
+    },
+  };
+}
+
+/**
+ * Lee el stock real con los permisos de quien entra. SÓLO pedidos GET: esta
+ * función no tiene forma de escribir en la base real.
+ */
+async function traerCopia(token: string, email: string, avance: (texto: string) => void): Promise<Copia> {
+  const encabezados = { apikey: CLAVE_PUBLICA, Authorization: `Bearer ${token}`, Accept: 'application/json' };
+  async function leer(ruta: string): Promise<Fila[]> {
+    const r = await fetch(`${URL_REAL}/rest/v1/${ruta}`, { method: 'GET', headers: encabezados });
+    if (!r.ok) {
+      const j: Fila = await r.json().catch(() => ({}));
+      throw new Error(`No se pudo copiar ${ruta.split('?')[0]}: ${j.message ?? `error ${r.status}`}`);
+    }
+    return r.json();
+  }
+  async function leerTodo(tabla: string, orden: string, que: string): Promise<Fila[]> {
+    const filas: Fila[] = [];
+    for (let desde = 0; ; desde += PAGINA) {
+      avance(`Copiando ${que}…` + (filas.length ? ` (${filas.length.toLocaleString('es-AR')})` : ''));
+      const pagina = await leer(`${tabla}?select=*&order=${orden}&limit=${PAGINA}&offset=${desde}`);
+      filas.push(...pagina);
+      if (pagina.length < PAGINA) break;
+    }
+    return filas;
+  }
+
+  avance('Revisando tu usuario…');
+  const yo = await leer(`st_users?select=email,activo&email=eq.${encodeURIComponent(email)}`);
+  if (!yo.length || yo[0].activo === false)
+    throw new Error('Tu usuario no tiene acceso al stock real, así que no hay nada para copiar.');
+
+  const usuarios = await leerTodo('st_users', 'email', 'los usuarios');
+  const items = await leerTodo('st_items', 'categoria,codigo', 'el inventario');
+  // Del más viejo al más nuevo: si entra un movimiento mientras se copia, va al final y no corre las páginas
+  const vistos = new Set<string>();
+  const movimientos = (await leerTodo('st_movimientos', 'fecha,id', 'el historial')).filter((m) =>
+    vistos.has(m.id) ? false : (vistos.add(m.id), true)
+  );
+  const skuMap = await leerTodo('st_sku_map', 'producto_id,pres_id', 'los vínculos con la tienda');
+  const pedidos = await leerTodo('st_pedidos', 'order_id', 'lo descontado de cada pedido');
+  avance('Copiando los pedidos de la tienda…');
+  const ordenes = (await leer(`ss_orders?select=id,ts,status,data&order=ts.desc&limit=${PEDIDOS_TIENDA}`)).map(
+    minimizarPedido
+  );
+  const tienda = await leer('ss_store?select=products&id=eq.1');
+  return { usuarios, items, movimientos, skuMap, pedidos, ordenes, catalogo: tienda[0]?.products ?? [] };
+}
+
+/**
+ * Inserta filas tal como vinieron de la base real. Sólo las columnas que
+ * existen en las dos: si la real todavía no tiene alguna, queda su valor por
+ * defecto.
+ */
+async function insertar(tabla: string, filas: Fila[]): Promise<void> {
+  if (!filas.length) return;
+  const cols = (
+    await db.query<Fila>(
+      `select attname as col, format_type(atttypid, atttypmod) as tipo
+         from pg_attribute
+        where attrelid = $1::regclass and attnum > 0 and not attisdropped
+        order by attnum`,
+      [`public.${tabla}`]
+    )
+  ).rows;
+  const presentes = new Set<string>();
+  for (const f of filas) for (const k of Object.keys(f)) presentes.add(k);
+  const usar = cols.filter((c) => presentes.has(c.col));
+  const lista = usar.map((c) => nombre(c.col)).join(', ');
+  const definicion = usar.map((c) => `${nombre(c.col)} ${c.tipo}`).join(', ');
+  for (let i = 0; i < filas.length; i += 500)
+    await db.query(
+      `insert into public.${nombre(tabla)} (${lista})
+       select ${lista} from jsonb_to_recordset($1::jsonb) as x(${definicion})`,
+      [JSON.stringify(filas.slice(i, i + 500))]
+    );
+}
+
+async function cargarCopia(c: Copia): Promise<void> {
+  // Sin disparadores mientras se carga: la copia ya trae el stock, el
+  // historial y lo descontado de cada pedido tal como quedaron en la base real
+  await db.exec(`set session_replication_role = replica`);
+  try {
+    // Los scripts traen su propia carga inicial (usuarios y el mapa de la
+    // tienda de agosto): se reemplaza entera por la copia
+    await db.exec(
+      `delete from st_sku_map; delete from st_pedidos; delete from st_movimientos; delete from st_items;
+       delete from st_users; delete from ss_orders; delete from ss_store;`
+    );
+    await insertar('st_users', c.usuarios);
+    await insertar('st_items', c.items);
+    await insertar('st_movimientos', c.movimientos);
+    await insertar('st_sku_map', c.skuMap);
+    await insertar('st_pedidos', c.pedidos);
+    await insertar('ss_orders', c.ordenes);
+    await db.query(`insert into ss_store (id, products) values (1, $1::jsonb)`, [JSON.stringify(c.catalogo)]);
+  } finally {
+    await db.exec(`set session_replication_role = origin`);
+  }
+}
+
+/** Entrar con el usuario de siempre: copia el stock real y arma la base de prueba con él */
+async function entrarConCopiaReal(email: string, password: string): Promise<Resultado> {
+  const limpio = String(email ?? '').trim().toLowerCase();
+  mostrarProgreso('Entrando con tu usuario…');
+  try {
+    const token = await autenticar(limpio, password);
+    let copia: Copia;
+    try {
+      copia = await traerCopia(token, limpio, mostrarProgreso);
+    } finally {
+      await cerrarSesionReal(token);
+    }
+    mostrarProgreso('Armando la base de prueba con la copia…');
+    await reconstruir(() => cargarCopia(copia), 'real', limpio);
+    iniciarSesion(limpio);
+    return { data: { session: sesion }, error: null };
+  } catch (e: any) {
+    return { data: null, error: { message: e?.message ?? String(e) } };
+  } finally {
+    ocultarProgreso();
+  }
+}
+
+/** Probar sin usuario: los 15 productos de ejemplo de sandbox/datos.json */
+export async function entrarConDatosDeEjemplo(): Promise<{ error?: string }> {
+  if (!SERVIDOR) return {};
+  mostrarProgreso('Armando la base con los datos de ejemplo…');
+  try {
+    await reconstruir(
+      async () => {
+        await db.exec(USUARIO_PRUEBA);
+        await db.query(`update st_users set nombre = 'Prueba' where email = $1`, [EMAIL_PRUEBA]);
+        await cargarDatosDeEjemplo();
+      },
+      'ejemplo',
+      EMAIL_PRUEBA
+    );
+    iniciarSesion(EMAIL_PRUEBA);
+    return {};
+  } catch (e: any) {
+    return { error: e?.message ?? String(e) };
+  } finally {
+    ocultarProgreso();
+  }
+}
+
+/** Cerrar sesión borra la copia de esta computadora entera */
+async function salirYBorrar(): Promise<void> {
+  guardarEmail(null);
+  sesion = null;
+  try {
+    await db.close();
+  } catch {
+    /* ya estaba cerrada */
+  }
+  // Si el navegador deja el borrado esperando, se completa al recargar,
+  // antes de que la página nueva abra la base
+  await new Promise<void>((ok) => {
+    const r = indexedDB.deleteDatabase(`/pglite/${BASE_IDB}`);
+    r.onsuccess = r.onerror = r.onblocked = () => ok();
+  });
+  location.reload();
+}
+
+// ---------------------------------------------------------------------
+// Sesión
+// ---------------------------------------------------------------------
+type Sesion = { access_token: string; user: { id: string; email: string } };
+function sesionDe(email: string): Sesion {
+  return SERVIDOR
+    ? { access_token: 'servidor-de-pruebas', user: { id: email, email } }
+    : { access_token: 'banco', user: { id: 'banco', email } };
+}
+// El banco entra solo, como el admin de prueba; el servidor, eligiendo cómo entrar
+let sesion: Sesion | null = SERVIDOR ? null : sesionDe(EMAIL_PRUEBA);
+
+let lista: Promise<void> = SERVIDOR ? abrirServidor() : armarBanco();
+
+const oyentes = new Set<(e: string, s: unknown) => void>();
+function iniciarSesion(email: string): void {
+  sesion = sesionDe(email);
+  guardarEmail(email);
+  ponerCartel();
+  for (const cb of oyentes) cb('SIGNED_IN', sesion);
+}
 
 // ---------------------------------------------------------------------
 // Valores: todo viaja como texto y se castea al tipo de la columna
@@ -267,7 +667,6 @@ class Consulta implements PromiseLike<Resultado> {
 // ---------------------------------------------------------------------
 // rpc('st_aplicar', {...}): cada parámetro se castea al tipo que declara la función
 // ---------------------------------------------------------------------
-const firmas = new Map<string, Map<string, string>>();
 async function firma(fn: string): Promise<Map<string, string>> {
   if (firmas.has(fn)) return firmas.get(fn)!;
   const r = await db.query<Fila>(
@@ -302,18 +701,32 @@ async function rpc(fn: string, args: Fila = {}): Promise<Resultado> {
 }
 
 // ---------------------------------------------------------------------
-// Sesión: siempre adentro, como el admin de prueba
+// auth: el banco está siempre adentro; el servidor entra copiando el stock
+// real (o con los datos de ejemplo) y sale borrando la copia
 // ---------------------------------------------------------------------
-const SESION = { access_token: 'banco', user: { id: 'banco', email: EMAIL_PRUEBA } };
 const auth = {
-  getSession: async () => ({ data: { session: SESION }, error: null }),
-  onAuthStateChange: (cb: (e: string, s: unknown) => void) => {
-    setTimeout(() => cb('SIGNED_IN', SESION), 0);
-    return { data: { subscription: { unsubscribe() {} } } };
+  getSession: async () => {
+    if (SERVIDOR) await lista;
+    return { data: { session: sesion }, error: null };
   },
-  signInWithPassword: async () => ({ data: { session: SESION }, error: null }),
-  signOut: async () => ({ error: null }),
-  resetPasswordForEmail: async () => ({ data: {}, error: null }),
+  onAuthStateChange: (cb: (e: string, s: unknown) => void) => {
+    oyentes.add(cb);
+    setTimeout(async () => {
+      if (SERVIDOR) await lista;
+      cb(sesion ? 'SIGNED_IN' : 'SIGNED_OUT', sesion);
+    }, 0);
+    return { data: { subscription: { unsubscribe: () => oyentes.delete(cb) } } };
+  },
+  signInWithPassword: async ({ email, password }: { email: string; password: string }) =>
+    SERVIDOR ? entrarConCopiaReal(email, password) : { data: { session: sesion }, error: null },
+  signOut: async () => {
+    if (SERVIDOR) await salirYBorrar();
+    return { error: null };
+  },
+  resetPasswordForEmail: async () =>
+    SERVIDOR
+      ? { data: {}, error: { message: 'En el servidor de pruebas no se cambian contraseñas: hacelo desde la plataforma real.' } }
+      : { data: {}, error: null },
   updateUser: async () => ({ data: {}, error: null }),
   signUp: async () => ({ data: {}, error: null }),
 };
@@ -323,12 +736,26 @@ export function clienteAislado(): any {
   return sb;
 }
 
+// Lo mismo que exporta src/lib/supabase.ts para las versiones de prueba
+export const servidorDePruebas = SERVIDOR;
+export const personasDePrueba: { email: string; nombre: string }[] = [];
+export async function volverADatosIniciales(): Promise<void> {
+  if (SERVIDOR) await salirYBorrar();
+  else location.reload();
+}
+export async function fechaDeLaCopia(): Promise<string | null> {
+  await lista;
+  return meta?.copiada ?? null;
+}
+
 // ---------------------------------------------------------------------
-// Para las pruebas: consultar la base directo y simular lo que pasa afuera
-// (una venta de la tienda mientras alguien tiene un formulario abierto)
+// Para revisar desde la consola: consultar la base directo y, en el banco,
+// correr las pruebas de punta a punta (recargar la página antes)
 // ---------------------------------------------------------------------
 (window as any).__banco = {
-  lista,
+  get lista() {
+    return lista;
+  },
   async query(sql: string, params: unknown[] = []) {
     await lista;
     return (await db.query<Fila>(sql, params)).rows;
@@ -337,29 +764,74 @@ export function clienteAislado(): any {
     await lista;
     return db.exec(sql);
   },
-  /** Todas las pruebas de punta a punta (recargar la página antes) */
-  async pruebas() {
-    await lista;
-    return correrPruebas(async (sql, params = []) => (await db.query<Fila>(sql, params)).rows);
-  },
-  /** ¿Algo se sale de la pantalla en el ancho actual? */
-  pantallas: revisarPantallas,
+  ...(SERVIDOR
+    ? {}
+    : {
+        async pruebas() {
+          await lista;
+          const { correrPruebas } = await import('./pruebas');
+          return correrPruebas(async (sql, params = []) => (await db.query<Fila>(sql, params)).rows);
+        },
+        /** ¿Algo se sale de la pantalla en el ancho actual? */
+        async pantallas() {
+          const { revisarPantallas } = await import('./pruebas');
+          return revisarPantallas();
+        },
+      }),
 };
 
+// ---------------------------------------------------------------------
 // Cartel fijo: que nadie confunda esta pestaña con la plataforma real
+// ---------------------------------------------------------------------
 const cartel = document.createElement('div');
-cartel.textContent = 'BANCO DE PRUEBAS · base local con una copia del inventario — nada de lo que se haga acá toca los datos reales';
+cartel.setAttribute('role', 'status');
 cartel.style.cssText =
-  'position:fixed;left:0;right:0;bottom:0;z-index:9999;background:#6a4f7a;color:#fff;font:600 12px/1.2 Montserrat,sans-serif;text-align:center;padding:6px 10px;pointer-events:none';
-document.addEventListener('DOMContentLoaded', () => document.body.appendChild(cartel));
-if (document.readyState !== 'loading') document.body.appendChild(cartel);
+  'position:fixed;left:0;right:0;bottom:0;z-index:9999;background:#6a4f7a;color:#fff;font:600 12px/1.3 Montserrat,sans-serif;text-align:center;padding:6px 10px;pointer-events:none';
 
-// Lo mismo que exporta src/lib/supabase.ts para la versión de prueba (v2):
-// acá el banco entra solo, así que no hay personas para elegir.
-export const personasDePrueba: { email: string; nombre: string }[] = [];
-export async function volverADatosIniciales(): Promise<void> {
-  location.reload();
+function fechaCorta(iso: string): string {
+  const d = new Date(iso);
+  return (
+    d.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit' }) +
+    ' ' +
+    d.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
+  );
 }
-export async function fechaDeLaCopia(): Promise<string | null> {
-  return null;
+function textoCartel(): string {
+  if (!SERVIDOR)
+    return 'BANCO DE PRUEBAS · base local con una copia del inventario — nada de lo que se haga acá toca los datos reales';
+  const fin = 'nada de lo que hagas acá cambia el stock real';
+  if (!sesion || !meta) return `SERVIDOR DE PRUEBAS — ${fin}`;
+  if (meta.origen === 'ejemplo') return `SERVIDOR DE PRUEBAS · datos de ejemplo — ${fin}`;
+  return `SERVIDOR DE PRUEBAS · copia del stock real del ${fechaCorta(meta.copiada)} — ${fin}`;
+}
+function ponerCartel(): void {
+  cartel.textContent = textoCartel();
+  if (!cartel.isConnected && document.body) document.body.appendChild(cartel);
+}
+document.addEventListener('DOMContentLoaded', ponerCartel);
+if (document.readyState !== 'loading') ponerCartel();
+if (SERVIDOR) document.title = 'PRUEBAS · ' + document.title;
+
+// ---------------------------------------------------------------------
+// Mientras se copia y se arma la base: una capa con lo que está pasando
+// ---------------------------------------------------------------------
+let capa: HTMLDivElement | null = null;
+function mostrarProgreso(texto: string): void {
+  if (!capa) {
+    capa = document.createElement('div');
+    capa.setAttribute('role', 'status');
+    capa.style.cssText =
+      'position:fixed;inset:0;z-index:10000;display:flex;align-items:center;justify-content:center;padding:24px;' +
+      'background:rgba(247,245,231,.94);color:#1d1d1b;font-family:var(--font-body,sans-serif);text-align:center';
+    capa.innerHTML =
+      '<div style="max-width:440px"><div style="font-weight:700;font-size:24px;margin-bottom:10px">Preparando el servidor de pruebas</div>' +
+      '<div data-texto style="font-size:17px;color:#4a473f"></div>' +
+      '<div style="font-size:13px;color:#6a665c;margin-top:14px">Tarda unos segundos. No cierres esta pestaña.</div></div>';
+    document.body.appendChild(capa);
+  }
+  (capa.querySelector('[data-texto]') as HTMLElement).textContent = texto;
+}
+function ocultarProgreso(): void {
+  capa?.remove();
+  capa = null;
 }

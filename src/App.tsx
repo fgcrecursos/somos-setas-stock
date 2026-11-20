@@ -43,7 +43,7 @@ import { HistoriaView } from './views/HistoriaView';
 import { InicioView } from './views/InicioView';
 import { ProducirView } from './views/ProducirView';
 import { SalidaView } from './views/SalidaView';
-import { personasDePrueba, volverADatosIniciales } from './lib/supabase';
+import { personasDePrueba, servidorDePruebas, volverADatosIniciales } from './lib/supabase';
 import { Dashboard } from './views/Dashboard';
 import { MovimientosView } from './views/MovimientosView';
 import { PedidosView } from './views/PedidosView';
@@ -262,6 +262,19 @@ export default function App() {
     await volverADatosIniciales();
   }
 
+  async function cerrarSesion() {
+    // Servidor de pruebas: salir borra la copia que quedó en esta computadora
+    if (
+      servidorDePruebas &&
+      !confirm(
+        'Al cerrar sesión se borra todo lo que cargaste en el servidor de pruebas desde esta computadora. Para seguir probando, volvés a entrar y se copia el stock real de nuevo.\n\n' +
+          'No toca el stock real. ¿Cerrar sesión?'
+      )
+    )
+      return;
+    await salir();
+  }
+
   return (
     <div className="app">
       {menuAbierto && <div className="sidebar-fondo" onClick={() => setMenuAbierto(false)} />}
@@ -325,15 +338,17 @@ export default function App() {
               Volver a los datos iniciales
             </button>
           )}
-          <button onClick={salir} style={{ marginTop: 8 }}>
+          <button onClick={cerrarSesion} style={{ marginTop: 8 }}>
             <LogOut size={13} style={{ verticalAlign: 'middle', marginRight: 6 }} />
             Cerrar sesión
           </button>
           <p style={{ marginTop: 10, marginBottom: 0 }}>
             <Database size={11} style={{ verticalAlign: 'middle', marginRight: 4 }} />
-            {personasDePrueba.length > 0
-              ? 'Versión de prueba: los datos se guardan en este navegador.'
-              : 'Datos compartidos en la nube.'}
+            {servidorDePruebas
+              ? 'Servidor de pruebas: los datos viven en este navegador y se borran al cerrar sesión.'
+              : personasDePrueba.length > 0
+                ? 'Versión de prueba: los datos se guardan en este navegador.'
+                : 'Datos compartidos en la nube.'}
           </p>
         </div>
       </aside>

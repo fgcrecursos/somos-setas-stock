@@ -22,6 +22,15 @@
         "banco"
       ],
       "port": 5199
+    },
+    {
+      "name": "stock-servidor-pruebas",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "run",
+        "pruebas"
+      ],
+      "port": 5234
     }
   ]
 }

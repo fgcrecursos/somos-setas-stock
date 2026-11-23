@@ -1,0 +1,1514 @@
+{
+  "name": "Bot de stock Somos Setas (Telegram)",
+  "nodes": [
+    {
+      "parameters": {
+        "updates": [
+          "message",
+          "callback_query"
+        ],
+        "additionalFields": {}
+      },
+      "id": "11c7aab0-9c6a-5bfd-a0f5-6171bd5c0dd6",
+      "name": "Telegram",
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        300
+      ],
+      "credentials": {
+        "telegramApi": {
+          "name": "Telegram bot Stock Somos Setas"
+        }
+      },
+      "webhookId": "194dde5e-edb9-5983-8ee1-6675eb96c123"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "4d6c6aa1-f77e-5794-b635-85634de91002",
+              "leftValue": "={{ !!$json.callback_query }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "a61b42fb-5229-52ec-bb4c-92be1893f619",
+      "name": "¿Tocó un botón?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        220,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "726160c5-dd12-5b88-8ed1-f6172e5b04fa",
+              "name": "chat_id",
+              "value": "={{ $json.message.chat.id }}",
+              "type": "number"
+            },
+            {
+              "id": "55d6482d-3298-5adf-810d-7a525b23aa71",
+              "name": "privado",
+              "value": "={{ $json.message.chat.type === 'private' }}",
+              "type": "boolean"
+            },
+            {
+              "id": "275a9842-373d-52f1-8e64-1d262dc09195",
+              "name": "nombre",
+              "value": "={{ $json.message.from.first_name || 'equipo' }}",
+              "type": "string"
+            },
+            {
+              "id": "2c2ba798-e103-57ef-8410-797df7ca06cd",
+              "name": "texto",
+              "value": "={{ ($json.message.text || $json.message.caption || '').trim() }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "3342642c-9b75-52c8-b753-3f95bfb968c2",
+      "name": "Datos del mensaje",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        440,
+        420
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://muuqqbocpumdvhvxsigz.supabase.co/rest/v1/rpc/st_bot_quien",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpCustomAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ p_chat_id: $json.chat_id }) }}",
+        "options": {}
+      },
+      "id": "27b99908-f073-54e3-9c28-58e0f2b4772c",
+      "name": "¿Quién escribe?",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        660,
+        420
+      ],
+      "credentials": {
+        "httpCustomAuth": {
+          "name": "Supabase Somos Setas (clave secreta)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "c09356bb-a0c5-5f4d-98ab-cf46e5cd601b",
+              "leftValue": "={{ $json.habilitado === true && $('Datos del mensaje').item.json.privado }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "d65f3e5d-cfd6-5e67-9889-3f492a0a55fe",
+      "name": "¿Está habilitado?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        880,
+        420
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Datos del mensaje').item.json.chat_id }}",
+        "text": "=Hola {{ String($('Datos del mensaje').item.json.nombre).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;') }}. Todavía no estás habilitado para cargar stock.\n\nTu número de chat es {{ String($('Datos del mensaje').item.json.chat_id).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;') }}: pasáselo a Frani para que te dé de alta.",
+        "additionalFields": {
+          "appendAttribution": false,
+          "parse_mode": "HTML"
+        }
+      },
+      "id": "0c32eba6-1ba7-5f1b-ba27-0d7019921318",
+      "name": "Avisar que no está habilitado",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1100,
+        600
+      ],
+      "credentials": {
+        "telegramApi": {
+          "name": "Telegram bot Stock Somos Setas"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://muuqqbocpumdvhvxsigz.supabase.co/rest/v1/rpc/st_bot_checkin",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpCustomAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ p_chat_id: $('Datos del mensaje').item.json.chat_id, p_sin_novedades: false }) }}",
+        "options": {}
+      },
+      "id": "3fcf3a93-92da-524a-9c07-1ded3125e0ec",
+      "name": "Anotar que respondió",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1100,
+        420
+      ],
+      "credentials": {
+        "httpCustomAuth": {
+          "name": "Supabase Somos Setas (clave secreta)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "103ec3db-7191-5c38-bf16-e611a4d96559",
+              "leftValue": "={{ $('Datos del mensaje').item.json.texto !== '' }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "9cfcd9ac-6d90-5243-96cf-e92a20990989",
+      "name": "¿Mandó texto?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1320,
+        420
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Datos del mensaje').item.json.chat_id }}",
+        "text": "=Por ahora solo leo mensajes de texto ✍️ Escribime qué pasó con el stock y lo acomodo.",
+        "additionalFields": {
+          "appendAttribution": false,
+          "parse_mode": "HTML"
+        }
+      },
+      "id": "52996ccc-f770-5ebd-aaec-677be536bf1c",
+      "name": "Pedir texto",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1540,
+        600
+      ],
+      "credentials": {
+        "telegramApi": {
+          "name": "Telegram bot Stock Somos Setas"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $('Datos del mensaje').item.json.texto }}",
+        "options": {
+          "systemMessage": "=Sos el asistente de stock de Somos Setas (suplementos de hongos, Mendoza). Hablás por Telegram con {{ $('Datos del mensaje').item.json.nombre }}, del equipo de producción. Hoy es {{ $now.setZone('America/Argentina/Buenos_Aires').setLocale('es').toFormat(\"cccc d 'de' LLLL, HH:mm\") }}.\n\nTu trabajo: que la plataforma de stock refleje la realidad. El equipo no carga todo en el día; vos les preguntás, interpretás lo que tipean (aunque escriban mal el nombre), lo comparás con lo que dice el sistema y proponés los movimientos para que los confirmen.\n\nREGLA DE ORO\nNunca digas que algo \"quedó cargado\". Vos solo PROPONÉS con la herramienta preparar_movimientos. Abajo de tu respuesta, el sistema muestra la propuesta con los botones Confirmar / Cancelar, y recién ahí se carga. Después de llamar a preparar_movimientos respondé corto (\"Te dejo la propuesta abajo, revisala y confirmá\") sin repetir la lista, y agregá solo lo que haya que aclarar.\n\nCÓMO TRABAJAR\n1. Por cada producto o insumo que nombren, usá buscar_items. Nunca inventes un código. Si hay varias opciones parecidas (por ejemplo distintos tamaños: 50 g, 100 g, 500 g, 1 kg, o cápsulas vs polvo) y no queda claro cuál es, preguntá mostrando las opciones con su código. Si una opción es claramente la correcta, usala sin preguntar.\n2. Si falta un dato (cuánto, de qué tamaño), preguntá una sola cosa por vez, corto.\n3. Cuando tengas todo, juntá TODOS los movimientos de la charla en UNA sola llamada a preparar_movimientos.\n4. Si preparar_movimientos devuelve errores, corregí lo que puedas (buscá de nuevo el código) o preguntá. Si devuelve avisos (algo queda en negativo, receta incompleta), contalos en una línea.\n\nTIPOS DE MOVIMIENTO\n- produccion: se fabricó un producto terminado. Solo categoría producto. Suma el producto y la plataforma descuenta sola la receta (etiquetas, envases, materia prima). Cantidad en unidades enteras (frascos, bolsas); los productos de tipo Gel van en kilos (0,25 / 0,5 / 1).\n- venta: salió vendido algo que NO pasó por la tienda web (feria, local, venta en mano, un cliente que pasó a buscar sin pedido web).\n- consumo_interno: muestras, regalos, uso del equipo, roturas, vencidos. Sirve para cualquier categoría.\n- ingreso: llegó una compra (insumos, etiquetas, materia prima, reventa). La cantidad va en la unidad del ítem que devuelve buscar_items (campo unidad: g, ml o u). Si dicen \"2 bolsas de 5 kg\" y la unidad es g, son 10000. Si no sabés cuánto trae el envase, preguntá. Un producto que fabricaron ellos no es ingreso, es produccion.\n- ajuste: conteo físico; la cantidad es lo que HAY en el estante, no la diferencia.\n- pasar_a_preparacion: pasa un pedido web de Confirmado a En preparación (ahí la plataforma descuenta el stock sola). Solo con el OK de la persona.\n- revertir: deshace un movimiento cargado desde la plataforma (por el bot o a mano). Para corregir \"eran 15, no 20\": revertir el movimiento equivocado y cargar el correcto, las dos acciones en la misma propuesta.\n\nPEDIDOS DE LA WEB (muy importante)\nLa plataforma descuenta sola los pedidos web cuando pasan a \"En preparación\" (también Enviado y Entregado). \"Confirmado\" solo reserva: todavía no descontó.\nAntes de cargar una venta, mirá pedidos_web:\n- Si lo que salió corresponde a un pedido En preparación, Enviado o Entregado: ya está descontado. NO cargues venta y avisale.\n- Si corresponde a un pedido Confirmado: contale que todavía no se descontó y preguntale si querés que lo pases a En preparación (acción pasar_a_preparacion). No cargues una venta suelta para ese pedido: se descontaría dos veces.\n- Si no hay pedido web que coincida: es venta fuera de la web.\nLos movimientos de pedidos web no se deshacen con revertir: se corrigen cambiando el estado del pedido en el panel de la tienda.\n\nCONTEOS DEL ESTANTE\nbuscar_items devuelve en_estante (lo que dice el sistema), reservado (pedidos Confirmados: siguen físicamente en el estante y están incluidos en en_estante) y por_despachar (pedidos En preparación: ya descontados del sistema). Si te pasan un conteo de un producto con por_despachar mayor a 0, preguntá si esas unidades ya estaban apartadas o si las contaron en el estante; si las contaron, restáselas al conteo antes de proponer el ajuste.\n\nVALIDAR\nCompará siempre lo que te cuentan con el sistema. Si una venta deja un producto en negativo, si una producción deja una materia prima en negativo, o si un número parece raro (por ejemplo 200 cuando siempre producen 20), decilo y preguntá. Si te dan un número de stock distinto al del sistema, proponé un ajuste.\nSi preguntan \"¿cuánto hay de X?\", respondé con buscar_items o ver_item (estante, reservado, disponible).\nSi preguntan si algo quedó cargado, fijate en movimientos_recientes.\n\nLA PREGUNTA DE CADA DÍA\nTodos los días el bot les manda: ¿hubo producción?, ¿salió mercadería fuera de la web?, ¿llegó alguna compra?, ¿hay algo para corregir? Si el mensaje responde a eso, procesá cada parte. Si dicen que no hubo nada, agradecé y listo. Podés usar resumen_del_dia para ver qué ya está cargado hoy y no duplicarlo.\n\nESTILO\nVoseo, cálido y corto, como un compañero. Texto plano para Telegram: sin tablas, sin asteriscos ni negritas, como mucho guiones para listar. Usá los nombres de los productos como figuran en el sistema y el código entre paréntesis. No muestres datos personales de clientes más allá del nombre de pila. Si te piden algo que no tiene que ver con el stock, decí amablemente que solo ayudás con el stock.",
+          "maxIterations": 15
+        }
+      },
+      "id": "c07759fc-1a8e-512c-a655-f32e3dab59d6",
+      "name": "Agente de stock",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 2,
+      "position": [
+        1560,
+        400
+      ],
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Datos del mensaje').item.json.chat_id }}",
+        "text": "=Uy, tuve un problema para procesar eso y no cargué nada 😕 Probá de nuevo en un ratito. Si sigue pasando, avisale a Frani.",
+        "additionalFields": {
+          "appendAttribution": false,
+          "parse_mode": "HTML"
+        }
+      },
+      "id": "b63af02e-85d2-5fa1-a089-26ac30362725",
+      "name": "Avisar del error",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1960,
+        600
+      ],
+      "credentials": {
+        "telegramApi": {
+          "name": "Telegram bot Stock Somos Setas"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "modelName": "models/gemini-2.5-flash",
+        "options": {
+          "temperature": 0.2
+        }
+      },
+      "id": "66cb7614-7556-5e4a-9507-69baace79328",
+      "name": "Gemini",
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [
+        1300,
+        700
+      ],
+      "credentials": {
+        "googlePalmApi": {
+          "name": "Gemini Somos Setas"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "={{ 'stock-' + $('Datos del mensaje').item.json.chat_id }}",
+        "contextWindowLength": 20
+      },
+      "id": "0421130d-b63a-50bd-a949-6e4de69d92da",
+      "name": "Memoria de la charla",
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.3,
+      "position": [
+        1440,
+        700
+      ]
+    },
+    {
+      "parameters": {
+        "toolDescription": "Busca productos, insumos, etiquetas o materias primas por nombre o código, aunque estén mal escritos. Devuelve hasta 8 opciones con codigo, categoria, nombre, unidad, en_estante, reservado, disponible, por_despachar y parecido (1 = coincide). Usala SIEMPRE antes de proponer un movimiento.",
+        "method": "POST",
+        "url": "https://muuqqbocpumdvhvxsigz.supabase.co/rest/v1/rpc/st_bot_buscar",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpCustomAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ p_texto: $fromAI('texto', 'Lo que escribió la persona para nombrar el ítem, por ejemplo \"melena capsulas\" o \"POL 39\"', 'string'), p_categoria: $fromAI('categoria', 'Opcional. Una de: producto, insumo, insumo_interno, etiqueta, materia_prima. Vacío para buscar en todas', 'string') || null, p_limite: 8 }) }}",
+        "options": {}
+      },
+      "id": "21e61845-684a-5e60-a567-023dc6097c73",
+      "name": "buscar_items",
+      "type": "n8n-nodes-base.httpRequestTool",
+      "typeVersion": 4.2,
+      "position": [
+        1580,
+        700
+      ],
+      "credentials": {
+        "httpCustomAuth": {
+          "name": "Supabase Somos Setas (clave secreta)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "toolDescription": "Ficha completa de un ítem ya identificado: stock en el estante, reservado, por despachar, mínimo, receta con el stock de cada componente y los últimos movimientos.",
+        "method": "POST",
+        "url": "https://muuqqbocpumdvhvxsigz.supabase.co/rest/v1/rpc/st_bot_item",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpCustomAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ p_categoria: $fromAI('categoria', 'Categoría exacta del ítem (producto, insumo, insumo_interno, etiqueta, materia_prima)', 'string'), p_codigo: $fromAI('codigo', 'Código exacto del ítem tal como lo devolvió buscar_items', 'string') }) }}",
+        "options": {}
+      },
+      "id": "269fc33e-2f6d-5d77-8e45-9867299d890e",
+      "name": "ver_item",
+      "type": "n8n-nodes-base.httpRequestTool",
+      "typeVersion": 4.2,
+      "position": [
+        1720,
+        700
+      ],
+      "credentials": {
+        "httpCustomAuth": {
+          "name": "Supabase Somos Setas (clave secreta)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "toolDescription": "Pedidos de la tienda web con lo que descuentan del stock. Por defecto trae Confirmados (reservados, sin descontar) y En preparación (ya descontados) de los últimos 10 días. Usala antes de cargar cualquier venta.",
+        "method": "POST",
+        "url": "https://muuqqbocpumdvhvxsigz.supabase.co/rest/v1/rpc/st_bot_pedidos",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpCustomAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ p_estados: ($fromAI('estados', 'Estados separados por coma: confirmado, preparacion, enviado, entregado. Vacío = confirmado,preparacion', 'string') || 'confirmado,preparacion').split(',').map(s => s.trim()).filter(Boolean), p_dias: $fromAI('dias', 'Cuántos días para atrás mirar (1 a 60). Normalmente 10', 'number') || 10 }) }}",
+        "options": {}
+      },
+      "id": "69f4dc0f-f054-5305-b375-8215cedeac1b",
+      "name": "pedidos_web",
+      "type": "n8n-nodes-base.httpRequestTool",
+      "typeVersion": 4.2,
+      "position": [
+        1860,
+        700
+      ],
+      "credentials": {
+        "httpCustomAuth": {
+          "name": "Supabase Somos Setas (clave secreta)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "toolDescription": "Últimos movimientos de stock (hasta 40), con id, quién, cuándo, antes y después, y si se pueden deshacer. Usala para corregir errores (acción revertir) o para ver si algo ya quedó cargado.",
+        "method": "POST",
+        "url": "https://muuqqbocpumdvhvxsigz.supabase.co/rest/v1/rpc/st_bot_movimientos",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpCustomAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ p_horas: $fromAI('horas', 'Cuántas horas para atrás (1 a 720). Normalmente 48', 'number') || 48, p_texto: $fromAI('texto', 'Opcional: código o parte del nombre del ítem. Vacío para todos', 'string') || null, p_usuario: null }) }}",
+        "options": {}
+      },
+      "id": "7e51a996-90fc-512d-bdc9-5097fcec11e7",
+      "name": "movimientos_recientes",
+      "type": "n8n-nodes-base.httpRequestTool",
+      "typeVersion": 4.2,
+      "position": [
+        2000,
+        700
+      ],
+      "credentials": {
+        "httpCustomAuth": {
+          "name": "Supabase Somos Setas (clave secreta)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "toolDescription": "Qué se cargó hoy: producciones, salidas, pedidos web descontados, pedidos confirmados sin preparar, productos en negativo y bajo mínimo. Usala para no duplicar lo que ya está cargado.",
+        "method": "POST",
+        "url": "https://muuqqbocpumdvhvxsigz.supabase.co/rest/v1/rpc/st_bot_resumen_dia",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpCustomAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ p_fecha: null }) }}",
+        "options": {}
+      },
+      "id": "bdb68b07-39e2-5ce0-b0e6-d6ead67e4170",
+      "name": "resumen_del_dia",
+      "type": "n8n-nodes-base.httpRequestTool",
+      "typeVersion": 4.2,
+      "position": [
+        2140,
+        700
+      ],
+      "credentials": {
+        "httpCustomAuth": {
+          "name": "Supabase Somos Setas (clave secreta)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "toolDescription": "Arma la PROPUESTA de movimientos para que la persona la confirme con un botón. No carga nada. Mandá todos los movimientos juntos en una sola llamada. Devuelve ok, resumen y avisos, o errores para corregir.",
+        "method": "POST",
+        "url": "https://muuqqbocpumdvhvxsigz.supabase.co/rest/v1/rpc/st_bot_preparar",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpCustomAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ p_chat_id: $('Datos del mensaje').item.json.chat_id, p_acciones: $fromAI('acciones', 'Lista JSON de movimientos. Cada uno es un objeto con tipo y sus campos: {\"tipo\":\"produccion\",\"codigo\":\"CAP-01\",\"cantidad\":20,\"nota\":\"lote 12\"} · {\"tipo\":\"venta\",\"codigo\":\"...\",\"cantidad\":2,\"nota\":\"feria\"} · {\"tipo\":\"consumo_interno\",\"categoria\":\"producto\",\"codigo\":\"...\",\"cantidad\":1,\"nota\":\"muestra\"} · {\"tipo\":\"ingreso\",\"categoria\":\"materia_prima\",\"codigo\":\"MP-27\",\"cantidad\":5000} · {\"tipo\":\"ajuste\",\"categoria\":\"producto\",\"codigo\":\"...\",\"cantidad\":12} · {\"tipo\":\"pasar_a_preparacion\",\"pedido\":\"ORD-...\"} · {\"tipo\":\"revertir\",\"movimiento\":\"id del movimiento\"}', 'json'), p_nota: null }) }}",
+        "options": {}
+      },
+      "id": "78a5a773-69e7-5378-9c66-b02b38ae0ad2",
+      "name": "preparar_movimientos",
+      "type": "n8n-nodes-base.httpRequestTool",
+      "typeVersion": 4.2,
+      "position": [
+        2280,
+        700
+      ],
+      "credentials": {
+        "httpCustomAuth": {
+          "name": "Supabase Somos Setas (clave secreta)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://muuqqbocpumdvhvxsigz.supabase.co/rest/v1/rpc/st_bot_pendiente_para_mostrar",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpCustomAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ p_chat_id: $('Datos del mensaje').item.json.chat_id }) }}",
+        "options": {}
+      },
+      "id": "393a6f93-2a2f-588e-9242-4829ceea14ae",
+      "name": "¿Armó una propuesta?",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1960,
+        400
+      ],
+      "credentials": {
+        "httpCustomAuth": {
+          "name": "Supabase Somos Setas (clave secreta)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "691868d0-a4a7-5b54-851f-df2b3ca36533",
+              "leftValue": "={{ $json.hay === true }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "8344ef84-6117-5f94-946a-abb1862c989a",
+      "name": "¿Hay propuesta?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        2180,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Datos del mensaje').item.json.chat_id }}",
+        "text": "={{ String($('Agente de stock').item.json.output).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;') }}",
+        "additionalFields": {
+          "appendAttribution": false,
+          "parse_mode": "HTML"
+        }
+      },
+      "id": "57a04ad0-3636-5770-8494-070f222e7160",
+      "name": "Responder",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        2400,
+        520
+      ],
+      "credentials": {
+        "telegramApi": {
+          "name": "Telegram bot Stock Somos Setas"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Datos del mensaje').item.json.chat_id }}",
+        "text": "={{ String($('Agente de stock').item.json.output).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;') }}",
+        "additionalFields": {
+          "appendAttribution": false,
+          "parse_mode": "HTML"
+        }
+      },
+      "id": "ec1801c7-d2af-51d5-8195-520f2cd3250b",
+      "name": "Responder antes de la propuesta",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        2400,
+        300
+      ],
+      "credentials": {
+        "telegramApi": {
+          "name": "Telegram bot Stock Somos Setas"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Datos del mensaje').item.json.chat_id }}",
+        "text": "=📋 Propuesta para cargar:\n\n{{ String($('¿Armó una propuesta?').item.json.resumen).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;') }}\n\n¿La cargo?",
+        "additionalFields": {
+          "appendAttribution": false,
+          "parse_mode": "HTML"
+        },
+        "replyMarkup": "inlineKeyboard",
+        "inlineKeyboard": {
+          "rows": [
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "✅ Confirmar",
+                    "additionalFields": {
+                      "callback_data": "=ok:{{ $('¿Armó una propuesta?').item.json.token }}"
+                    }
+                  },
+                  {
+                    "text": "❌ Cancelar",
+                    "additionalFields": {
+                      "callback_data": "=no:{{ $('¿Armó una propuesta?').item.json.token }}"
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      },
+      "id": "1614d90d-a586-51e3-8679-fd3eb7326fca",
+      "name": "Mostrar propuesta con botones",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        2620,
+        300
+      ],
+      "credentials": {
+        "telegramApi": {
+          "name": "Telegram bot Stock Somos Setas"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "9465f9b8-a99e-57ee-906c-8c3b7bbfa25a",
+              "name": "chat_id",
+              "value": "={{ $json.callback_query.message.chat.id }}",
+              "type": "number"
+            },
+            {
+              "id": "0ae7a69c-e59f-5a7e-82c1-20e0daeb37d2",
+              "name": "message_id",
+              "value": "={{ $json.callback_query.message.message_id }}",
+              "type": "number"
+            },
+            {
+              "id": "f92e355d-8e8a-5d02-97af-f95a0d494ff7",
+              "name": "callback_id",
+              "value": "={{ $json.callback_query.id }}",
+              "type": "string"
+            },
+            {
+              "id": "f7c053d3-e2a4-572a-a59f-fba1b9a70abb",
+              "name": "accion",
+              "value": "={{ ($json.callback_query.data || '').split(':')[0] }}",
+              "type": "string"
+            },
+            {
+              "id": "4fd3f70c-18b4-53c3-bd30-5f1c15a5b3b5",
+              "name": "token",
+              "value": "={{ ($json.callback_query.data || '').split(':').slice(1).join(':') }}",
+              "type": "string"
+            },
+            {
+              "id": "e499376e-811d-542b-8315-e3cfcfd59007",
+              "name": "texto_original",
+              "value": "={{ $json.callback_query.message.text || '' }}",
+              "type": "string"
+            },
+            {
+              "id": "c189c62f-6ece-5cf0-bef3-063132ec7e8c",
+              "name": "quien",
+              "value": "={{ $json.callback_query.from.first_name || '' }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "f1428436-acfe-52e7-b953-61f73f10bcb7",
+      "name": "Datos del botón",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        440,
+        140
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "callback",
+        "queryId": "={{ $json.callback_id }}",
+        "additionalFields": {}
+      },
+      "id": "8270f428-601c-5631-9114-4aa813242f64",
+      "name": "Responder al botón",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        660,
+        140
+      ],
+      "credentials": {
+        "telegramApi": {
+          "name": "Telegram bot Stock Somos Setas"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "7eb2ff7c-e94a-543b-843c-d3191588af06",
+                    "leftValue": "={{ $('Datos del botón').item.json.accion }}",
+                    "rightValue": "ok",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Confirmar"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "7eb4b1c2-87c0-5c8b-8058-d1a24c699835",
+                    "leftValue": "={{ $('Datos del botón').item.json.accion }}",
+                    "rightValue": "no",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Cancelar"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "6368f247-6fb9-5c8c-a38a-ced14ca5da84",
+                    "leftValue": "={{ $('Datos del botón').item.json.accion }}",
+                    "rightValue": "nada",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Sin novedades"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "00e8cab4-1276-527f-bbbb-e0f6e11d3f68",
+      "name": "¿Qué botón?",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        880,
+        140
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://muuqqbocpumdvhvxsigz.supabase.co/rest/v1/rpc/st_bot_confirmar",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpCustomAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ p_token: $('Datos del botón').item.json.token, p_chat_id: $('Datos del botón').item.json.chat_id }) }}",
+        "options": {}
+      },
+      "id": "29864d5d-768c-5ea5-b66f-55406045f1f8",
+      "name": "Cargar en el stock",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1100,
+        -40
+      ],
+      "credentials": {
+        "httpCustomAuth": {
+          "name": "Supabase Somos Setas (clave secreta)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "editMessageText",
+        "chatId": "={{ $('Datos del botón').item.json.chat_id }}",
+        "messageId": "={{ $('Datos del botón').item.json.message_id }}",
+        "text": "={{ $('Datos del botón').item.json.texto_original.replace(/\\n*¿La cargo\\?$/, '') }}\n\n{{ $json.ok ? '✅ Cargado por ' + $('Datos del botón').item.json.quien + ':\\n' + $json.texto : '⚠️ ' + $json.error }}",
+        "additionalFields": {}
+      },
+      "id": "78fcfa7f-480c-5a4a-80f4-5b71872cd8a2",
+      "name": "Mostrar resultado",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1320,
+        -40
+      ],
+      "credentials": {
+        "telegramApi": {
+          "name": "Telegram bot Stock Somos Setas"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://muuqqbocpumdvhvxsigz.supabase.co/rest/v1/rpc/st_bot_cancelar",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpCustomAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ p_token: $('Datos del botón').item.json.token, p_chat_id: $('Datos del botón').item.json.chat_id }) }}",
+        "options": {}
+      },
+      "id": "5fd8eb30-9772-5fdf-8679-062f20eea3e0",
+      "name": "Cancelar propuesta",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1100,
+        140
+      ],
+      "credentials": {
+        "httpCustomAuth": {
+          "name": "Supabase Somos Setas (clave secreta)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "editMessageText",
+        "chatId": "={{ $('Datos del botón').item.json.chat_id }}",
+        "messageId": "={{ $('Datos del botón').item.json.message_id }}",
+        "text": "={{ $('Datos del botón').item.json.texto_original.replace(/\\n*¿La cargo\\?$/, '') }}\n\n❌ Cancelado: no se cargó nada. Si querés, decime qué cambio.",
+        "additionalFields": {}
+      },
+      "id": "47e0a830-a411-509d-b3f5-efbf3fdf66e5",
+      "name": "Mostrar cancelado",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1320,
+        140
+      ],
+      "credentials": {
+        "telegramApi": {
+          "name": "Telegram bot Stock Somos Setas"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://muuqqbocpumdvhvxsigz.supabase.co/rest/v1/rpc/st_bot_checkin",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpCustomAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ p_chat_id: $('Datos del botón').item.json.chat_id, p_sin_novedades: true }) }}",
+        "options": {}
+      },
+      "id": "e9f29e8e-012d-531d-bc22-0f21575d8af1",
+      "name": "Anotar sin novedades",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1100,
+        320
+      ],
+      "credentials": {
+        "httpCustomAuth": {
+          "name": "Supabase Somos Setas (clave secreta)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "editMessageText",
+        "chatId": "={{ $('Datos del botón').item.json.chat_id }}",
+        "messageId": "={{ $('Datos del botón').item.json.message_id }}",
+        "text": "={{ $('Datos del botón').item.json.texto_original }}\n\n👍 Anotado: sin novedades hoy. ¡Gracias!",
+        "additionalFields": {}
+      },
+      "id": "b4d3b944-d566-5be6-9449-9ddcf7a3b435",
+      "name": "Agradecer",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1320,
+        320
+      ],
+      "credentials": {
+        "telegramApi": {
+          "name": "Telegram bot Stock Somos Setas"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 18 * * 1-6"
+            }
+          ]
+        }
+      },
+      "id": "221338ce-2402-5e86-b454-961a20d4a8da",
+      "name": "Todos los días 18 h",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        1000
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://muuqqbocpumdvhvxsigz.supabase.co/rest/v1/rpc/st_bot_resumen_dia",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpCustomAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ p_fecha: null }) }}",
+        "options": {}
+      },
+      "id": "a1157369-453c-5495-811b-a8f2242cc610",
+      "name": "Resumen del día",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        220,
+        1000
+      ],
+      "credentials": {
+        "httpCustomAuth": {
+          "name": "Supabase Somos Setas (clave secreta)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://muuqqbocpumdvhvxsigz.supabase.co/rest/v1/rpc/st_bot_destinatarios_resumen",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpCustomAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{}",
+        "options": {}
+      },
+      "id": "d7d511f5-4ef9-5ce2-8b54-aa5d05b8b9c4",
+      "name": "A quién preguntarle",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        440,
+        1000
+      ],
+      "credentials": {
+        "httpCustomAuth": {
+          "name": "Supabase Somos Setas (clave secreta)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Una pregunta por persona, con lo que ya está cargado hoy para que no lo repitan.\nconst r = $('Resumen del día').first().json;\nconst p = $json;\nconst n = (x) => String(x).replace('.', ',');\nconst lineas = [];\n\nconst prod = r.producciones_cargadas || [];\nconst sal = r.salidas_cargadas || [];\nconst ya = [];\nif (prod.length) ya.push(`${prod.length} producción${prod.length > 1 ? 'es' : ''} (${prod.slice(0, 4).map(m => `${n(m.cantidad)} ${m.nombre}`).join(', ')}${prod.length > 4 ? '…' : ''})`);\nif (sal.length) ya.push(`${sal.length} salida${sal.length > 1 ? 's' : ''} fuera de la web`);\nif (r.pedidos_web_descontados_hoy) ya.push(`${r.pedidos_web_descontados_hoy} pedido${r.pedidos_web_descontados_hoy > 1 ? 's' : ''} web descontado${r.pedidos_web_descontados_hoy > 1 ? 's' : ''}`);\n\nlineas.push(`¡Hola ${p.nombre}! 🍄 Cierre de stock del ${r.fecha}.`);\nlineas.push('');\nlineas.push(ya.length ? `Ya está cargado hoy: ${ya.join(' · ')}.` : 'Hoy todavía no hay nada cargado en la plataforma.');\nif (r.pedidos_confirmados_sin_preparar) {\n  lineas.push(`Hay ${r.pedidos_confirmados_sin_preparar} pedido${r.pedidos_confirmados_sin_preparar > 1 ? 's' : ''} web en Confirmado (reservados, sin descontar). Si alguno ya se armó, contame.`);\n}\nconst neg = r.productos_en_negativo || [];\nif (neg.length) {\n  lineas.push(`⚠️ En negativo: ${neg.slice(0, 5).map(i => `${i.nombre} (${n(i.en_estante)})`).join(', ')}${neg.length > 5 ? ` y ${neg.length - 5} más` : ''}. Si podés, contalos.`);\n}\nlineas.push('');\nlineas.push('Contame:');\nlineas.push('1. ¿Hubo producción? ¿De qué y cuánto?');\nlineas.push('2. ¿Salió mercadería por fuera de la web? (feria, en mano, muestras, uso interno)');\nlineas.push('3. ¿Llegó alguna compra de insumos o materia prima?');\nlineas.push('4. ¿Hay algo para corregir?');\nlineas.push('');\nlineas.push('Escribime como te salga, yo lo acomodo. Si no hubo nada, tocá el botón.');\n\nreturn { json: { chat_id: p.chat_id, texto: lineas.join('\\n') } };\n"
+      },
+      "id": "4fffd69e-3fd1-51c0-a52c-a957fbf494c3",
+      "name": "Armar la pregunta",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        660,
+        1000
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.chat_id }}",
+        "text": "={{ String($json.texto).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;') }}",
+        "additionalFields": {
+          "appendAttribution": false,
+          "parse_mode": "HTML"
+        },
+        "replyMarkup": "inlineKeyboard",
+        "inlineKeyboard": {
+          "rows": [
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "✅ Sin novedades hoy",
+                    "additionalFields": {
+                      "callback_data": "nada:hoy"
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      },
+      "id": "f3557851-f6e8-527a-8191-3fec9177ad91",
+      "name": "Mandar la pregunta",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        880,
+        1000
+      ],
+      "credentials": {
+        "telegramApi": {
+          "name": "Telegram bot Stock Somos Setas"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "content": "## Bot de stock · mensajes\nEl agente (Gemini) entiende lo que escriben, busca los ítems y arma una **propuesta**. Nunca carga solo: la carga pasa cuando la persona toca **Confirmar** (rama de botones, arriba).\n\nTodo pasa por funciones `st_bot_*` de Supabase (`supabase/bot_stock_telegram_2026-11-22.sql`).",
+        "height": 120,
+        "width": 560,
+        "color": 4
+      },
+      "id": "d4e3aeab-c85d-5834-bc1b-b9bd7071ef47",
+      "name": "Nota 38",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        400,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## Botones\nConfirmar → `st_bot_confirmar` aplica con las reglas de la plataforma (receta al producir, pedido web descuenta al pasar a En preparación). Todo o nada; no se puede confirmar dos veces.",
+        "height": 100,
+        "width": 560,
+        "color": 5
+      },
+      "id": "325bfd5b-ca45-50ad-9226-cff069026ade",
+      "name": "Nota 39",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        400,
+        -140
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## Pregunta diaria\nLunes a sábado 18 h a cada persona habilitada con `resumen_diario`. La respuesta entra por la rama de mensajes. Cambiá la hora en el nodo de horario.",
+        "height": 110,
+        "width": 560,
+        "color": 6
+      },
+      "id": "3ef44927-86bb-50b4-89ca-b704b51c39dc",
+      "name": "Nota 40",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        0,
+        840
+      ]
+    }
+  ],
+  "connections": {
+    "Telegram": {
+      "main": [
+        [
+          {
+            "node": "¿Tocó un botón?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Tocó un botón?": {
+      "main": [
+        [
+          {
+            "node": "Datos del botón",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Datos del mensaje",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Datos del mensaje": {
+      "main": [
+        [
+          {
+            "node": "¿Quién escribe?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Quién escribe?": {
+      "main": [
+        [
+          {
+            "node": "¿Está habilitado?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Está habilitado?": {
+      "main": [
+        [
+          {
+            "node": "Anotar que respondió",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Avisar que no está habilitado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Anotar que respondió": {
+      "main": [
+        [
+          {
+            "node": "¿Mandó texto?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Mandó texto?": {
+      "main": [
+        [
+          {
+            "node": "Agente de stock",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Pedir texto",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Agente de stock": {
+      "main": [
+        [
+          {
+            "node": "¿Armó una propuesta?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Avisar del error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gemini": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Agente de stock",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Memoria de la charla": {
+      "ai_memory": [
+        [
+          {
+            "node": "Agente de stock",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "buscar_items": {
+      "ai_tool": [
+        [
+          {
+            "node": "Agente de stock",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ver_item": {
+      "ai_tool": [
+        [
+          {
+            "node": "Agente de stock",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "pedidos_web": {
+      "ai_tool": [
+        [
+          {
+            "node": "Agente de stock",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "movimientos_recientes": {
+      "ai_tool": [
+        [
+          {
+            "node": "Agente de stock",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "resumen_del_dia": {
+      "ai_tool": [
+        [
+          {
+            "node": "Agente de stock",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "preparar_movimientos": {
+      "ai_tool": [
+        [
+          {
+            "node": "Agente de stock",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Armó una propuesta?": {
+      "main": [
+        [
+          {
+            "node": "¿Hay propuesta?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Hay propuesta?": {
+      "main": [
+        [
+          {
+            "node": "Responder antes de la propuesta",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responder",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Responder antes de la propuesta": {
+      "main": [
+        [
+          {
+            "node": "Mostrar propuesta con botones",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Datos del botón": {
+      "main": [
+        [
+          {
+            "node": "Responder al botón",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Responder al botón": {
+      "main": [
+        [
+          {
+            "node": "¿Qué botón?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Qué botón?": {
+      "main": [
+        [
+          {
+            "node": "Cargar en el stock",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Cancelar propuesta",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Anotar sin novedades",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cargar en el stock": {
+      "main": [
+        [
+          {
+            "node": "Mostrar resultado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cancelar propuesta": {
+      "main": [
+        [
+          {
+            "node": "Mostrar cancelado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Anotar sin novedades": {
+      "main": [
+        [
+          {
+            "node": "Agradecer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Todos los días 18 h": {
+      "main": [
+        [
+          {
+            "node": "Resumen del día",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Resumen del día": {
+      "main": [
+        [
+          {
+            "node": "A quién preguntarle",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "A quién preguntarle": {
+      "main": [
+        [
+          {
+            "node": "Armar la pregunta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Armar la pregunta": {
+      "main": [
+        [
+          {
+            "node": "Mandar la pregunta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "America/Argentina/Buenos_Aires",
+    "saveManualExecutions": true
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": false
+  },
+  "tags": []
+}

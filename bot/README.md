@@ -101,7 +101,7 @@ El primer aprobador se da de alta a mano con `bot/alta_usuarios_bot.sql` (column
 - **Hora o días de la pregunta**: nodo "Todos los días 18 h" (cron `0 18 * * 1-6`, lunes a sábado).
 - **Quién recibe la pregunta**: `update st_bot_usuarios set resumen_diario = false where chat_id = …;`
 - **Sacarle el acceso a alguien**: `update st_bot_usuarios set activo = false where chat_id = …;` (o desactivarlo en `st_users`).
-- **Modelo**: nodo "Gemini". Viene con `gemini-3.8-flash` (la 2.5 ya no la dan a cuentas nuevas); se puede elegir otro de la lista. Si Google lo tiene saturado (error 503), el agente pasa solo al nodo "Gemini respaldo", que tiene que ser **otro** modelo.
+- **Modelo**: nodo "Gemini". Viene con `gemini-3.5-flash` y de respaldo `gemini-3.5-flash-lite` (la 2.5 ya no la dan a cuentas nuevas y la 3.8 suele estar saturada); se puede elegir otro de la lista. Si Google lo tiene saturado (error 503), el agente pasa solo al nodo "Gemini respaldo", que tiene que ser **otro** modelo.
 - **Cómo habla o qué reglas sigue**: el prompt está en `n8n/generar_flujo.py` (`PROMPT`). Regenerá el JSON y volvé a importar, o editá el mensaje de sistema directo en el nodo "Agente de stock".
 
 ## Qué quedó afuera (por ahora)

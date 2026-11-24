@@ -296,7 +296,7 @@ telegram_texto("Avisar del error", [1960, 600], "={{ " + CHAT + " }}",
 unir("Agente de stock", "Avisar del error", salida=1)
 
 nodo("Gemini", "@n8n/n8n-nodes-langchain.lmChatGoogleGemini", 1, [1300, 700], {
-    "modelName": "models/gemini-3.8-flash",
+    "modelName": "models/gemini-3.5-flash",
     "options": {"temperature": 0.2},
 }, CRED_GEMINI)
 unir("Gemini", "Agente de stock", tipo="ai_languageModel")
@@ -304,7 +304,7 @@ unir("Gemini", "Agente de stock", tipo="ai_languageModel")
 # Respaldo: si Google tiene saturado el modelo principal (error 503) o lo da de baja,
 # el agente usa este. Tiene que ser OTRO modelo; se elige de la lista del nodo.
 nodo("Gemini respaldo", "@n8n/n8n-nodes-langchain.lmChatGoogleGemini", 1, [1312, 704], {
-    "modelName": "models/gemini-3.5-flash",
+    "modelName": "models/gemini-3.5-flash-lite",
     "options": {"temperature": 0.2},
 }, CRED_GEMINI)
 unir("Gemini respaldo", "Agente de stock", tipo="ai_languageModel", entrada=1)

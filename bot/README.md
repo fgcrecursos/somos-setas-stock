@@ -98,7 +98,9 @@ El primer aprobador se da de alta a mano con `bot/alta_usuarios_bot.sql` (column
 
 ## Uso de todos los días (versión local)
 
-1. Prendé la compu y corré `bot/local/iniciar-bot.ps1` (ver arriba). Esperá ~1 minuto, hasta que la ventana diga que n8n está listo.
+1. Prendé la compu y corré `bot/local/iniciar-bot.ps1` (ver arriba). Esperá ~1-2 minutos, hasta que la ventana diga **"Listo: Telegram ya tiene la direccion nueva"**.
+   - n8n no le pasa solo a Telegram la dirección nueva del túnel: hay que apagar y prender el flujo. El script lo hace solo si encuentra la clave de la API de n8n en `bot/local/n8n-api-key.txt` (no se sube a git). Para crearla una vez: en n8n → **Settings → n8n API → Create an API key** (si pide permisos, tildá activar y desactivar workflows), copiala y pegala sola en ese archivo.
+   - Sin ese archivo, la ventana avisa y hay que apagar y prender el flujo a mano.
 2. Dejá esa ventana abierta todo el día, sobre todo a las 12 h, que es cuando sale la pregunta.
 3. Si el bot no contesta, abrí `https://api.telegram.org/bot<TOKEN>/getWebhookInfo`. Si `url` está vacío, en n8n apagá el flujo, esperá 5 segundos y prendelo de nuevo. Puede pasar después de guardar cambios en el flujo.
 

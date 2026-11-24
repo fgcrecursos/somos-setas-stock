@@ -74,12 +74,45 @@ Write-Host "Editor: http://localhost:$puerto" -ForegroundColor Gray
 
 $env:WEBHOOK_URL = "$url/"
 $env:N8N_DIAGNOSTICS_ENABLED = 'false'
+
+# Al arrancar, n8n NO le pasa a Telegram la direccion nueva del tunel: hay que
+# apagar y prender el flujo. Si existe la clave de la API de n8n (archivo
+# n8n-api-key.txt al lado de este script, fuera de git), se hace solo.
+$claveArchivo = Join-Path $PSScriptRoot 'n8n-api-key.txt'
+$flujo = 'rnZfLWUmTyCqeszQ'
+$base = "http://localhost:$puerto"
+
+$n8n = Start-Process -FilePath 'n8n.cmd' -ArgumentList 'start' -NoNewWindow -PassThru
 try {
-  & n8n start
+  for ($i = 0; $i -lt 180 -and -not $n8n.HasExited; $i++) {
+    Start-Sleep -Seconds 2
+    try { if ((Invoke-WebRequest "$base/healthz/readiness" -UseBasicParsing -TimeoutSec 3).StatusCode -eq 200) { break } } catch {}
+  }
+  Start-Sleep -Seconds 5
+
+  if (-not (Test-Path $claveArchivo)) {
+    Write-Host ''
+    Write-Host '>> FALTA UN PASO: en n8n apaga el flujo, espera 5 s y prendelo (asi Telegram recibe la direccion nueva).' -ForegroundColor Yellow
+    Write-Host '   Para que se haga solo, guarda la clave de la API de n8n en bot\local\n8n-api-key.txt (ver README).' -ForegroundColor Yellow
+  } else {
+    $h = @{ 'X-N8N-API-KEY' = (Get-Content $claveArchivo -Raw).Trim() }
+    try {
+      Invoke-RestMethod -Method Post -Uri "$base/api/v1/workflows/$flujo/deactivate" -Headers $h | Out-Null
+      Start-Sleep -Seconds 5
+      Invoke-RestMethod -Method Post -Uri "$base/api/v1/workflows/$flujo/activate" -Headers $h | Out-Null
+      Write-Host ''
+      Write-Host '>> Listo: Telegram ya tiene la direccion nueva. El bot esta andando. No cierres esta ventana.' -ForegroundColor Green
+    } catch {
+      Write-Host ''
+      Write-Host ">> No pude reactivar el flujo solo ($($_.Exception.Message)). Apagalo y prendelo a mano en n8n." -ForegroundColor Yellow
+    }
+  }
+  Wait-Process -Id $n8n.Id
 } finally {
-  # Al cerrar n8n (Ctrl+C) se cierra tambien el tunel.
+  # Al cerrar (Ctrl+C) se cierran n8n y el tunel.
+  if (-not $n8n.HasExited) { Stop-Process -Id $n8n.Id -Force -ErrorAction SilentlyContinue }
   if (-not $tunel.HasExited) { Stop-Process -Id $tunel.Id -Force -ErrorAction SilentlyContinue }
   Get-CimInstance Win32_Process -Filter "Name = 'node.exe'" |
-    Where-Object { $_.CommandLine -match 'tunnelmole' } |
+    Where-Object { $_.CommandLine -match 'tunnelmole|n8n' } |
     ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
 }

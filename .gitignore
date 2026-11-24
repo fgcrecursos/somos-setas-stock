@@ -22,3 +22,6 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Clave de la API de n8n local (bot de stock)
+bot/local/n8n-api-key.txt

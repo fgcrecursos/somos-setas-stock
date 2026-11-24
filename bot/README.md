@@ -96,6 +96,14 @@ El primer aprobador se da de alta a mano con `bot/alta_usuarios_bot.sql` (column
 - "Hoy hicimos 20 de melena en cápsulas" → muestra la propuesta con lo que descuenta de la receta. Tocá **Cancelar** para no cargar nada.
 - Para probar la pregunta diaria sin esperar a las 18: abrí el nodo "Todos los días 18 h" y tocá **Execute step**.
 
+## Uso de todos los días (versión local)
+
+1. Prendé la compu y corré `bot/local/iniciar-bot.ps1` (ver arriba). Esperá ~1 minuto, hasta que la ventana diga que n8n está listo.
+2. Dejá esa ventana abierta todo el día, sobre todo a las 18 h, que es cuando sale la pregunta.
+3. Si el bot no contesta, abrí `https://api.telegram.org/bot<TOKEN>/getWebhookInfo`. Si `url` está vacío, en n8n apagá el flujo, esperá 5 segundos y prendelo de nuevo. Puede pasar después de guardar cambios en el flujo.
+
+Sumar a alguien del equipo: le escribe al bot, manda su mail de la plataforma y te llega Aprobar / Rechazar.
+
 ## Cambiar cosas
 
 - **Hora o días de la pregunta**: nodo "Todos los días 18 h" (cron `0 18 * * 1-6`, lunes a sábado).

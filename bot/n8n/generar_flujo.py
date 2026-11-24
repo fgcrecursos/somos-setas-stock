@@ -295,7 +295,7 @@ telegram_texto("Avisar del error", [1960, 600], "={{ " + CHAT + " }}",
 unir("Agente de stock", "Avisar del error", salida=1)
 
 nodo("Gemini", "@n8n/n8n-nodes-langchain.lmChatGoogleGemini", 1, [1300, 700], {
-    "modelName": "models/gemini-2.5-flash",
+    "modelName": "models/gemini-3.8-flash",
     "options": {"temperature": 0.2},
 }, CRED_GEMINI)
 unir("Gemini", "Agente de stock", tipo="ai_languageModel")

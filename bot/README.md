@@ -52,7 +52,17 @@ En el SQL Editor de Supabase (proyecto de Somos Setas), en este orden:
 2. Guardá el token que te da.
 3. Opcional: `/setdescription` y `/setuserpic` con el logo.
 
-### 3. n8n Cloud
+### 3. n8n
+
+Hoy corre **gratis en la compu de Frani** (n8n local + un túnel público https). Para arrancarlo:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File C:\Users\frani\somos-setas-stock\bot\local\iniciar-bot.ps1
+```
+
+`bot/local/iniciar-bot.ps1` abre el túnel (tunnelmole, tarda ~40 s), toma la dirección nueva y arranca n8n con ella como `WEBHOOK_URL`. Como el flujo está activo, n8n le pasa solo la dirección nueva a Telegram. Hay que dejar esa ventana abierta: **el bot responde solo con la compu prendida y la ventana abierta**, y la pregunta de las 18 h no sale si está apagada. El editor queda en <http://localhost:5678>.
+
+Para que ande siempre, el mismo flujo se puede importar en n8n Cloud (pago) o en un servidor propio, sin cambios. En ese caso:
 
 1. **Workflows → Import from file** → `bot/n8n/bot-stock-telegram.json`.
 2. Creá las tres credenciales que pide (los nodos quedan marcados en rojo hasta elegirlas):

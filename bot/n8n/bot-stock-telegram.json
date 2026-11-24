@@ -85,6 +85,12 @@
               "name": "texto",
               "value": "={{ ($json.message.text || $json.message.caption || '').trim() }}",
               "type": "string"
+            },
+            {
+              "id": "5148bb9d-550e-5a80-8dfe-c8e36bf91779",
+              "name": "usuario",
+              "value": "={{ $json.message.from.username || '' }}",
+              "type": "string"
             }
           ]
         },
@@ -160,20 +166,162 @@
     },
     {
       "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "03390e1f-6ba0-5683-ad43-3a73c45e25ff",
+              "leftValue": "={{ /[^\\s@]+@[^\\s@]+\\.[^\\s@]+/.test($('Datos del mensaje').item.json.texto) }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "5824b8bf-773e-571d-8052-2371cb8e2e4b",
+      "name": "¿Mandó su mail?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1100,
+        960
+      ]
+    },
+    {
+      "parameters": {
         "chatId": "={{ $('Datos del mensaje').item.json.chat_id }}",
-        "text": "=Hola {{ String($('Datos del mensaje').item.json.nombre).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;') }}. Todavía no estás habilitado para cargar stock.\n\nTu número de chat es {{ String($('Datos del mensaje').item.json.chat_id).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;') }}: pasáselo a Frani para que te dé de alta.",
+        "text": "=Hola {{ String($('Datos del mensaje').item.json.nombre).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;') }} 👋 Soy el bot de stock de Somos Setas.\n\nPara usarlo te tengo que habilitar: escribime el mail con el que entrás a la plataforma de stock y le paso el pedido a quien aprueba los accesos.",
         "additionalFields": {
           "appendAttribution": false,
           "parse_mode": "HTML"
         }
       },
-      "id": "0c32eba6-1ba7-5f1b-ba27-0d7019921318",
-      "name": "Avisar que no está habilitado",
+      "id": "b96691b2-0d7b-559c-8bf8-6f1f1ac8f300",
+      "name": "Pedir el mail",
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.2,
       "position": [
-        1100,
-        600
+        1320,
+        1140
+      ],
+      "credentials": {
+        "telegramApi": {
+          "name": "Telegram bot Stock Somos Setas"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://muuqqbocpumdvhvxsigz.supabase.co/rest/v1/rpc/st_bot_solicitar",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpCustomAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ p_chat_id: $('Datos del mensaje').item.json.chat_id, p_nombre: $('Datos del mensaje').item.json.nombre + ($('Datos del mensaje').item.json.usuario ? ' (@' + $('Datos del mensaje').item.json.usuario + ')' : ''), p_email: ($('Datos del mensaje').item.json.texto.match(/[^\\s@]+@[^\\s@]+\\.[^\\s@]+/) || [''])[0] }) }}",
+        "options": {}
+      },
+      "id": "1b9b3077-0982-53f0-ac11-e2dceb80beae",
+      "name": "Pedir acceso",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1320,
+        960
+      ],
+      "credentials": {
+        "httpCustomAuth": {
+          "name": "Supabase Somos Setas (clave secreta)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Datos del mensaje').item.json.chat_id }}",
+        "text": "={{ String($('Pedir acceso').item.json.motivo).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;') }}",
+        "additionalFields": {
+          "appendAttribution": false,
+          "parse_mode": "HTML"
+        }
+      },
+      "id": "e446a6d0-02c4-5f17-8ae2-bd64da11788f",
+      "name": "Responder el pedido",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1540,
+        960
+      ],
+      "credentials": {
+        "telegramApi": {
+          "name": "Telegram bot Stock Somos Setas"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Un aviso por cada persona que puede aprobar. Si el pedido no fue válido\n// o es repetido, no sale ninguno.\nconst r = $('Pedir acceso').first().json;\nif (!r.ok || r.repetido) return [];\nreturn (r.aprobadores || []).map(a => ({ json: {\n  chat_id: a.chat_id,\n  texto: `🔑 Pedido de acceso al bot de stock\\n\\n${r.solicitante.nombre}\\n${r.solicitante.email}\\n\\n` +\n         `Si lo aprobás, va a poder cargar y corregir stock desde Telegram.`,\n  solicitante: r.solicitante.chat_id,\n}}));\n"
+      },
+      "id": "59c3a59d-b393-5f2d-a9b0-4787146ec55a",
+      "name": "A quién pedirle",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1760,
+        960
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.chat_id }}",
+        "text": "={{ String($json.texto).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;') }}",
+        "additionalFields": {
+          "appendAttribution": false,
+          "parse_mode": "HTML"
+        },
+        "replyMarkup": "inlineKeyboard",
+        "inlineKeyboard": {
+          "rows": [
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "✅ Aprobar",
+                    "additionalFields": {
+                      "callback_data": "=apr:{{ $json.solicitante }}"
+                    }
+                  },
+                  {
+                    "text": "❌ Rechazar",
+                    "additionalFields": {
+                      "callback_data": "=rec:{{ $json.solicitante }}"
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      },
+      "id": "9408139d-433e-5e3e-95da-585bc2fc9ccb",
+      "name": "Pedir aprobación",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1980,
+        960
       ],
       "credentials": {
         "telegramApi": {
@@ -802,6 +950,54 @@
               },
               "renameOutput": true,
               "outputKey": "Sin novedades"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "06a3c64d-02c1-569e-bf9a-57b9d8b5e0ae",
+                    "leftValue": "={{ $('Datos del botón').item.json.accion }}",
+                    "rightValue": "apr",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Aprobar acceso"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "71136062-fd30-5cf2-a03a-c7f6af4ecfc1",
+                    "leftValue": "={{ $('Datos del botón').item.json.accion }}",
+                    "rightValue": "rec",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Rechazar acceso"
             }
           ]
         },
@@ -959,6 +1155,110 @@
     },
     {
       "parameters": {
+        "method": "POST",
+        "url": "https://muuqqbocpumdvhvxsigz.supabase.co/rest/v1/rpc/st_bot_resolver_solicitud",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpCustomAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ p_chat_aprobador: $('Datos del botón').item.json.chat_id, p_chat_solicitante: Number($('Datos del botón').item.json.token), p_aprobar: $('Datos del botón').item.json.accion === 'apr' }) }}",
+        "options": {}
+      },
+      "id": "cc654a1b-c531-5c6c-b19e-2513f33b65b6",
+      "name": "Resolver acceso",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1100,
+        500
+      ],
+      "credentials": {
+        "httpCustomAuth": {
+          "name": "Supabase Somos Setas (clave secreta)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "editMessageText",
+        "chatId": "={{ $('Datos del botón').item.json.chat_id }}",
+        "messageId": "={{ $('Datos del botón').item.json.message_id }}",
+        "text": "={{ $('Datos del botón').item.json.texto_original }}\n\n{{ $json.ok ? ($json.aprobada ? '✅ Aprobado por ' + $('Datos del botón').item.json.quien + '. Ya le avisé.' : '❌ Rechazado por ' + $('Datos del botón').item.json.quien + '.') : '⚠️ ' + $json.error }}",
+        "additionalFields": {}
+      },
+      "id": "a921d15c-af13-578a-82b8-5853703eda8d",
+      "name": "Mostrar resolución",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1320,
+        500
+      ],
+      "credentials": {
+        "telegramApi": {
+          "name": "Telegram bot Stock Somos Setas"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "ae3e4772-16f9-5066-8bec-8ef08d76b519",
+              "leftValue": "={{ $('Resolver acceso').item.json.ok === true }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "14716188-65d7-56b5-843c-c256b9660d21",
+      "name": "¿Se resolvió?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1540,
+        500
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Resolver acceso').item.json.chat_id }}",
+        "text": "={{ String($('Resolver acceso').item.json.aprobada ? '¡Listo ' + $('Resolver acceso').item.json.nombre + '! Ya estás habilitado ✅\\n\\nEscribime cuando quieras qué pasó con el stock: qué se produjo, qué salió por fuera de la web, qué compra llegó o qué hay que corregir. También todos los días a las 18 te pregunto yo.' : 'Tu pedido de acceso al bot de stock no fue aprobado. Si creés que es un error, hablalo con quien administra el stock.').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;') }}",
+        "additionalFields": {
+          "appendAttribution": false,
+          "parse_mode": "HTML"
+        }
+      },
+      "id": "d4569ae4-4c7a-577b-bbeb-2cdac8779ddc",
+      "name": "Avisarle a quien pidió",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1760,
+        500
+      ],
+      "credentials": {
+        "telegramApi": {
+          "name": "Telegram bot Stock Somos Setas"
+        }
+      }
+    },
+    {
+      "parameters": {
         "rule": {
           "interval": [
             {
@@ -1089,7 +1389,7 @@
         "color": 4
       },
       "id": "d4e3aeab-c85d-5834-bc1b-b9bd7071ef47",
-      "name": "Nota 38",
+      "name": "Nota 47",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
@@ -1105,7 +1405,7 @@
         "color": 5
       },
       "id": "325bfd5b-ca45-50ad-9226-cff069026ade",
-      "name": "Nota 39",
+      "name": "Nota 48",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
@@ -1121,7 +1421,7 @@
         "color": 6
       },
       "id": "3ef44927-86bb-50b4-89ca-b704b51c39dc",
-      "name": "Nota 40",
+      "name": "Nota 49",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
@@ -1193,7 +1493,58 @@
         ],
         [
           {
-            "node": "Avisar que no está habilitado",
+            "node": "¿Mandó su mail?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Mandó su mail?": {
+      "main": [
+        [
+          {
+            "node": "Pedir acceso",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Pedir el mail",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pedir acceso": {
+      "main": [
+        [
+          {
+            "node": "Responder el pedido",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Responder el pedido": {
+      "main": [
+        [
+          {
+            "node": "A quién pedirle",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "A quién pedirle": {
+      "main": [
+        [
+          {
+            "node": "Pedir aprobación",
             "type": "main",
             "index": 0
           }
@@ -1419,6 +1770,20 @@
             "type": "main",
             "index": 0
           }
+        ],
+        [
+          {
+            "node": "Resolver acceso",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Resolver acceso",
+            "type": "main",
+            "index": 0
+          }
         ]
       ]
     },
@@ -1449,6 +1814,39 @@
         [
           {
             "node": "Agradecer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Resolver acceso": {
+      "main": [
+        [
+          {
+            "node": "Mostrar resolución",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mostrar resolución": {
+      "main": [
+        [
+          {
+            "node": "¿Se resolvió?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Se resolvió?": {
+      "main": [
+        [
+          {
+            "node": "Avisarle a quien pidió",
             "type": "main",
             "index": 0
           }

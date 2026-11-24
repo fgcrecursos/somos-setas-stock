@@ -220,6 +220,7 @@ asignar("Datos del mensaje", [440, 420], [
     ("privado", "={{ $json.message.chat.type === 'private' }}", "boolean"),
     ("nombre", "={{ $json.message.from.first_name || 'equipo' }}", "string"),
     ("texto", "={{ ($json.message.text || $json.message.caption || '').trim() }}", "string"),
+    ("usuario", "={{ $json.message.from.username || '' }}", "string"),
 ])
 unir("¿Tocó un botón?", "Datos del mensaje", salida=1)
 
@@ -229,10 +230,46 @@ unir("Datos del mensaje", "¿Quién escribe?")
 si("¿Está habilitado?", [880, 420], "={{ $json.habilitado === true && $('Datos del mensaje').item.json.privado }}")
 unir("¿Quién escribe?", "¿Está habilitado?")
 
-telegram_texto("Avisar que no está habilitado", [1100, 600], "={{ $('Datos del mensaje').item.json.chat_id }}",
-    "=Hola {{ $('Datos del mensaje').item.json.nombre }}. Todavía no estás habilitado para cargar stock.\n\n"
-    "Tu número de chat es {{ $('Datos del mensaje').item.json.chat_id }}: pasáselo a Frani para que te dé de alta.")
-unir("¿Está habilitado?", "Avisar que no está habilitado", salida=1)
+# --- Gente nueva: pide acceso con su mail y alguien con permiso lo aprueba ---
+MSG = "$('Datos del mensaje').item.json"
+si("¿Mandó su mail?", [1100, 960], "={{ /[^\\s@]+@[^\\s@]+\\.[^\\s@]+/.test(" + MSG + ".texto) }}")
+unir("¿Está habilitado?", "¿Mandó su mail?", salida=1)
+
+telegram_texto("Pedir el mail", [1320, 1140], "={{ " + MSG + ".chat_id }}",
+    "=Hola {{ " + MSG + ".nombre }} 👋 Soy el bot de stock de Somos Setas.\n\n"
+    "Para usarlo te tengo que habilitar: escribime el mail con el que entrás a la plataforma de stock "
+    "y le paso el pedido a quien aprueba los accesos.")
+unir("¿Mandó su mail?", "Pedir el mail", salida=1)
+
+rpc("Pedir acceso", [1320, 960], "st_bot_solicitar",
+    "={{ JSON.stringify({ p_chat_id: " + MSG + ".chat_id, "
+    "p_nombre: " + MSG + ".nombre + (" + MSG + ".usuario ? ' (@' + " + MSG + ".usuario + ')' : ''), "
+    "p_email: (" + MSG + ".texto.match(/[^\\s@]+@[^\\s@]+\\.[^\\s@]+/) || [''])[0] }) }}")
+unir("¿Mandó su mail?", "Pedir acceso")
+
+telegram_texto("Responder el pedido", [1540, 960], "={{ " + MSG + ".chat_id }}",
+    "={{ $('Pedir acceso').item.json.motivo }}")
+unir("Pedir acceso", "Responder el pedido")
+
+nodo("A quién pedirle", "n8n-nodes-base.code", 2, [1760, 960], {
+    "mode": "runOnceForAllItems",
+    "jsCode": r"""// Un aviso por cada persona que puede aprobar. Si el pedido no fue válido
+// o es repetido, no sale ninguno.
+const r = $('Pedir acceso').first().json;
+if (!r.ok || r.repetido) return [];
+return (r.aprobadores || []).map(a => ({ json: {
+  chat_id: a.chat_id,
+  texto: `🔑 Pedido de acceso al bot de stock\n\n${r.solicitante.nombre}\n${r.solicitante.email}\n\n` +
+         `Si lo aprobás, va a poder cargar y corregir stock desde Telegram.`,
+  solicitante: r.solicitante.chat_id,
+}}));
+""",
+})
+unir("Responder el pedido", "A quién pedirle")
+
+telegram_texto("Pedir aprobación", [1980, 960], "={{ $json.chat_id }}", "={{ $json.texto }}",
+    botones=[("✅ Aprobar", "=apr:{{ $json.solicitante }}"), ("❌ Rechazar", "=rec:{{ $json.solicitante }}")])
+unir("A quién pedirle", "Pedir aprobación")
 
 rpc("Anotar que respondió", [1100, 420], "st_bot_checkin",
     "={{ JSON.stringify({ p_chat_id: $('Datos del mensaje').item.json.chat_id, p_sin_novedades: false }) }}")
@@ -374,7 +411,8 @@ nodo("¿Qué botón?", "n8n-nodes-base.switch", 3.2, [880, 140], {
             "renameOutput": True,
             "outputKey": salida,
         }
-        for clave, salida in [("ok", "Confirmar"), ("no", "Cancelar"), ("nada", "Sin novedades")]
+        for clave, salida in [("ok", "Confirmar"), ("no", "Cancelar"), ("nada", "Sin novedades"),
+                              ("apr", "Aprobar acceso"), ("rec", "Rechazar acceso")]
     ]},
     "options": {},
 })
@@ -402,6 +440,27 @@ unir("¿Qué botón?", "Anotar sin novedades", salida=2)
 telegram_editar("Agradecer", [1320, 320],
     "={{ " + BOTON + ".texto_original }}\n\n👍 Anotado: sin novedades hoy. ¡Gracias!")
 unir("Anotar sin novedades", "Agradecer")
+
+# Aprobar o rechazar un pedido de acceso (el token del botón es el chat de quien pidió).
+rpc("Resolver acceso", [1100, 500], "st_bot_resolver_solicitud",
+    "={{ JSON.stringify({ p_chat_aprobador: " + BOTON + ".chat_id, "
+    "p_chat_solicitante: Number(" + BOTON + ".token), p_aprobar: " + BOTON + ".accion === 'apr' }) }}")
+unir("¿Qué botón?", "Resolver acceso", salida=3)
+unir("¿Qué botón?", "Resolver acceso", salida=4)
+telegram_editar("Mostrar resolución", [1320, 500],
+    "={{ " + BOTON + ".texto_original }}\n\n"
+    "{{ $json.ok ? ($json.aprobada ? '✅ Aprobado por ' + " + BOTON + ".quien + '. Ya le avisé.' "
+    ": '❌ Rechazado por ' + " + BOTON + ".quien + '.') : '⚠️ ' + $json.error }}")
+unir("Resolver acceso", "Mostrar resolución")
+si("¿Se resolvió?", [1540, 500], "={{ $('Resolver acceso').item.json.ok === true }}")
+unir("Mostrar resolución", "¿Se resolvió?")
+telegram_texto("Avisarle a quien pidió", [1760, 500], "={{ $('Resolver acceso').item.json.chat_id }}",
+    "={{ $('Resolver acceso').item.json.aprobada "
+    "? '¡Listo ' + $('Resolver acceso').item.json.nombre + '! Ya estás habilitado ✅\\n\\n"
+    "Escribime cuando quieras qué pasó con el stock: qué se produjo, qué salió por fuera de la web, "
+    "qué compra llegó o qué hay que corregir. También todos los días a las 18 te pregunto yo.' "
+    ": 'Tu pedido de acceso al bot de stock no fue aprobado. Si creés que es un error, hablalo con quien administra el stock.' }}")
+unir("¿Se resolvió?", "Avisarle a quien pidió")
 
 # ---------------------------------------------------------------------------
 # Rama 2 · Pregunta diaria

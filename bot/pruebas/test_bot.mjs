@@ -213,7 +213,39 @@ check('formato de número', (await v(`select st_bot_num(20) || '|' || st_bot_num
 
 console.log('Control y alta');
 const nf = Number(await v(`select count(*) from pg_proc where proname like 'st\\_bot\\_%'`));
-check('21 funciones (lo que dice la guía)', nf === 21, nf);
+check('23 funciones (lo que dice la guía)', nf === 23, nf);
+
+console.log('Pedidos de acceso');
+await db.exec(`insert into st_users (email, nombre, rol, activo) values ('nueva@x.com', 'Nueva', 'admin', true)`);
+let s = await comoN8n(`select st_bot_solicitar(777, 'Nueva', 'nueva@x.com')`);
+check('sin aprobadores avisa', s.ok === false && s.motivo.includes('nadie'), s);
+await db.exec(`update st_bot_usuarios set aprueba = true where chat_id = 111`);
+s = await comoN8n(`select st_bot_solicitar(777, 'Nueva', 'desconocido@x.com')`);
+check('mail desconocido rechazado', s.ok === false, s);
+s = await comoN8n(`select st_bot_solicitar(777, 'Nueva', 'invitado@x.com')`);
+check('mail de invitado rechazado', s.ok === false, s);
+s = await comoN8n(`select st_bot_solicitar(777, 'Nueva', ' NUEVA@x.com ')`);
+check('pedido con mail admin avisa al aprobador', s.ok && s.aprobadores.length === 1 && s.aprobadores[0].chat_id == 111, s);
+s = await comoN8n(`select st_bot_solicitar(777, 'Nueva', 'nueva@x.com')`);
+check('pedido repetido no vuelve a avisar', s.ok && s.repetido && s.aprobadores.length === 0, s);
+check('todavía no habilitada', (await comoN8n(`select st_bot_quien(777)`)).habilitado === false);
+let rs = await comoN8n(`select st_bot_resolver_solicitud(777, 777, true)`);
+check('no se aprueba a sí misma', rs.ok === false, rs);
+rs = await comoN8n(`select st_bot_resolver_solicitud(555, 777, true)`);
+check('un usuario sin permiso de aprobar no aprueba', rs.ok === false, rs);
+rs = await comoN8n(`select st_bot_resolver_solicitud(111, 777, true)`);
+check('aprobada', rs.ok && rs.aprobada && rs.chat_id == 777, rs);
+check('queda habilitada', (await comoN8n(`select st_bot_quien(777)`)).habilitado === true);
+rs = await comoN8n(`select st_bot_resolver_solicitud(111, 777, true)`);
+check('no se resuelve dos veces', rs.ok === false, rs);
+s = await comoN8n(`select st_bot_solicitar(777, 'Nueva', 'nueva@x.com')`);
+check('ya habilitada no pide de nuevo', s.ok === false && s.motivo.includes('Ya estás'), s);
+await db.exec(`insert into st_users (email, nombre, rol, activo) values ('otra@x.com', 'Otra', 'admin', true)`);
+await comoN8n(`select st_bot_solicitar(888, 'Otra', 'otra@x.com')`);
+rs = await comoN8n(`select st_bot_resolver_solicitud(111, 888, false)`);
+check('rechazada', rs.ok && rs.aprobada === false && (await comoN8n(`select st_bot_quien(888)`)).habilitado === false, rs);
+s = await comoN8n(`select st_bot_solicitar(888, 'Otra', 'otra@x.com')`);
+check('rechazada no insiste por 24 h', s.ok === false, s);
 const alta = readFileSync(fileURLToPath(new URL('../alta_usuarios_bot.sql', import.meta.url)), 'utf8');
 let err = null; try { await db.exec(alta); } catch (e) { err = e.message; }
 check('alta frena con chat en 0', err?.includes('Falta completar'), err);

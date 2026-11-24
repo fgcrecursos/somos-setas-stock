@@ -47,6 +47,23 @@ create table if not exists public.st_bot_usuarios (
   resumen_diario boolean not null default true,   -- recibe la pregunta de cada día
   created_at     timestamptz not null default now()
 );
+-- Quién aprueba los pedidos de acceso de gente nueva.
+alter table public.st_bot_usuarios add column if not exists aprueba boolean not null default false;
+
+-- Pedidos de acceso: alguien nuevo le escribe al bot con su mail y un
+-- aprobador lo habilita con un botón.
+create table if not exists public.st_bot_solicitudes (
+  chat_id      bigint primary key,
+  nombre       text not null,
+  email        text not null,
+  estado       text not null default 'pendiente',
+  created_at   timestamptz not null default now(),
+  resuelto_at  timestamptz,
+  resuelto_por text
+);
+alter table public.st_bot_solicitudes drop constraint if exists st_bot_solicitudes_estado_check;
+alter table public.st_bot_solicitudes add constraint st_bot_solicitudes_estado_check
+  check (estado in ('pendiente', 'aprobada', 'rechazada'));
 
 -- Propuestas que esperan el botón "Confirmar".
 create table if not exists public.st_bot_pendientes (
@@ -86,6 +103,7 @@ create table if not exists public.st_bot_checkins (
 
 -- Nadie entra a estas tablas desde la app: solo las funciones de abajo.
 alter table public.st_bot_usuarios    enable row level security;
+alter table public.st_bot_solicitudes enable row level security;
 alter table public.st_bot_pendientes  enable row level security;
 alter table public.st_bot_reversiones enable row level security;
 alter table public.st_bot_checkins    enable row level security;
@@ -835,6 +853,98 @@ begin
 end;
 $$;
 
+-- ---------- 5b. Pedidos de acceso de gente nueva ----------
+
+-- Alguien que todavía no está habilitado escribe su mail. Si es admin activo
+-- en la plataforma de stock, queda un pedido y se devuelve a quién avisarle.
+create or replace function public.st_bot_solicitar(p_chat_id bigint, p_nombre text, p_email text)
+returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare
+  e    text := lower(trim(coalesce(p_email, '')));
+  sol  record;
+  apr  jsonb;
+begin
+  if public.st_bot_usuario(p_chat_id) is not null then
+    return jsonb_build_object('ok', false, 'motivo', 'Ya estás habilitado: escribime directamente qué pasó con el stock.');
+  end if;
+
+  if not exists (select 1 from public.st_users u where u.email = e and u.rol = 'admin' and u.activo) then
+    return jsonb_build_object('ok', false, 'motivo',
+      'No encuentro ese mail entre quienes cargan stock en la plataforma. Fijate que sea el mismo con el que entrás a la plataforma de stock, o pedile a quien la administra que te dé de alta ahí primero.');
+  end if;
+
+  select * into sol from public.st_bot_solicitudes where chat_id = p_chat_id;
+  if found and sol.estado = 'rechazada' and sol.resuelto_at > now() - interval '24 hours' then
+    return jsonb_build_object('ok', false, 'motivo', 'Tu pedido de acceso no fue aprobado. Si creés que es un error, hablalo con quien administra el stock.');
+  end if;
+  if found and sol.estado = 'pendiente' and sol.email = e and sol.created_at > now() - interval '30 minutes' then
+    return jsonb_build_object('ok', true, 'repetido', true, 'aprobadores', '[]'::jsonb,
+      'motivo', 'Tu pedido ya está enviado. Te aviso apenas lo aprueben.');
+  end if;
+
+  select coalesce(jsonb_agg(jsonb_build_object('chat_id', b.chat_id, 'nombre', b.nombre)), '[]'::jsonb)
+    into apr
+    from public.st_bot_usuarios b
+    join public.st_users u on u.email = b.email and u.activo and u.rol = 'admin'
+   where b.activo and b.aprueba and b.chat_id <> p_chat_id;
+
+  if jsonb_array_length(apr) = 0 then
+    return jsonb_build_object('ok', false, 'motivo', 'Todavía no hay nadie que pueda aprobar pedidos de acceso. Avisale a quien administra el stock.');
+  end if;
+
+  insert into public.st_bot_solicitudes (chat_id, nombre, email, estado, created_at, resuelto_at, resuelto_por)
+  values (p_chat_id, coalesce(nullif(trim(p_nombre), ''), 'Sin nombre'), e, 'pendiente', now(), null, null)
+  on conflict (chat_id) do update
+    set nombre = excluded.nombre, email = excluded.email, estado = 'pendiente',
+        created_at = now(), resuelto_at = null, resuelto_por = null;
+
+  return jsonb_build_object(
+    'ok', true, 'repetido', false, 'aprobadores', apr,
+    'solicitante', jsonb_build_object('chat_id', p_chat_id, 'nombre', coalesce(nullif(trim(p_nombre), ''), 'Sin nombre'), 'email', e),
+    'motivo', 'Listo, le pasé tu pedido a quien aprueba los accesos. Te aviso por acá apenas lo apruebe.');
+end;
+$$;
+
+-- Un aprobador toca Aprobar o Rechazar.
+create or replace function public.st_bot_resolver_solicitud(p_chat_aprobador bigint, p_chat_solicitante bigint, p_aprobar boolean)
+returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare
+  apr  jsonb := public.st_bot_usuario(p_chat_aprobador);
+  sol  record;
+begin
+  if apr is null or not exists (select 1 from public.st_bot_usuarios where chat_id = p_chat_aprobador and aprueba) then
+    return jsonb_build_object('ok', false, 'error', 'No tenés permiso para aprobar accesos.');
+  end if;
+
+  select * into sol from public.st_bot_solicitudes where chat_id = p_chat_solicitante for update;
+  if not found or sol.estado <> 'pendiente' then
+    return jsonb_build_object('ok', false, 'error', 'Ese pedido ya estaba resuelto.');
+  end if;
+
+  if p_aprobar then
+    if not exists (select 1 from public.st_users u where u.email = sol.email and u.rol = 'admin' and u.activo) then
+      update public.st_bot_solicitudes set estado = 'rechazada', resuelto_at = now(), resuelto_por = apr ->> 'email'
+       where chat_id = p_chat_solicitante;
+      return jsonb_build_object('ok', false, 'error', sol.email || ' ya no es admin en la plataforma de stock: no lo habilité.');
+    end if;
+    insert into public.st_bot_usuarios (chat_id, email, nombre, resumen_diario, activo)
+    values (sol.chat_id, sol.email, sol.nombre, true, true)
+    on conflict (chat_id) do update set email = excluded.email, nombre = excluded.nombre, activo = true;
+  end if;
+
+  update public.st_bot_solicitudes
+     set estado = case when p_aprobar then 'aprobada' else 'rechazada' end,
+         resuelto_at = now(), resuelto_por = apr ->> 'email'
+   where chat_id = p_chat_solicitante;
+
+  return jsonb_build_object('ok', true, 'aprobada', p_aprobar,
+    'chat_id', sol.chat_id, 'nombre', sol.nombre, 'email', sol.email,
+    'aprobador', apr ->> 'nombre');
+end;
+$$;
+
 -- ---------- 6. Permisos: solo la clave secreta (n8n) llama a estas funciones ----------
 do $$
 declare
@@ -859,7 +969,9 @@ begin
     'public.st_bot_preparar(bigint, jsonb, text)',
     'public.st_bot_confirmar(uuid, bigint)',
     'public.st_bot_cancelar(uuid, bigint)',
-    'public.st_bot_pendiente_para_mostrar(bigint)'
+    'public.st_bot_pendiente_para_mostrar(bigint)',
+    'public.st_bot_solicitar(bigint, text, text)',
+    'public.st_bot_resolver_solicitud(bigint, bigint, boolean)'
   ] loop
     execute format('revoke all on function %s from public', f);
     execute format('revoke all on function %s from anon, authenticated', f);

@@ -8,7 +8,7 @@ Un agente (n8n + Gemini) que todos los días les pregunta a los chicos de produc
 | `n8n/generar_flujo.py` | De acá sale el JSON (prompt, cuerpos de las llamadas). Si cambiás algo, regenerá con `python bot/n8n/generar_flujo.py` |
 | `../supabase/bot_stock_telegram_2026-11-22.sql` | Las funciones `st_bot_*` que usa el bot |
 | `alta_usuarios_bot.sql` | Para dar de alta a cada persona en el bot |
-| `pruebas/test_bot.mjs` | 67 pruebas del SQL sobre PGlite con los scripts de produccion: `node bot/pruebas/test_bot.mjs` |
+| `pruebas/test_bot.mjs` | 81 pruebas del SQL sobre PGlite con los scripts de produccion: `node bot/pruebas/test_bot.mjs` |
 
 ## Cómo funciona
 
@@ -44,7 +44,7 @@ Lunes a sábado 18 h ──► resumen del día ──► pregunta a cada person
 En el SQL Editor de Supabase (proyecto de Somos Setas), en este orden:
 
 1. Si todavía no se corrió: `supabase/descuento_en_preparacion_2026-11-16.sql`. El script del bot se frena solo si falta.
-2. `supabase/bot_stock_telegram_2026-11-22.sql`. Se puede correr más de una vez y no toca stock ni pedidos. Al final tiene que decir `funciones del bot: 21 | usuarios del bot: 0`.
+2. `supabase/bot_stock_telegram_2026-11-22.sql`. Se puede correr más de una vez y no toca stock ni pedidos. Al final tiene que decir `funciones del bot: 23 | usuarios del bot: 0`.
 
 ### 2. Bot de Telegram
 
@@ -82,9 +82,13 @@ Para que ande siempre, el mismo flujo se puede importar en n8n Cloud (pago) o en
 
 ### 4. Dar de alta a cada persona
 
-1. La persona busca el bot en Telegram y le escribe cualquier cosa. El bot le contesta con su **número de chat**.
-2. Completá `bot/alta_usuarios_bot.sql` con ese número y su mail, y corrélo en Supabase.
-3. Tiene que ser **admin activo** en `st_users` (el invitado no puede cargar). Si no lo es, el script avisa.
+El bot solo atiende a gente habilitada, porque puede cambiar el stock real. Habilitar a alguien es así:
+
+1. La persona busca el bot en Telegram y le escribe. El bot le pide el **mail con el que entra a la plataforma de stock**.
+2. Si ese mail es **admin activo** en `st_users`, a quien aprueba accesos le llega un aviso con **Aprobar / Rechazar**. Si no lo es, el bot se lo dice y no avisa a nadie (el invitado no puede cargar).
+3. Al aprobar, la persona recibe "Ya estás habilitado". Un rechazo la frena 24 h.
+
+El primer aprobador se da de alta a mano con `bot/alta_usuarios_bot.sql` (columna `aprueba = true`). Para que otra persona también apruebe: `update st_bot_usuarios set aprueba = true where chat_id = …;`
 
 ### 5. Probar
 

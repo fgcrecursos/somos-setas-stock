@@ -1259,7 +1259,7 @@
     {
       "parameters": {
         "chatId": "={{ $('Resolver acceso').item.json.chat_id }}",
-        "text": "={{ String($('Resolver acceso').item.json.aprobada ? '¡Listo ' + $('Resolver acceso').item.json.nombre + '! Ya estás habilitado ✅\\n\\nEscribime cuando quieras qué pasó con el stock: qué se produjo, qué salió por fuera de la web, qué compra llegó o qué hay que corregir. También todos los días a las 18 te pregunto yo.' : 'Tu pedido de acceso al bot de stock no fue aprobado. Si creés que es un error, hablalo con quien administra el stock.').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;') }}",
+        "text": "={{ String($('Resolver acceso').item.json.aprobada ? '¡Listo ' + $('Resolver acceso').item.json.nombre + '! Ya estás habilitado ✅\\n\\nEscribime cuando quieras qué pasó con el stock: qué se produjo, qué salió por fuera de la web, qué compra llegó o qué hay que corregir. También todos los días a las 12 te pregunto yo.' : 'Tu pedido de acceso al bot de stock no fue aprobado. Si creés que es un error, hablalo con quien administra el stock.').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;') }}",
         "additionalFields": {
           "appendAttribution": false,
           "parse_mode": "HTML"
@@ -1285,13 +1285,13 @@
           "interval": [
             {
               "field": "cronExpression",
-              "expression": "0 18 * * 1-6"
+              "expression": "0 12 * * 1-6"
             }
           ]
         }
       },
-      "id": "221338ce-2402-5e86-b454-961a20d4a8da",
-      "name": "Todos los días 18 h",
+      "id": "fafa3b9c-6c24-5427-a4c9-6904df9d758b",
+      "name": "Todos los días 12 h",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
       "position": [
@@ -1437,12 +1437,12 @@
     },
     {
       "parameters": {
-        "content": "## Pregunta diaria\nLunes a sábado 18 h a cada persona habilitada con `resumen_diario`. La respuesta entra por la rama de mensajes. Cambiá la hora en el nodo de horario.",
+        "content": "## Pregunta diaria\nLunes a sábado 12 h a cada persona habilitada con `resumen_diario`. La respuesta entra por la rama de mensajes. Cambiá la hora en el nodo de horario.",
         "height": 110,
         "width": 560,
         "color": 6
       },
-      "id": "3ef44927-86bb-50b4-89ca-b704b51c39dc",
+      "id": "cd187dd8-daf9-57cc-a05f-eed4a9887a4c",
       "name": "Nota 50",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
@@ -1886,7 +1886,7 @@
         ]
       ]
     },
-    "Todos los días 18 h": {
+    "Todos los días 12 h": {
       "main": [
         [
           {

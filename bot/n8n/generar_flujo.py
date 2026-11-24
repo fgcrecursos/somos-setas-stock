@@ -467,19 +467,19 @@ telegram_texto("Avisarle a quien pidió", [1760, 500], "={{ $('Resolver acceso')
     "={{ $('Resolver acceso').item.json.aprobada "
     "? '¡Listo ' + $('Resolver acceso').item.json.nombre + '! Ya estás habilitado ✅\\n\\n"
     "Escribime cuando quieras qué pasó con el stock: qué se produjo, qué salió por fuera de la web, "
-    "qué compra llegó o qué hay que corregir. También todos los días a las 18 te pregunto yo.' "
+    "qué compra llegó o qué hay que corregir. También todos los días a las 12 te pregunto yo.' "
     ": 'Tu pedido de acceso al bot de stock no fue aprobado. Si creés que es un error, hablalo con quien administra el stock.' }}")
 unir("¿Se resolvió?", "Avisarle a quien pidió")
 
 # ---------------------------------------------------------------------------
 # Rama 2 · Pregunta diaria
 # ---------------------------------------------------------------------------
-nodo("Todos los días 18 h", "n8n-nodes-base.scheduleTrigger", 1.2, [0, 1000], {
-    "rule": {"interval": [{"field": "cronExpression", "expression": "0 18 * * 1-6"}]},
+nodo("Todos los días 12 h", "n8n-nodes-base.scheduleTrigger", 1.2, [0, 1000], {
+    "rule": {"interval": [{"field": "cronExpression", "expression": "0 12 * * 1-6"}]},
 })
 
 rpc("Resumen del día", [220, 1000], "st_bot_resumen_dia", "={{ JSON.stringify({ p_fecha: null }) }}")
-unir("Todos los días 18 h", "Resumen del día")
+unir("Todos los días 12 h", "Resumen del día")
 
 rpc("A quién preguntarle", [440, 1000], "st_bot_destinatarios_resumen", "{}")
 unir("Resumen del día", "A quién preguntarle")
@@ -536,7 +536,7 @@ nota("## Bot de stock · mensajes\nEl agente (Gemini) entiende lo que escriben, 
      [400, 240], 560, 120, 4)
 nota("## Botones\nConfirmar → `st_bot_confirmar` aplica con las reglas de la plataforma (receta al producir, pedido web descuenta al pasar a En preparación). "
      "Todo o nada; no se puede confirmar dos veces.", [400, -140], 560, 100, 5)
-nota("## Pregunta diaria\nLunes a sábado 18 h a cada persona habilitada con `resumen_diario`. "
+nota("## Pregunta diaria\nLunes a sábado 12 h a cada persona habilitada con `resumen_diario`. "
      "La respuesta entra por la rama de mensajes. Cambiá la hora en el nodo de horario.", [0, 840], 560, 110, 6)
 
 # Disposición en el lienzo: la que armó Frani a mano en n8n (posiciones.json).

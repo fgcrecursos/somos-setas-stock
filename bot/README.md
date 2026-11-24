@@ -27,7 +27,7 @@ Telegram ──► ¿botón o mensaje?
                      Cancelar  ──► st_bot_cancelar
                      Sin novedades ──► se anota
 
-Lunes a sábado 18 h ──► resumen del día ──► pregunta a cada persona con [Sin novedades hoy]
+Lunes a sábado 12 h ──► resumen del día ──► pregunta a cada persona con [Sin novedades hoy]
 ```
 
 - **El agente nunca escribe.** Solo arma propuestas. La carga la hace n8n cuando la persona toca el botón: el modelo no puede confirmarse a sí mismo.
@@ -60,7 +60,7 @@ Hoy corre **gratis en la compu de Frani** (n8n local + un túnel público https)
 powershell -ExecutionPolicy Bypass -File C:\Users\frani\somos-setas-stock\bot\local\iniciar-bot.ps1
 ```
 
-`bot/local/iniciar-bot.ps1` abre el túnel (tunnelmole, tarda ~40 s), toma la dirección nueva y arranca n8n con ella como `WEBHOOK_URL`. Como el flujo está activo, n8n le pasa solo la dirección nueva a Telegram. Hay que dejar esa ventana abierta: **el bot responde solo con la compu prendida y la ventana abierta**, y la pregunta de las 18 h no sale si está apagada. El editor queda en <http://localhost:5678>.
+`bot/local/iniciar-bot.ps1` abre el túnel (tunnelmole, tarda ~40 s), toma la dirección nueva y arranca n8n con ella como `WEBHOOK_URL`. Como el flujo está activo, n8n le pasa solo la dirección nueva a Telegram. Hay que dejar esa ventana abierta: **el bot responde solo con la compu prendida y la ventana abierta**, y la pregunta de las 12 h no sale si está apagada. El editor queda en <http://localhost:5678>.
 
 Para que ande siempre, el mismo flujo se puede importar en n8n Cloud (pago) o en un servidor propio, sin cambios. En ese caso:
 
@@ -94,19 +94,19 @@ El primer aprobador se da de alta a mano con `bot/alta_usuarios_bot.sql` (column
 
 - Escribile al bot: "¿cuánto hay de melena cápsulas?" → responde con estante, reservado y disponible.
 - "Hoy hicimos 20 de melena en cápsulas" → muestra la propuesta con lo que descuenta de la receta. Tocá **Cancelar** para no cargar nada.
-- Para probar la pregunta diaria sin esperar a las 18: abrí el nodo "Todos los días 18 h" y tocá **Execute step**.
+- Para probar la pregunta diaria sin esperar a las 12: abrí el nodo "Todos los días 12 h" y tocá **Execute step**.
 
 ## Uso de todos los días (versión local)
 
 1. Prendé la compu y corré `bot/local/iniciar-bot.ps1` (ver arriba). Esperá ~1 minuto, hasta que la ventana diga que n8n está listo.
-2. Dejá esa ventana abierta todo el día, sobre todo a las 18 h, que es cuando sale la pregunta.
+2. Dejá esa ventana abierta todo el día, sobre todo a las 12 h, que es cuando sale la pregunta.
 3. Si el bot no contesta, abrí `https://api.telegram.org/bot<TOKEN>/getWebhookInfo`. Si `url` está vacío, en n8n apagá el flujo, esperá 5 segundos y prendelo de nuevo. Puede pasar después de guardar cambios en el flujo.
 
 Sumar a alguien del equipo: le escribe al bot, manda su mail de la plataforma y te llega Aprobar / Rechazar.
 
 ## Cambiar cosas
 
-- **Hora o días de la pregunta**: nodo "Todos los días 18 h" (cron `0 18 * * 1-6`, lunes a sábado).
+- **Hora o días de la pregunta**: nodo "Todos los días 12 h" (cron `0 12 * * 1-6`, lunes a sábado).
 - **Quién recibe la pregunta**: `update st_bot_usuarios set resumen_diario = false where chat_id = …;`
 - **Sacarle el acceso a alguien**: `update st_bot_usuarios set activo = false where chat_id = …;` (o desactivarlo en `st_users`).
 - **Modelo**: nodo "Gemini". Viene con `gemini-3.5-flash` y de respaldo `gemini-3.5-flash-lite` (la 2.5 ya no la dan a cuentas nuevas y la 3.8 suele estar saturada); se puede elegir otro de la lista. Si Google lo tiene saturado (error 503), el agente pasa solo al nodo "Gemini respaldo", que tiene que ser **otro** modelo.

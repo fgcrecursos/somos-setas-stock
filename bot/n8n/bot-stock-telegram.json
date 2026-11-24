@@ -15,7 +15,7 @@
       "typeVersion": 1.2,
       "position": [
         0,
-        300
+        304
       ],
       "credentials": {
         "telegramApi": {
@@ -54,8 +54,8 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
       "position": [
-        220,
-        300
+        224,
+        304
       ]
     },
     {
@@ -101,8 +101,8 @@
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
       "position": [
-        440,
-        420
+        448,
+        416
       ]
     },
     {
@@ -121,8 +121,8 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        660,
-        420
+        656,
+        416
       ],
       "credentials": {
         "httpCustomAuth": {
@@ -161,7 +161,7 @@
       "typeVersion": 2.2,
       "position": [
         880,
-        420
+        416
       ]
     },
     {
@@ -194,8 +194,8 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
       "position": [
-        1100,
-        960
+        1024,
+        944
       ]
     },
     {
@@ -212,8 +212,8 @@
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.2,
       "position": [
-        1320,
-        1140
+        1232,
+        1104
       ],
       "credentials": {
         "telegramApi": {
@@ -237,8 +237,8 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        1320,
-        960
+        1232,
+        928
       ],
       "credentials": {
         "httpCustomAuth": {
@@ -260,8 +260,8 @@
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.2,
       "position": [
-        1540,
-        960
+        1440,
+        928
       ],
       "credentials": {
         "telegramApi": {
@@ -279,8 +279,8 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1760,
-        960
+        1664,
+        928
       ]
     },
     {
@@ -320,8 +320,8 @@
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.2,
       "position": [
-        1980,
-        960
+        1888,
+        928
       ],
       "credentials": {
         "telegramApi": {
@@ -345,8 +345,8 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        1100,
-        420
+        1104,
+        416
       ],
       "credentials": {
         "httpCustomAuth": {
@@ -384,8 +384,8 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
       "position": [
-        1320,
-        420
+        1328,
+        416
       ]
     },
     {
@@ -402,8 +402,8 @@
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.2,
       "position": [
-        1540,
-        600
+        1488,
+        480
       ],
       "credentials": {
         "telegramApi": {
@@ -425,7 +425,7 @@
       "type": "@n8n/n8n-nodes-langchain.agent",
       "typeVersion": 2,
       "position": [
-        1560,
+        1632,
         400
       ],
       "onError": "continueErrorOutput"
@@ -444,8 +444,8 @@
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.2,
       "position": [
-        1960,
-        600
+        2064,
+        464
       ],
       "credentials": {
         "telegramApi": {
@@ -465,8 +465,8 @@
       "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
       "typeVersion": 1,
       "position": [
-        1300,
-        700
+        1456,
+        704
       ],
       "credentials": {
         "googlePalmApi": {
@@ -485,8 +485,8 @@
       "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
       "typeVersion": 1.3,
       "position": [
-        1440,
-        700
+        1600,
+        704
       ]
     },
     {
@@ -506,8 +506,8 @@
       "type": "n8n-nodes-base.httpRequestTool",
       "typeVersion": 4.2,
       "position": [
-        1580,
-        700
+        1744,
+        704
       ],
       "credentials": {
         "httpCustomAuth": {
@@ -532,8 +532,8 @@
       "type": "n8n-nodes-base.httpRequestTool",
       "typeVersion": 4.2,
       "position": [
-        1720,
-        700
+        1888,
+        704
       ],
       "credentials": {
         "httpCustomAuth": {
@@ -558,8 +558,8 @@
       "type": "n8n-nodes-base.httpRequestTool",
       "typeVersion": 4.2,
       "position": [
-        1860,
-        700
+        2016,
+        704
       ],
       "credentials": {
         "httpCustomAuth": {
@@ -584,8 +584,8 @@
       "type": "n8n-nodes-base.httpRequestTool",
       "typeVersion": 4.2,
       "position": [
-        2000,
-        700
+        2160,
+        704
       ],
       "credentials": {
         "httpCustomAuth": {
@@ -610,8 +610,8 @@
       "type": "n8n-nodes-base.httpRequestTool",
       "typeVersion": 4.2,
       "position": [
-        2140,
-        700
+        2304,
+        704
       ],
       "credentials": {
         "httpCustomAuth": {
@@ -636,8 +636,8 @@
       "type": "n8n-nodes-base.httpRequestTool",
       "typeVersion": 4.2,
       "position": [
-        2280,
-        700
+        2448,
+        704
       ],
       "credentials": {
         "httpCustomAuth": {
@@ -661,8 +661,8 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        1960,
-        400
+        2064,
+        288
       ],
       "credentials": {
         "httpCustomAuth": {
@@ -700,8 +700,8 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
       "position": [
-        2180,
-        400
+        2272,
+        288
       ]
     },
     {
@@ -718,8 +718,8 @@
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.2,
       "position": [
-        2400,
-        520
+        2496,
+        416
       ],
       "credentials": {
         "telegramApi": {
@@ -741,8 +741,8 @@
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.2,
       "position": [
-        2400,
-        300
+        2432,
+        208
       ],
       "credentials": {
         "telegramApi": {
@@ -787,8 +787,8 @@
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.2,
       "position": [
-        2620,
-        300
+        2656,
+        208
       ],
       "credentials": {
         "telegramApi": {
@@ -851,8 +851,8 @@
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
       "position": [
-        440,
-        140
+        448,
+        0
       ]
     },
     {
@@ -866,8 +866,8 @@
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.2,
       "position": [
-        660,
-        140
+        656,
+        0
       ],
       "credentials": {
         "telegramApi": {
@@ -1009,7 +1009,7 @@
       "typeVersion": 3.2,
       "position": [
         880,
-        140
+        -48
       ]
     },
     {
@@ -1028,8 +1028,8 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        1100,
-        -40
+        1088,
+        -352
       ],
       "credentials": {
         "httpCustomAuth": {
@@ -1050,8 +1050,8 @@
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.2,
       "position": [
-        1320,
-        -40
+        1312,
+        -352
       ],
       "credentials": {
         "telegramApi": {
@@ -1075,8 +1075,8 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        1100,
-        140
+        1088,
+        -176
       ],
       "credentials": {
         "httpCustomAuth": {
@@ -1097,8 +1097,8 @@
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.2,
       "position": [
-        1320,
-        140
+        1312,
+        -176
       ],
       "credentials": {
         "telegramApi": {
@@ -1122,8 +1122,8 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        1100,
-        320
+        1088,
+        0
       ],
       "credentials": {
         "httpCustomAuth": {
@@ -1144,8 +1144,8 @@
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.2,
       "position": [
-        1320,
-        320
+        1312,
+        0
       ],
       "credentials": {
         "telegramApi": {
@@ -1169,8 +1169,8 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        1100,
-        500
+        1088,
+        192
       ],
       "credentials": {
         "httpCustomAuth": {
@@ -1191,8 +1191,8 @@
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.2,
       "position": [
-        1320,
-        500
+        1312,
+        192
       ],
       "credentials": {
         "telegramApi": {
@@ -1230,8 +1230,8 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
       "position": [
-        1540,
-        500
+        1536,
+        192
       ]
     },
     {
@@ -1248,8 +1248,8 @@
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.2,
       "position": [
-        1760,
-        500
+        1776,
+        176
       ],
       "credentials": {
         "telegramApi": {
@@ -1273,8 +1273,8 @@
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
       "position": [
-        0,
-        1000
+        -112,
+        832
       ]
     },
     {
@@ -1293,8 +1293,8 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        220,
-        1000
+        112,
+        832
       ],
       "credentials": {
         "httpCustomAuth": {
@@ -1318,8 +1318,8 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        440,
-        1000
+        336,
+        832
       ],
       "credentials": {
         "httpCustomAuth": {
@@ -1337,8 +1337,8 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        660,
-        1000
+        544,
+        832
       ]
     },
     {
@@ -1372,8 +1372,8 @@
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.2,
       "position": [
-        880,
-        1000
+        768,
+        832
       ],
       "credentials": {
         "telegramApi": {
@@ -1393,8 +1393,8 @@
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        400,
-        240
+        352,
+        272
       ]
     },
     {
@@ -1410,7 +1410,7 @@
       "typeVersion": 1,
       "position": [
         400,
-        -140
+        -144
       ]
     },
     {
@@ -1425,8 +1425,8 @@
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        0,
-        840
+        -112,
+        672
       ]
     }
   ],

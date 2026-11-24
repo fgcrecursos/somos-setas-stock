@@ -1,0 +1,308 @@
+{
+ "Telegram": {
+  "position": [
+   0,
+   304
+  ]
+ },
+ "¿Tocó un botón?": {
+  "position": [
+   224,
+   304
+  ]
+ },
+ "Datos del mensaje": {
+  "position": [
+   448,
+   416
+  ]
+ },
+ "¿Quién escribe?": {
+  "position": [
+   656,
+   416
+  ]
+ },
+ "¿Está habilitado?": {
+  "position": [
+   880,
+   416
+  ]
+ },
+ "¿Mandó su mail?": {
+  "position": [
+   1024,
+   944
+  ]
+ },
+ "Pedir el mail": {
+  "position": [
+   1232,
+   1104
+  ]
+ },
+ "Pedir acceso": {
+  "position": [
+   1232,
+   928
+  ]
+ },
+ "Responder el pedido": {
+  "position": [
+   1440,
+   928
+  ]
+ },
+ "A quién pedirle": {
+  "position": [
+   1664,
+   928
+  ]
+ },
+ "Pedir aprobación": {
+  "position": [
+   1888,
+   928
+  ]
+ },
+ "Anotar que respondió": {
+  "position": [
+   1104,
+   416
+  ]
+ },
+ "¿Mandó texto?": {
+  "position": [
+   1328,
+   416
+  ]
+ },
+ "Pedir texto": {
+  "position": [
+   1488,
+   480
+  ]
+ },
+ "Agente de stock": {
+  "position": [
+   1632,
+   400
+  ]
+ },
+ "Avisar del error": {
+  "position": [
+   2064,
+   464
+  ]
+ },
+ "Gemini": {
+  "position": [
+   1456,
+   704
+  ]
+ },
+ "Memoria de la charla": {
+  "position": [
+   1600,
+   704
+  ]
+ },
+ "buscar_items": {
+  "position": [
+   1744,
+   704
+  ]
+ },
+ "ver_item": {
+  "position": [
+   1888,
+   704
+  ]
+ },
+ "pedidos_web": {
+  "position": [
+   2016,
+   704
+  ]
+ },
+ "movimientos_recientes": {
+  "position": [
+   2160,
+   704
+  ]
+ },
+ "resumen_del_dia": {
+  "position": [
+   2304,
+   704
+  ]
+ },
+ "preparar_movimientos": {
+  "position": [
+   2448,
+   704
+  ]
+ },
+ "¿Armó una propuesta?": {
+  "position": [
+   2064,
+   288
+  ]
+ },
+ "¿Hay propuesta?": {
+  "position": [
+   2272,
+   288
+  ]
+ },
+ "Responder": {
+  "position": [
+   2496,
+   416
+  ]
+ },
+ "Responder antes de la propuesta": {
+  "position": [
+   2432,
+   208
+  ]
+ },
+ "Mostrar propuesta con botones": {
+  "position": [
+   2656,
+   208
+  ]
+ },
+ "Datos del botón": {
+  "position": [
+   448,
+   0
+  ]
+ },
+ "Responder al botón": {
+  "position": [
+   656,
+   0
+  ]
+ },
+ "¿Qué botón?": {
+  "position": [
+   880,
+   -48
+  ]
+ },
+ "Cargar en el stock": {
+  "position": [
+   1088,
+   -352
+  ]
+ },
+ "Mostrar resultado": {
+  "position": [
+   1312,
+   -352
+  ]
+ },
+ "Cancelar propuesta": {
+  "position": [
+   1088,
+   -176
+  ]
+ },
+ "Mostrar cancelado": {
+  "position": [
+   1312,
+   -176
+  ]
+ },
+ "Anotar sin novedades": {
+  "position": [
+   1088,
+   0
+  ]
+ },
+ "Agradecer": {
+  "position": [
+   1312,
+   0
+  ]
+ },
+ "Resolver acceso": {
+  "position": [
+   1088,
+   192
+  ]
+ },
+ "Mostrar resolución": {
+  "position": [
+   1312,
+   192
+  ]
+ },
+ "¿Se resolvió?": {
+  "position": [
+   1536,
+   192
+  ]
+ },
+ "Avisarle a quien pidió": {
+  "position": [
+   1776,
+   176
+  ]
+ },
+ "Todos los días 18 h": {
+  "position": [
+   -112,
+   832
+  ]
+ },
+ "Resumen del día": {
+  "position": [
+   112,
+   832
+  ]
+ },
+ "A quién preguntarle": {
+  "position": [
+   336,
+   832
+  ]
+ },
+ "Armar la pregunta": {
+  "position": [
+   544,
+   832
+  ]
+ },
+ "Mandar la pregunta": {
+  "position": [
+   768,
+   832
+  ]
+ },
+ "nota:## Bot de stock · mensajes": {
+  "position": [
+   352,
+   272
+  ],
+  "width": 560,
+  "height": 120
+ },
+ "nota:## Botones": {
+  "position": [
+   400,
+   -144
+  ],
+  "width": 560,
+  "height": 100
+ },
+ "nota:## Pregunta diaria": {
+  "position": [
+   -112,
+   672
+  ],
+  "width": 560,
+  "height": 110
+ }
+}

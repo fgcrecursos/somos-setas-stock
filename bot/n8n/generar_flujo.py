@@ -530,6 +530,20 @@ nota("## Botones\nConfirmar → `st_bot_confirmar` aplica con las reglas de la p
 nota("## Pregunta diaria\nLunes a sábado 18 h a cada persona habilitada con `resumen_diario`. "
      "La respuesta entra por la rama de mensajes. Cambiá la hora en el nodo de horario.", [0, 840], 560, 110, 6)
 
+# Disposición en el lienzo: la que armó Frani a mano en n8n (posiciones.json).
+# Respetarla siempre; un nodo nuevo que no esté ahí queda con su posición del código.
+_pos = json.loads((AQUI / "posiciones.json").read_text(encoding="utf-8"))
+for _n in nodos:
+    if _n["type"].endswith("stickyNote"):
+        _k = "nota:" + _n["parameters"]["content"].split("\n")[0]
+    else:
+        _k = _n["name"]
+    if _k in _pos:
+        _n["position"] = _pos[_k]["position"]
+        if _pos[_k].get("width"):
+            _n["parameters"]["width"] = _pos[_k]["width"]
+            _n["parameters"]["height"] = _pos[_k]["height"]
+
 flujo = {
     "name": "Bot de stock Somos Setas (Telegram)",
     "nodes": nodos,

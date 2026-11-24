@@ -282,8 +282,9 @@ telegram_texto("Pedir texto", [1540, 600], "={{ $('Datos del mensaje').item.json
     "Por ahora solo leo mensajes de texto ✍️ Escribime qué pasó con el stock y lo acomodo.")
 unir("¿Mandó texto?", "Pedir texto", salida=1)
 
-nodo("Agente de stock", "@n8n/n8n-nodes-langchain.agent", 2, [1560, 400], {
+nodo("Agente de stock", "@n8n/n8n-nodes-langchain.agent", 2.2, [1560, 400], {
     "promptType": "define",
+    "needsFallback": True,
     "text": "={{ $('Datos del mensaje').item.json.texto }}",
     "options": {"systemMessage": "=" + PROMPT, "maxIterations": 15},
 }, onError="continueErrorOutput")
@@ -299,6 +300,14 @@ nodo("Gemini", "@n8n/n8n-nodes-langchain.lmChatGoogleGemini", 1, [1300, 700], {
     "options": {"temperature": 0.2},
 }, CRED_GEMINI)
 unir("Gemini", "Agente de stock", tipo="ai_languageModel")
+
+# Respaldo: si Google tiene saturado el modelo principal (error 503) o lo da de baja,
+# el agente usa este. Tiene que ser OTRO modelo; se elige de la lista del nodo.
+nodo("Gemini respaldo", "@n8n/n8n-nodes-langchain.lmChatGoogleGemini", 1, [1312, 704], {
+    "modelName": "models/gemini-3.8-flash-lite",
+    "options": {"temperature": 0.2},
+}, CRED_GEMINI)
+unir("Gemini respaldo", "Agente de stock", tipo="ai_languageModel", entrada=1)
 
 nodo("Memoria de la charla", "@n8n/n8n-nodes-langchain.memoryBufferWindow", 1.3, [1440, 700], {
     "sessionIdType": "customKey",

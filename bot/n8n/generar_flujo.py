@@ -304,7 +304,7 @@ unir("Gemini", "Agente de stock", tipo="ai_languageModel")
 # Respaldo: si Google tiene saturado el modelo principal (error 503) o lo da de baja,
 # el agente usa este. Tiene que ser OTRO modelo; se elige de la lista del nodo.
 nodo("Gemini respaldo", "@n8n/n8n-nodes-langchain.lmChatGoogleGemini", 1, [1312, 704], {
-    "modelName": "models/gemini-3.8-flash-lite",
+    "modelName": "models/gemini-3.5-flash",
     "options": {"temperature": 0.2},
 }, CRED_GEMINI)
 unir("Gemini respaldo", "Agente de stock", tipo="ai_languageModel", entrada=1)

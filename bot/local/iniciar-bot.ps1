@@ -23,8 +23,21 @@ if (Get-NetTCPConnection -LocalPort $puerto -State Listen -ErrorAction SilentlyC
   exit 1
 }
 
+# Un tunel que quedo abierto de la vez anterior (se cerro la ventana sin
+# Ctrl+C) traba el archivo de registro: se cierra antes de abrir uno nuevo.
+Get-CimInstance Win32_Process -Filter "Name = 'node.exe'" |
+  Where-Object { $_.CommandLine -match 'tunnelmole' } |
+  ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+Start-Sleep -Seconds 1
+
 Write-Host 'Abriendo el tunel publico...' -ForegroundColor Cyan
-if (Test-Path $log) { Remove-Item $log -Force }
+foreach ($f in @($log, "$log.err")) {
+  if (Test-Path $f) { Remove-Item $f -Force -ErrorAction SilentlyContinue }
+}
+if (Test-Path $log) {
+  # Si igual sigue trabado, se usa otro archivo.
+  $log = Join-Path $env:TEMP ("bot-stock-tunel-{0}.log" -f (Get-Date -Format 'yyyyMMdd-HHmmss'))
+}
 
 # tunnelmole se cierra si al abrir no hay nada escuchando en el puerto, y
 # n8n necesita saber la direccion del tunel antes de arrancar. Un servidor

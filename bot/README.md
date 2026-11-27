@@ -1,14 +1,19 @@
 # Bot de stock por Telegram
 
-Un agente (n8n + Gemini) que todos los días les pregunta a los chicos de producción qué pasó con el stock, entiende lo que tipean aunque escriban mal el producto, lo compara con la plataforma y propone los movimientos. **Nada se carga hasta que la persona toca "Confirmar".**
+Un agente (Gemini) que todos los días les pregunta a los chicos de producción qué pasó con el stock, entiende lo que tipean aunque escriban mal el producto, lo compara con la plataforma y propone los movimientos. **Nada se carga hasta que la persona toca "Confirmar".**
+
+**Desde el 27/11/2026 corre en Supabase** (Edge Function `bot-stock` + pg_cron), gratis y sin depender de ninguna compu. Antes corría en n8n en la compu de Frani; eso quedó apagado y sus archivos (`n8n/`, `local/`) solo sirven de referencia.
 
 | Archivo | Qué es |
 |---|---|
-| `n8n/bot-stock-telegram.json` | El flujo para importar en n8n |
-| `n8n/generar_flujo.py` | De acá sale el JSON (prompt, cuerpos de las llamadas). Si cambiás algo, regenerá con `python bot/n8n/generar_flujo.py` |
-| `../supabase/bot_stock_telegram_2026-11-22.sql` | Las funciones `st_bot_*` que usa el bot |
-| `alta_usuarios_bot.sql` | Para dar de alta a cada persona en el bot |
-| `pruebas/test_bot.mjs` | 81 pruebas del SQL sobre PGlite con los scripts de produccion: `node bot/pruebas/test_bot.mjs` |
+| `../supabase/functions/bot-stock/bot.ts` | El bot: mensajes, botones, agente con sus 6 herramientas, prompt y pregunta diaria |
+| `../supabase/functions/bot-stock/index.ts` | La entrada de la función: controla la clave y atiende a Telegram, a pg_cron y la configuración |
+| `../supabase/bot_stock_telegram_2026-11-22.sql` | Las funciones `st_bot_*` que usa el bot (la lógica de stock) |
+| `../supabase/bot_stock_supabase_2026-11-27.sql` | Memoria de la charla, mensajes ya atendidos, clave en Vault y la pregunta diaria con pg_cron |
+| `alta_usuarios_bot.sql` | Para dar de alta a mano a una persona |
+| `pruebas/test_bot.mjs` | 87 pruebas del SQL sobre PGlite con los scripts de producción: `node bot/pruebas/test_bot.mjs` |
+| `pruebas/test_funcion.mjs` | 45 pruebas de la función con Supabase, Telegram y Gemini simulados: `node bot/pruebas/test_funcion.mjs` |
+| `n8n/`, `local/` | La versión vieja en n8n (ya no se usa) |
 
 ## Cómo funciona
 
@@ -30,7 +35,7 @@ Telegram ──► ¿botón o mensaje?
 Lunes a sábado 12 h ──► resumen del día ──► pregunta a cada persona con [Sin novedades hoy]
 ```
 
-- **El agente nunca escribe.** Solo arma propuestas. La carga la hace n8n cuando la persona toca el botón: el modelo no puede confirmarse a sí mismo.
+- **El agente nunca escribe.** Solo arma propuestas. La carga la hace la función cuando la persona toca el botón: el modelo no puede confirmarse a sí mismo.
 - **Mismas reglas que la plataforma.** Producir suma el producto y descuenta la receta en la base, una venta resta solo el producto terminado, un conteo fija el número. Todo pasa por `st_aplicar`, con los mismos bloqueos para que dos cargas al mismo tiempo no se pisen.
 - **Pedidos de la web.** La plataforma solo descuenta los pedidos En preparación, Enviado o Entregado. Si reportan una salida que corresponde a un pedido en Confirmado, el bot lo cuenta y pregunta si lo pasa a En preparación (ahí descuenta la plataforma). Así no se descuenta dos veces.
 - **Corregir.** "Me equivoqué, eran 15" → el bot busca el movimiento y propone deshacerlo y cargar el correcto, en la misma confirmación. Se puede deshacer cualquier movimiento hecho desde la plataforma (por el bot o a mano). Los de pedidos web se corrigen cambiando el estado del pedido.
@@ -52,33 +57,27 @@ En el SQL Editor de Supabase (proyecto de Somos Setas), en este orden:
 2. Guardá el token que te da.
 3. Opcional: `/setdescription` y `/setuserpic` con el logo.
 
-### 3. n8n
+### 3. Función en Supabase (una vez)
 
-Hoy corre **gratis en la compu de Frani** (n8n local + un túnel público https). Para arrancarlo:
+Desde la carpeta del repo, con la CLI de Supabase con sesión iniciada (`npx supabase login`):
 
-```powershell
-powershell -ExecutionPolicy Bypass -File C:\Users\frani\somos-setas-stock\bot\local\iniciar-bot.ps1
-```
+1. En el SQL Editor (o con `npx supabase db query --remote=muuqqbocpumdvhvxsigz -f …`): `supabase/bot_stock_supabase_2026-11-27.sql`. Crea la clave interna en Vault y programa la pregunta diaria. Al final tiene que decir `clave: ok | pregunta diaria: 0 15 * * 1-6`.
+2. Los secretos de la función (Supabase → Edge Functions → Secrets, o `npx supabase secrets set --remote=muuqqbocpumdvhvxsigz …`):
+   - `TELEGRAM_TOKEN`: el token de BotFather (tal cual, sin `=` adelante).
+   - `GEMINI_API_KEY`: una clave de <https://aistudio.google.com/apikey>.
+   - `GEMINI_MODELOS` (opcional): principal y respaldo separados por coma. Por defecto `gemini-3.5-flash,gemini-3.5-flash-lite`.
+   - La URL y la clave secreta de Supabase ya las tiene la función sola.
+3. Publicar (sin verificación de JWT, porque Telegram no manda uno):
+   ```powershell
+   npx supabase functions deploy bot-stock --no-verify-jwt --remote=muuqqbocpumdvhvxsigz --use-api
+   ```
+4. Decirle a Telegram que mande los mensajes a la función. Se hace una vez (y de nuevo si cambia el token):
+   ```powershell
+   curl.exe -X POST https://muuqqbocpumdvhvxsigz.supabase.co/functions/v1/bot-stock -H "x-bot-token: <TOKEN>" -H "Content-Type: application/json" -d '{\"tarea\":\"configurar\"}'
+   ```
+   Responde `ok: true` con la dirección nueva. Ojo: si alguien vuelve a prender el flujo viejo de n8n, Telegram pasa a mandarle los mensajes a n8n otra vez.
 
-`bot/local/iniciar-bot.ps1` abre el túnel (tunnelmole, tarda ~40 s), toma la dirección nueva y arranca n8n con ella como `WEBHOOK_URL`. Como el flujo está activo, n8n le pasa solo la dirección nueva a Telegram. Hay que dejar esa ventana abierta: **el bot responde solo con la compu prendida y la ventana abierta**, y la pregunta de las 12 h no sale si está apagada. El editor queda en <http://localhost:5678>.
-
-Para que ande siempre, el mismo flujo se puede importar en n8n Cloud (pago) o en un servidor propio, sin cambios. En ese caso:
-
-1. **Workflows → Import from file** → `bot/n8n/bot-stock-telegram.json`.
-2. Creá las tres credenciales que pide (los nodos quedan marcados en rojo hasta elegirlas):
-   - **Telegram API** "Telegram bot Stock Somos Setas": el token de BotFather.
-   - **Google Gemini (PaLM) API** "Gemini Somos Setas": una clave de <https://aistudio.google.com/apikey>.
-   - **Custom Auth** "Supabase Somos Setas (clave secreta)": en Supabase → Project Settings → API Keys, la clave **secreta** (nunca la publishable). Según cómo empiece:
-     - si empieza con `sb_secret_`:
-       ```json
-       { "headers": { "apikey": "sb_secret_..." } }
-       ```
-     - si es la vieja `service_role` (empieza con `eyJ`):
-       ```json
-       { "headers": { "apikey": "eyJ...", "Authorization": "Bearer eyJ..." } }
-       ```
-3. Revisá en **Settings** del flujo que la zona horaria sea `America/Argentina/Buenos_Aires`.
-4. Guardá y **activá** el flujo (Publish / Active). Recién activo Telegram le manda los mensajes.
+Cómo se protege: la función solo atiende pedidos que traen la clave interna (`bot_stock_clave` en Vault). Telegram la manda en cada mensaje (header `X-Telegram-Bot-Api-Secret-Token`) y pg_cron en la pregunta diaria (`x-bot-clave`). Para configurar el webhook hay que tener el token del bot. A cada mensaje se le contesta a Telegram al instante y se procesa en segundo plano; si Telegram igual lo reintenta, `st_bot_update_nuevo` evita atenderlo dos veces.
 
 ### 4. Dar de alta a cada persona
 
@@ -94,29 +93,27 @@ El primer aprobador se da de alta a mano con `bot/alta_usuarios_bot.sql` (column
 
 - Escribile al bot: "¿cuánto hay de melena cápsulas?" → responde con estante, reservado y disponible.
 - "Hoy hicimos 20 de melena en cápsulas" → muestra la propuesta con lo que descuenta de la receta. Tocá **Cancelar** para no cargar nada.
-- Para probar la pregunta diaria sin esperar a las 12: abrí el nodo "Todos los días 12 h" y tocá **Execute step**.
+- La pregunta diaria sale sola de lunes a sábado a las 12 h. Para ver si salió: `select * from cron.job_run_details order by start_time desc limit 5;` y la respuesta de la función en `select * from net._http_response order by created desc limit 5;`.
 
-## Uso de todos los días (versión local)
+## Si el bot no contesta
 
-1. Prendé la compu y corré `bot/local/iniciar-bot.ps1` (ver arriba). Esperá ~1-2 minutos, hasta que la ventana diga **"Listo: Telegram ya tiene la direccion nueva"**.
-   - n8n no le pasa solo a Telegram la dirección nueva del túnel: hay que apagar y prender el flujo. El script lo hace solo si encuentra la clave de la API de n8n en `bot/local/n8n-api-key.txt` (no se sube a git). Para crearla una vez: en n8n → **Settings → n8n API → Create an API key** (si pide permisos, tildá activar y desactivar workflows), copiala y pegala sola en ese archivo.
-   - Sin ese archivo, la ventana avisa y hay que apagar y prender el flujo a mano.
-2. Dejá esa ventana abierta todo el día, sobre todo a las 12 h, que es cuando sale la pregunta.
-3. Si el bot no contesta, abrí `https://api.telegram.org/bot<TOKEN>/getWebhookInfo`. Si `url` está vacío, en n8n apagá el flujo, esperá 5 segundos y prendelo de nuevo. Puede pasar después de guardar cambios en el flujo.
+1. Supabase → Edge Functions → `bot-stock` → **Logs**: ahí aparecen los errores (con `[bot-stock]`).
+2. `https://api.telegram.org/bot<TOKEN>/getWebhookInfo`: la `url` tiene que ser la de la función y `last_error_message` vacío. Si apunta a otro lado (por ejemplo a un túnel de n8n), repetí el paso 4 de la puesta en marcha.
+3. Si Gemini está saturado, la función pasa sola al modelo de respaldo; si fallan los dos, el bot avisa "tuve un problema" y no carga nada.
 
 Sumar a alguien del equipo: le escribe al bot, manda su mail de la plataforma y te llega Aprobar / Rechazar.
 
 ## Cambiar cosas
 
-- **Hora o días de la pregunta**: nodo "Todos los días 12 h" (cron `0 12 * * 1-6`, lunes a sábado).
+- **Hora o días de la pregunta**: el cron `bot-stock-pregunta-diaria` en `bot_stock_supabase_2026-11-27.sql` (`0 15 * * 1-6` = lunes a sábado 12 h de Argentina, porque pg_cron va en UTC). Cambialo ahí y volvé a correr el script.
 - **Quién recibe la pregunta**: `update st_bot_usuarios set resumen_diario = false where chat_id = …;`
 - **Sacarle el acceso a alguien**: `update st_bot_usuarios set activo = false where chat_id = …;` (o desactivarlo en `st_users`).
-- **Modelo**: nodo "Gemini". Viene con `gemini-3.5-flash` y de respaldo `gemini-3.5-flash-lite` (la 2.5 ya no la dan a cuentas nuevas y la 3.8 suele estar saturada); se puede elegir otro de la lista. Si Google lo tiene saturado (error 503), el agente pasa solo al nodo "Gemini respaldo", que tiene que ser **otro** modelo.
-- **Cómo habla o qué reglas sigue**: el prompt está en `n8n/generar_flujo.py` (`PROMPT`). Regenerá el JSON y volvé a importar, o editá el mensaje de sistema directo en el nodo "Agente de stock".
+- **Modelo**: secreto `GEMINI_MODELOS` (principal primero, respaldo después). No hace falta volver a publicar.
+- **Cómo habla o qué reglas sigue**: `armarPrompt` en `supabase/functions/bot-stock/bot.ts`. Después: correr `node bot/pruebas/test_funcion.mjs` y publicar (paso 3).
 
 ## Qué quedó afuera (por ahora)
 
 - **Audios.** Solo lee texto. Gemini puede transcribir notas de voz: es un agregado chico si lo usan mucho.
 - **Mail a la clienta al pasar a En preparación.** El aviso por mail lo dispara el panel con la sesión de quien cambia el estado. Si el bot pasa un pedido, el panel lo va a mostrar como "sin avisar" y se puede mandar desde ahí.
 - **Recordatorio si no contestan.** Queda registrado en `st_bot_checkins` (quién contestó cada día); un segundo aviso a la mañana siguiente es fácil de sumar.
-- **Memoria.** La charla se recuerda en la memoria simple de n8n (últimos 20 mensajes por chat). Si n8n se reinicia se pierde el hilo, pero no las propuestas, que viven en la base.
+- **Memoria.** La charla vive en `st_bot_charla`: el agente recuerda los últimos 40 mensajes de las últimas 12 horas de cada chat (una charla de otro día confunde más de lo que ayuda). Se borra sola a los 7 días.

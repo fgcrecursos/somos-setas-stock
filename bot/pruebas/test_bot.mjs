@@ -255,5 +255,23 @@ check('alta da de alta', (await v(`select nombre from st_bot_usuarios where chat
 err = null; try { await db.exec(alta.replace("(000000000::bigint, 'matias.aurieme@somossetas.com.ar'", "(556::bigint, 'invitado@x.com'")); } catch (e) { err = e.message; }
 check('alta frena si no es admin', err?.includes('no es admin'), err);
 
+console.log('Edge Function: memoria y mensajes repetidos (bot_stock_supabase_2026-11-27.sql)');
+// La sección de control lee cron.job, que en PGlite no existe.
+const sqlSupa = readFileSync(DIR + 'bot_stock_supabase_2026-11-27.sql', 'utf8').split('-- ---------- 6. Control')[0];
+await db.exec(sqlSupa);
+await db.exec(sqlSupa); // se puede correr dos veces
+check('update nuevo', (await comoN8n(`select st_bot_update_nuevo(1001)`)) === true);
+check('update repetido', (await comoN8n(`select st_bot_update_nuevo(1001)`)) === false);
+check('charla vacía', (await comoN8n(`select st_bot_charla_leer(111, 40)`)).length === 0);
+await comoN8n(`select st_bot_charla_guardar(111, 'hice 20 melena', 'Te dejo la propuesta abajo')`);
+await comoN8n(`select st_bot_charla_guardar(111, 'gracias', '')`);
+await comoN8n(`select st_bot_charla_guardar(222, 'otro chat', 'ok')`);
+let ch = await comoN8n(`select st_bot_charla_leer(111, 40)`);
+check('charla en orden y sin vacíos', ch.length === 3 && ch[0].rol === 'user' && ch[0].texto === 'hice 20 melena' && ch[1].rol === 'model' && ch[2].texto === 'gracias', ch);
+ch = await comoN8n(`select st_bot_charla_leer(111, 2)`);
+check('charla respeta el límite (lo último)', ch.length === 2 && ch[1].texto === 'gracias', ch);
+await db.exec(`update st_bot_charla set created_at = now() - interval '13 hours' where chat_id = 111`);
+check('charla vieja no vuelve', (await comoN8n(`select st_bot_charla_leer(111, 40)`)).length === 0);
+
 console.log(`\n${ok} OK · ${mal} MAL`);
 process.exit(mal ? 1 : 0);
